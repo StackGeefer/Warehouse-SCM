@@ -1,0 +1,1188 @@
+/*
+ * Call Order Rantau — aplikasi utama (tampilan & interaksi)
+ */
+(function () {
+  'use strict';
+
+  // ================= Utilitas =================
+  var $ = function (s, el) { return (el || document).querySelector(s); };
+  var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  var nf0 = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 });
+  var nf2 = new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 });
+  function fmtQ(n) { if (n == null) return '—'; return Math.abs(n % 1) > 0 ? nf2.format(n) : nf0.format(n); }
+  function fmtMoney(n, cur) {
+    if (n == null || isNaN(n)) return '—';
+    if (cur && cur !== 'IDR') return cur + ' ' + nf2.format(n);
+    return 'Rp ' + nf0.format(n);
+  }
+  function fmtBig(n, cur) {
+    if (n == null) return '—';
+    var p = cur && cur !== 'IDR' ? cur + ' ' : 'Rp ';
+    var a = Math.abs(n);
+    if (a >= 1e12) return p + nf2.format(n / 1e12) + ' T';
+    if (a >= 1e9) return p + nf2.format(n / 1e9) + ' M';
+    if (a >= 1e6) return p + nf2.format(n / 1e6) + ' jt';
+    return p + nf2.format(n);
+  }
+  var BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  var BLN = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  function fmtDate(s) { if (!s) return '—'; var p = s.split('-'); return p[2] + ' ' + BLN[+p[1] - 1] + ' ' + p[0]; }
+  function ddmm(s) { return s ? s.slice(8, 10) + '.' + s.slice(5, 7) : '-'; }
+  function daysLeft(s) { if (!s) return null; return Math.round((new Date(s + 'T00:00:00') - new Date(S.idx.today + 'T00:00:00')) / 86400000); }
+  function numVal(v) { var n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; }
+
+  var ICON = {
+    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+    upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>',
+    excel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 13l4 5M13 13l-4 5"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg>',
+    doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h10M9 12h10M9 19h10"/><path d="m3 5 1.5 1.5L7 4M3 12l1.5 1.5L7 11M3 19l1.5 1.5L7 18"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
+  };
+
+  // Repo GitHub tempat file data/sap-data.js di-upload
+  var REPO_URL = 'https://github.com/StackGeefer/Warehouse-SCM';
+
+  // ================= State =================
+  var S = {
+    ds: { stock: null, oa: null, mb51: null },
+    idx: null,
+    settings: Store.load('settings', clone(Model.DEFAULT_SETTINGS)),
+    cart: Store.load('cart', { items: {}, meta: {}, groupTitles: {} }),
+    q: '', filters: { home: false, zone: false, oa: false, used: false }, limit: 60,
+    oaF: { q: '', active: true, pg: '', sort: 'rel' },
+    oaD: { q: '', used: false, zero: false },
+    drawerAll: false,
+    lastLog: ''
+  };
+  S.cart.items = S.cart.items || {};
+  S.cart.meta = S.cart.meta || {};
+  S.cart.groupTitles = S.cart.groupTitles || {};
+
+  var view = $('#view');
+
+  function homeName() { return S.idx && S.idx.home ? S.idx.home.name : 'Home'; }
+  function fields() { return S.settings.fields; }
+  function hasData() { return !!(S.idx && S.idx.list.length); }
+
+  // ================= Toast & loading =================
+  function toast(msg, bad) {
+    var t = document.createElement('div');
+    t.className = 'toast' + (bad ? ' bad' : '');
+    t.textContent = msg;
+    var box = $('#toasts');
+    while (box.children.length >= 2) box.firstChild.remove();
+    box.appendChild(t);
+    setTimeout(function () { t.remove(); }, bad ? 6000 : 2600);
+  }
+  function loading(msg) {
+    if (msg === false) { $('#loading').classList.add('hidden'); return; }
+    $('#loadingText').textContent = msg;
+    $('#loading').classList.remove('hidden');
+  }
+
+  // ================= Keranjang (Call Order) =================
+  function item(m, create) {
+    var it = S.cart.items[m];
+    if (!it && create) {
+      it = S.cart.items[m] = { m: m, t: Date.now(), ro: { on: false, oa: null, qty: null, actual: null, note: '' }, bau: { on: false, alloc: {}, note: '' } };
+    }
+    return it;
+  }
+  function active(it) { return it && (it.ro.on || it.bau.on); }
+  function saveCart() { Store.save('cart', S.cart); updateCartUI(); }
+  function lineOf(o, key) {
+    if (!o || !key) return null;
+    for (var i = 0; i < o.oa.length; i++) if (o.oa[i].key === key) return o.oa[i];
+    return null;
+  }
+  function setRO(m, on, key) {
+    var it = item(m, true), o = S.idx.mats.get(m);
+    it.ro.on = on;
+    if (on) {
+      if (key) it.ro.oa = key;
+      if (!lineOf(o, it.ro.oa)) it.ro.oa = o && (o.bestOA || o.oa[0]) ? (o.bestOA || o.oa[0]).key : null;
+    }
+    saveCart();
+  }
+  function setBAU(m, on) {
+    var it = item(m, true);
+    it.bau.on = on;
+    saveCart();
+  }
+  function cartStats() {
+    var ro = 0, bau = 0;
+    Object.keys(S.cart.items).forEach(function (k) {
+      var it = S.cart.items[k];
+      if (!S.idx || !S.idx.mats.has(k)) return;
+      if (it.ro.on) ro++;
+      if (it.bau.on) bau++;
+    });
+    var n = Object.keys(S.cart.items).filter(function (k) { return active(S.cart.items[k]) && S.idx && S.idx.mats.has(k); }).length;
+    return { n: n, ro: ro, bau: bau };
+  }
+  function updateCartUI() {
+    var st = cartStats();
+    var nc = $('#navCount');
+    nc.textContent = st.n;
+    nc.classList.toggle('hidden', !st.n);
+    var bar = $('#cartbar');
+    var route = currentRoute().name;
+    if (!st.n || route === 'call-order' || route === 'data' || route === 'pengaturan') { bar.classList.add('hidden'); return; }
+    bar.classList.remove('hidden');
+    bar.innerHTML = '<span><b>' + st.n + '</b> material dipilih</span>' +
+      '<span class="badge ro">RO ' + st.ro + '</span><span class="badge bau">BAU ' + st.bau + '</span>' +
+      '<a class="btn primary sm" href="#/call-order">Buka Call Order ' + ICON.arrow + '</a>';
+  }
+
+  // Catatan otomatis seperti template: "Stok alternatif Zona 1: Jambi (W802) 83"
+  function autoNote(o) {
+    var parts = [];
+    fields().forEach(function (f) {
+      if (f.home) return;
+      f.plants.forEach(function (p) {
+        if (o.st[p] > 0) parts.push(f.name + ' (' + p + ') ' + fmtQ(o.st[p]));
+      });
+    });
+    return parts.length ? 'Stok alternatif Zona 1: ' + parts.join(', ') : '';
+  }
+  function suggestion(o) {
+    var c = +S.settings.coverMonths || 3;
+    return Math.max(0, Math.ceil(o.avg12 * c - o.homeStock));
+  }
+
+  // ================= Komponen kecil =================
+  function qtyPill(v, home, title) {
+    if (v == null) return '<span class="qty na" title="' + esc(title || 'Data plant belum diupload') + '">—</span>';
+    return '<span class="qty ' + (v > 0 ? 'pos' : 'zero') + (home ? ' home' : '') + '" title="' + esc(title || '') + '">' + fmtQ(v) + '</span>';
+  }
+  function fieldTitle(o, f) {
+    return f.plants.map(function (p) {
+      if (o.st[p] != null) return p + ': ' + fmtQ(o.st[p]);
+      return p + ': ' + (S.idx.plantDates[p] ? '0' : 'data plant belum diupload');
+    }).join(' · ');
+  }
+  function spark(arr) {
+    if (!arr || !arr.length) return '';
+    var max = Math.max.apply(null, arr.concat([0]));
+    if (max <= 0) return '<svg class="spark" width="84" height="16"><line x1="0" y1="15.5" x2="84" y2="15.5" stroke="#e2e8f0"/></svg>';
+    var w = 84 / arr.length;
+    var bars = arr.map(function (v, i) {
+      var h = v > 0 ? Math.max(2, (v / max) * 15) : 0;
+      return '<rect x="' + (i * w + 0.5).toFixed(1) + '" y="' + (16 - h).toFixed(1) + '" width="' + (w - 1.5).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="1" fill="' + (i === arr.length - 1 ? '#0a5cc2' : '#93b9ec') + '"/>';
+    }).join('');
+    return '<svg class="spark" width="84" height="16" aria-hidden="true">' + bars + '</svg>';
+  }
+  function pick(kind, m, checked, disabled, title, extra) {
+    return '<label class="pick ' + kind + '" title="' + esc(title || '') + '"><input type="checkbox" data-pick="' + kind + '" data-m="' + esc(m) + '"' +
+      (extra || '') + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' + kind.toUpperCase() + '</span></label>';
+  }
+  function priceCell(o) {
+    var chips = o.oa.length ? '<div style="margin-top:4px">' + oaChips(o) + '</div>' : '';
+    if (o.bestOA) return '<div class="price">' + fmtMoney(o.bestOA.price, o.bestOA.cur) + '</div>' + chips;
+    if (o.oa.length) return '<div class="price muted">' + fmtMoney(o.oa[0].price, o.oa[0].cur) + '</div><div class="price-sub">OA sudah berakhir</div>' + chips;
+    if (o.map) return '<div class="price">' + fmtMoney(o.map) + '</div><div class="price-sub">Harga rata-rata stok · tanpa OA</div>';
+    return '<span class="muted">—</span><div class="price-sub">Tanpa OA</div>';
+  }
+  function oaChips(o, max) {
+    max = max || 1;
+    if (!o.oa.length) return '<span class="muted small">Tidak ada</span>';
+    var seen = {}, out = [];
+    o.oa.forEach(function (l) {
+      if (seen[l.po]) return; seen[l.po] = 1;
+      out.push('<a class="oa-chip' + (l.active ? '' : ' exp') + '" href="#/kontrak/' + esc(l.po) + '" title="' +
+        esc(l.vendor + ' · ' + fmtMoney(l.price, l.cur) + ' · berlaku s/d ' + fmtDate(l.ve) + (l.active ? '' : ' (berakhir)')) + '">' + esc(l.po) + '</a>');
+    });
+    var more = out.length > max ? '<span class="muted small">+' + (out.length - max) + '</span>' : '';
+    return '<div class="oa-chips">' + out.slice(0, max).join('') + more + '</div>';
+  }
+  function useCell(o) {
+    return '<div class="use-cell"><b>' + fmtQ(o.hist) + '</b> <span class="muted small">' + S.idx.histYear + '</span> · <b>' +
+      fmtQ(o.ytd) + '</b> <span class="muted small">' + S.idx.dataYear + '</span></div>' + spark(o.spark);
+  }
+  function emptyData() {
+    return '<div class="card empty"><div class="ico">' + ICON.upload + '</div><h3>Belum ada data SAP</h3>' +
+      '<p>Upload file export SAP (MB52/ZMB52 untuk stok, ME3N untuk kontrak, MB51 untuk pemakaian) di halaman Data. ' +
+      'Data hanya disimpan di browser Anda, tidak dikirim ke mana pun.</p><a class="btn primary" href="#/data">' + ICON.upload + ' Upload Data SAP</a></div>';
+  }
+
+  // ================= Routing =================
+  function currentRoute() {
+    var h = location.hash.replace(/^#\/?/, '') || 'cari';
+    var parts = h.split('/');
+    return { name: parts[0], arg: decodeURIComponent(parts[1] || '') };
+  }
+  var TITLES = {
+    cari: ['Cari Material', 'Cari dengan KIMAP atau deskripsi, cek stok Zona 1, harga & kontrak sekaligus'],
+    kontrak: ['Kontrak (OA / RO)', 'Daftar Outline Agreement dari ME3N — klik untuk melihat semua material yang bisa ditarik'],
+    'call-order': ['Call Order ke MIM', 'Atur material RO & BAU, lalu export ke template Excel'],
+    data: ['Data & Upload', 'Upload export SAP terbaru — data tersimpan hanya di browser ini'],
+    pengaturan: ['Pengaturan', 'Atur Field, kode plant, dan parameter saran replenishment']
+  };
+  function render() {
+    var r = currentRoute();
+    if (!TITLES[r.name]) r.name = 'cari';
+    $$('#nav a').forEach(function (a) { a.classList.toggle('active', a.getAttribute('data-route') === r.name); });
+    var t = TITLES[r.name];
+    $('#pageTitle').textContent = t[0];
+    $('#pageSub').textContent = t[1];
+    $('#pageActions').innerHTML = '';
+    closeDrawer();
+    if (r.name === 'cari') renderSearch();
+    else if (r.name === 'kontrak') { if (r.arg) renderOADetail(r.arg); else renderOAList(); }
+    else if (r.name === 'call-order') renderCO();
+    else if (r.name === 'data') renderData();
+    else if (r.name === 'pengaturan') renderSettings();
+    updateCartUI();
+    renderSide();
+  }
+
+  function renderSide() {
+    var ds = S.ds, out = [];
+    var hp = S.idx ? S.idx.homePlants : [];
+    var homeDate = S.idx && S.idx.homeDate;
+    var nPlants = ds.stock ? Object.keys(ds.stock.plants).length : 0;
+    out.push('<div class="lbl">Status Data</div>');
+    out.push('<div class="row"><span><i class="dot ' + (nPlants ? 'on' : '') + '"></i>Stok MB52</span><b>' + (nPlants ? (homeDate ? ddmm(homeDate) + ' · ' : '') + nPlants + ' plant' : '—') + '</b></div>');
+    out.push('<div class="row"><span><i class="dot ' + (ds.oa ? 'on' : '') + '"></i>Kontrak ME3N</span><b>' + (ds.oa ? ddmm(ds.oa.date) : '—') + '</b></div>');
+    out.push('<div class="row"><span><i class="dot ' + (ds.mb51 ? 'on' : '') + '"></i>Pemakaian MB51</span><b>' + (ds.mb51 ? 's/d ' + BLN[+ds.mb51.max.slice(5, 7) - 1] + ' ' + ds.mb51.max.slice(2, 4) : '—') + '</b></div>');
+    if (hp.length) out.push('<div class="small">Home: Field ' + esc(homeName()) + ' (' + esc(hp.join('/')) + ')</div>');
+    $('#sideData').innerHTML = out.join('');
+  }
+
+  // ================= Halaman: Cari Material =================
+  function renderSearch() {
+    if (!hasData()) { view.innerHTML = emptyData(); return; }
+    var f = S.filters;
+    function chip(k, label) { return '<span class="chip-toggle' + (f[k] ? ' on' : '') + '" data-filter="' + k + '">' + esc(label) + '</span>'; }
+    view.innerHTML =
+      '<div class="search-hero">' +
+      '<div class="searchbox">' + ICON.search + '<input id="q" autocomplete="off" spellcheck="false" placeholder="Cari KIMAP atau deskripsi — contoh: flange 3&quot; 150" value="' + esc(S.q) + '"><span class="kbd">/</span></div>' +
+      '<div class="chips">' + chip('home', 'Ada stok ' + homeName()) + chip('zone', 'Ada stok Field lain (BAU)') + chip('oa', 'Ada kontrak aktif') + chip('used', 'Pernah dipakai ' + homeName()) +
+      '<span class="examples">Contoh: <a href="#" data-ex="flange 3&quot; 150">flange 3" 150</a><a href="#" data-ex="gate valve 2&quot; 600">gate valve 2" 600</a><a href="#" data-ex="stud bolt 5/8">stud bolt 5/8</a></span>' +
+      '<span class="spacer"></span><span class="result-meta" id="resMeta"></span></div></div>' +
+      '<div id="results"></div>';
+    renderResults();
+    var q = $('#q');
+    if (!('ontouchstart' in window)) q.focus();
+    q.setSelectionRange(q.value.length, q.value.length);
+  }
+
+  var searchTimer;
+  function computeResults() {
+    var pq = Search.parseQuery(S.q), f = S.filters, res = [], fuzzy = false;
+    var hasQ = !!pq.raw;
+    function pass(o) {
+      if (f.home && !(o.homeStock > 0)) return false;
+      if (f.zone && !(o.zoneStock > 0)) return false;
+      if (f.oa && !o.bestOA) return false;
+      if (f.used && !(o.hist > 0 || o.ytd > 0)) return false;
+      return true;
+    }
+    var list = S.idx.list;
+    for (var i = 0; i < list.length; i++) {
+      var o = list[i];
+      if (!pass(o)) continue;
+      if (!hasQ) { res.push({ o: o, s: 0 }); continue; }
+      var r = Search.score(pq, o.ix);
+      if (r.missed === 0 && r.s > 0) res.push({ o: o, s: r.s });
+    }
+    if (hasQ && !res.length && pq.hard.length > 1) {
+      fuzzy = true;
+      for (var j = 0; j < list.length; j++) {
+        var o2 = list[j];
+        if (!pass(o2)) continue;
+        var r2 = Search.score(pq, o2.ix);
+        if (r2.missed === 1 && r2.s > 0) res.push({ o: o2, s: r2.s });
+      }
+    }
+    if (hasQ) {
+      res.sort(function (a, b) {
+        return b.s - a.s || (b.o.homeStock > 0) - (a.o.homeStock > 0) || (!!b.o.bestOA) - (!!a.o.bestOA) ||
+          (b.o.hist + b.o.ytd) - (a.o.hist + a.o.ytd) || a.o.d.localeCompare(b.o.d);
+      });
+    } else {
+      res.sort(function (a, b) { return (b.o.hist + b.o.ytd) - (a.o.hist + a.o.ytd) || b.o.homeStock - a.o.homeStock; });
+    }
+    return { res: res, fuzzy: fuzzy, pq: pq, hasQ: hasQ };
+  }
+
+  function renderResults() {
+    var box = $('#results');
+    if (!box) return;
+    var R = computeResults(), idx = S.idx;
+    var meta = $('#resMeta');
+    var banner = '';
+    if (R.pq.codeLike && idx.oaMap.has(R.pq.raw)) {
+      var h = idx.oaMap.get(R.pq.raw);
+      banner = '<div class="card card-pad" style="margin-bottom:12px;display:flex;align-items:center;gap:12px">' + ICON.doc.replace('<svg', '<svg width="22" height="22"') +
+        '<div><b>' + esc(h.po) + '</b> adalah nomor kontrak (OA) — ' + esc(h.vendor) + '</div><span class="spacer"></span><a class="btn primary sm" href="#/kontrak/' + esc(h.po) + '">Buka kontrak ' + ICON.arrow + '</a></div>';
+    }
+    if (meta) {
+      meta.innerHTML = R.hasQ ? '<b>' + nf0.format(R.res.length) + '</b> material' + (R.fuzzy ? ' (hasil mirip — 1 kata kunci tidak cocok)' : '')
+        : 'Tanpa kata kunci: urut berdasarkan pemakaian ' + esc(homeName()) + ' terbanyak';
+    }
+    if (!R.res.length) {
+      box.innerHTML = banner + '<div class="card empty"><div class="ico">' + ICON.search + '</div><h3>Material tidak ditemukan</h3><p>Coba kata kunci lain, misalnya hanya jenis material + ukuran (contoh: <b>valve 2</b>), atau cari dengan KIMAP.</p></div>';
+      return;
+    }
+    var shown = R.res.slice(0, S.limit);
+    var F = fields();
+    var head = '<tr><th>Material</th><th>Harga &amp; Kontrak OA</th>' +
+      F.map(function (f) { return '<th class="num th-field">' + esc(f.name) + '<small>' + esc(f.plants.join('/')) + (f.home ? ' · ' + ddmm(idx.homeDate) : '') + '</small></th>'; }).join('') +
+      '<th class="num th-field">Lain<small>plant lain</small></th><th>Pemakaian ' + esc(homeName()) + '</th><th class="c pick-col">Pilih</th></tr>';
+    var rows = shown.map(function (x) { return resultRow(x.o); }).join('');
+    var more = R.res.length > shown.length ? '<tr class="more-row"><td colspan="' + (F.length + 5) + '"><button class="btn" data-act="more">Tampilkan ' + Math.min(60, R.res.length - shown.length) + ' lagi (' + nf0.format(R.res.length - shown.length) + ' tersisa)</button></td></tr>' : '';
+    box.innerHTML = banner + '<div class="table-wrap tall"><table class="grid" id="resTable"><thead>' + head + '</thead><tbody>' + rows + more + '</tbody></table></div>';
+  }
+
+  function resultRow(o) {
+    var it = item(o.m), F = fields();
+    var canBau = o.zoneStock > 0 || o.other > 0;
+    var otherTitle = o.otherPlants.map(function (p) { return p + ': ' + fmtQ(o.st[p]); }).join(' · ');
+    return '<tr class="clickable' + (active(it) ? ' in-cart' : '') + '" data-m="' + esc(o.m) + '">' +
+      '<td class="mat-cell"><div class="mat-desc">' + esc(o.d) + (o.u ? '<span class="uom">' + esc(o.u) + '</span>' : '') + '</div><div class="mat-code">' + esc(o.m) + '</div></td>' +
+      '<td>' + priceCell(o) + '</td>' +
+      F.map(function (f, i) { return '<td class="num">' + qtyPill(o.fs[i], f.home, fieldTitle(o, f)) + '</td>'; }).join('') +
+      '<td class="num">' + (o.other > 0 ? qtyPill(o.other, false, otherTitle) : '<span class="qty na">—</span>') + '</td>' +
+      '<td>' + useCell(o) + '</td>' +
+      '<td class="c pick-col"><div class="picks">' +
+      pick('ro', o.m, it && it.ro.on, !o.oa.length, o.oa.length ? 'Tarik lewat RO (kontrak)' : 'Tidak ada kontrak OA untuk material ini') +
+      pick('bau', o.m, it && it.bau.on, !canBau && !(it && it.bau.on), canBau ? 'Bantuan Antar Unit dari Field lain' : 'Tidak ada stok di Field lain') +
+      '</div></td></tr>';
+  }
+
+  // ================= Drawer detail material =================
+  function openDrawer(m) {
+    var o = S.idx.mats.get(m);
+    if (!o) return;
+    var d = $('#drawer'), idx = S.idx, it = item(m);
+    var F = fields();
+    // stok per plant
+    var rows = o.rows.slice().filter(function (r) { return S.drawerAll || r.qty !== 0; });
+    function rank(p) { var f = idx.fieldOfPlant(p); if (!f) return 99; return f.home ? 0 : F.indexOf(f) + 1; }
+    rows.sort(function (a, b) { return rank(a.plant) - rank(b.plant) || a.plant.localeCompare(b.plant) || b.qty - a.qty; });
+    var stockRows = rows.map(function (r) {
+      var f = idx.fieldOfPlant(r.plant);
+      return '<tr><td>' + (f ? '<b>' + esc(f.name) + '</b>' : '<span class="muted">Plant lain</span>') + '</td><td class="mono">' + esc(r.plant) + '</td><td class="mono">' + esc(r.sloc) + '</td><td class="small">' + esc(r.batch || '-') + '</td><td class="num">' + qtyPill(r.qty, f && f.home) + '</td><td class="small muted">' + ddmm(idx.plantDates[r.plant]) + '</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="muted center">Tidak ada stok tercatat' + (S.drawerAll ? '' : ' (selain 0)') + '</td></tr>';
+
+    // grafik pemakaian 24 bulan
+    var months = [];
+    if (idx.mb51Max) for (var i = 23; i >= 0; i--) months.push(Model.addMonths(idx.mb51Max, -i));
+    var vals = months.map(function (ym) { return o.homeUse[ym] || 0; });
+    var max = Math.max.apply(null, vals.concat([1]));
+    var bars = months.map(function (ym, i) {
+      var v = vals[i];
+      return '<div class="b' + (i === months.length - 1 ? ' cur' : '') + '" style="height:' + (v > 0 ? Math.max(3, v / max * 100) : 0) + '%" title="' + BLN[+ym.slice(5, 7) - 1] + ' ' + ym.slice(0, 4) + ': ' + fmtQ(v) + ' ' + esc(o.u) + '">' + (v > 0 && v === max ? '<span class="t">' + fmtQ(v) + '</span>' : '') + '</div>';
+    }).join('');
+    var labels = months.map(function (ym, i) { return '<span>' + (i % 3 === 0 ? BLN[+ym.slice(5, 7) - 1] + '<br>' + ym.slice(2, 4) : '') + '</span>'; }).join('');
+
+    var oaRows = o.oa.map(function (l) {
+      var dl = daysLeft(l.ve);
+      var sel = it && it.ro.on && it.ro.oa === l.key;
+      return '<tr><td><a class="mono" href="#/kontrak/' + esc(l.po) + '">' + esc(l.po) + '</a><div class="small muted">item ' + esc(l.item) + '</div></td>' +
+        '<td class="small">' + esc(l.vendor) + '</td><td class="num price">' + fmtMoney(l.price, l.cur) + '</td>' +
+        '<td class="num small">' + (l.tgtQty > 0 ? fmtQ(l.openQty) + ' / ' + fmtQ(l.tgtQty) : '<span class="muted">nilai</span>') + '</td>' +
+        '<td class="small nowrap">' + fmtDate(l.ve) + '<br>' + (l.active ? '<span class="badge ok">Aktif · ' + dl + ' hr</span>' : '<span class="badge bad">Berakhir</span>') + '</td>' +
+        '<td><button class="btn sm' + (sel ? ' primary' : '') + '" data-act="use-oa" data-m="' + esc(o.m) + '" data-key="' + esc(l.key) + '">' + (sel ? 'Dipakai' : 'Pakai RO') + '</button></td></tr>';
+    }).join('');
+
+    var fieldKpis = F.filter(function (f) { return !f.home; }).map(function (f) {
+      var i = F.indexOf(f);
+      return '<div class="kpi"><div class="k">Stok ' + esc(f.name) + '</div><div class="v">' + fmtQ(o.fs[i]) + '</div><div class="s">' + esc(fieldTitle(o, f)) + '</div></div>';
+    }).join('');
+
+    d.innerHTML =
+      '<div class="drawer-head"><div style="flex:1;min-width:0"><div class="mat-code">' + esc(o.m) + (o.u ? ' · ' + esc(o.u) : '') + '</div><h2>' + esc(o.d) + '</h2>' +
+      '<div class="picks" style="margin-top:12px">' + pick('ro', o.m, it && it.ro.on, !o.oa.length) + pick('bau', o.m, it && it.bau.on, false) +
+      '<button class="btn sm ghost" data-act="copy" data-text="' + esc(o.m) + '">Salin KIMAP</button></div></div>' +
+      '<button class="icon-btn" data-act="close-drawer" aria-label="Tutup">' + ICON.close + '</button></div>' +
+      '<div class="drawer-body">' +
+      '<div class="kpis">' +
+      '<div class="kpi"><div class="k">Stok ' + esc(homeName()) + '</div><div class="v" style="color:var(--ok)">' + fmtQ(o.homeStock) + '</div><div class="s">SAP ' + fmtDate(idx.homeDate) + '</div></div>' +
+      fieldKpis +
+      '<div class="kpi"><div class="k">Pemakaian ' + idx.histYear + '</div><div class="v">' + fmtQ(o.hist) + '</div><div class="s">' + idx.dataYear + ' YTD: ' + fmtQ(o.ytd) + '</div></div>' +
+      '<div class="kpi"><div class="k">Rata-rata / bulan</div><div class="v">' + fmtQ(Math.round(o.avg12 * 10) / 10) + '</div><div class="s">12 bulan terakhir</div></div>' +
+      '<div class="kpi"><div class="k">Harga</div><div class="v" style="font-size:17px">' + (o.bestOA ? fmtMoney(o.bestOA.price, o.bestOA.cur) : fmtMoney(o.map)) + '</div><div class="s">' + (o.bestOA ? 'OA ' + esc(o.bestOA.po) : (o.map ? 'Harga rata-rata stok' : 'Tidak ada')) + '</div></div>' +
+      '</div>' +
+      '<div><div class="toolbar"><h4 class="section-title" style="margin:0">Stok per plant</h4><span class="spacer"></span><label class="small"><input type="checkbox" data-act="drawer-all"' + (S.drawerAll ? ' checked' : '') + '> tampilkan stok 0</label></div>' +
+      '<div class="table-wrap" style="margin-top:8px"><table class="grid"><thead><tr><th>Field</th><th>Plant</th><th>SLoc</th><th>Batch</th><th class="num">Qty</th><th>Data</th></tr></thead><tbody>' + stockRows + '</tbody></table></div></div>' +
+      '<div><h4 class="section-title">Pemakaian ' + esc(homeName()) + ' (24 bulan, MB51)</h4>' +
+      (idx.mb51Max ? '<div class="bars">' + bars + '</div><div class="bar-labels">' + labels + '</div>' : '<p class="muted">Data MB51 belum diupload.</p>') + '</div>' +
+      '<div><h4 class="section-title">Kontrak tersedia (ME3N)</h4>' +
+      (o.oa.length ? '<div class="table-wrap"><table class="grid"><thead><tr><th>OA</th><th>Vendor</th><th class="num">Harga</th><th class="num">Sisa Qty</th><th>Berlaku s/d</th><th></th></tr></thead><tbody>' + oaRows + '</tbody></table></div>'
+        : '<p class="muted">Tidak ada kontrak untuk material ini — pertimbangkan BAU dari Field lain.</p>') +
+      '</div></div>';
+    d.setAttribute('data-m', m);
+    d.classList.add('open');
+    d.setAttribute('aria-hidden', 'false');
+    $('#scrim').classList.add('open');
+  }
+  function closeDrawer() {
+    var d = $('#drawer');
+    if (!d.classList.contains('open')) return;
+    d.classList.remove('open');
+    d.setAttribute('aria-hidden', 'true');
+    $('#scrim').classList.remove('open');
+  }
+
+  // ================= Halaman: Daftar Kontrak =================
+  function oaCategory(h) {
+    var cnt = {};
+    h.lines.forEach(function (l) {
+      var w = (l.d || '').toUpperCase().split(/[\s,:;]+/)[0];
+      if (w && w.length > 2) cnt[w] = (cnt[w] || 0) + 1;
+    });
+    var top = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; });
+    return top.slice(0, 2).join(' & ');
+  }
+  function oaStats(h) {
+    if (h._st) return h._st;
+    var used = 0, zero = 0;
+    h.lines.forEach(function (l) {
+      var o = S.idx.mats.get(l.m);
+      if (o && (o.hist > 0 || o.ytd > 0)) { used++; if (!(o.homeStock > 0)) zero++; }
+    });
+    h._st = { used: used, zero: zero, cat: oaCategory(h) };
+    return h._st;
+  }
+
+  function renderOAList() {
+    if (!S.idx || !S.idx.oaMap.size) { view.innerHTML = S.idx && hasData() ? '<div class="card empty"><div class="ico">' + ICON.doc + '</div><h3>Data ME3N belum ada</h3><p>Upload export ME3N untuk melihat kontrak.</p><a class="btn primary" href="#/data">Upload</a></div>' : emptyData(); return; }
+    var pgs = {};
+    S.idx.oaMap.forEach(function (h) { pgs[h.pg] = 1; });
+    var F = S.oaF;
+    view.innerHTML =
+      '<div class="card card-pad toolbar" style="margin-bottom:14px">' +
+      '<div class="searchbox" style="flex:1;min-width:240px">' + ICON.search.replace('<svg', '<svg style="left:12px;width:18px;height:18px"') + '<input id="oaq" class="input" style="height:40px;padding-left:38px;font-size:14px;border-radius:10px;box-shadow:none" placeholder="Cari nomor OA, vendor, atau jenis material…" value="' + esc(F.q) + '"></div>' +
+      '<select class="select" id="oapg"><option value="">Semua Purch. Group</option>' + Object.keys(pgs).sort().map(function (p) { return '<option' + (F.pg === p ? ' selected' : '') + '>' + esc(p) + '</option>'; }).join('') + '</select>' +
+      '<select class="select" id="oasort"><option value="rel"' + (F.sort === 'rel' ? ' selected' : '') + '>Urut: relevan untuk ' + esc(homeName()) + '</option><option value="end"' + (F.sort === 'end' ? ' selected' : '') + '>Urut: berakhir paling cepat</option><option value="val"' + (F.sort === 'val' ? ' selected' : '') + '>Urut: sisa nilai terbesar</option><option value="po"' + (F.sort === 'po' ? ' selected' : '') + '>Urut: nomor OA</option></select>' +
+      '<span class="chip-toggle' + (F.active ? ' on' : '') + '" data-oafilter="active">Hanya kontrak aktif</span></div>' +
+      '<div id="oaList"></div>';
+    renderOACards();
+  }
+  function renderOACards() {
+    var F = S.oaF, list = [];
+    var q = F.q.trim().toUpperCase();
+    S.idx.oaMap.forEach(function (h) {
+      if (F.active && !h.active) return;
+      if (F.pg && h.pg !== F.pg) return;
+      var st = oaStats(h);
+      if (q) {
+        var hay = (h.po + ' ' + h.vendor + ' ' + st.cat).toUpperCase();
+        if (hay.indexOf(q) < 0 && !h.lines.some(function (l) { return (l.d || '').toUpperCase().indexOf(q) >= 0 || l.m.toUpperCase() === q; })) return;
+      }
+      list.push(h);
+    });
+    list.sort(function (a, b) {
+      if (F.sort === 'end') return (a.ve || '').localeCompare(b.ve || '');
+      if (F.sort === 'val') return (b.cur === 'IDR' ? b.totalOpen : b.totalOpen * 16000) - (a.cur === 'IDR' ? a.totalOpen : a.totalOpen * 16000);
+      if (F.sort === 'po') return a.po.localeCompare(b.po);
+      return oaStats(b).used - oaStats(a).used || (b.active - a.active) || a.po.localeCompare(b.po);
+    });
+    var html = list.map(function (h) {
+      var st = oaStats(h), dl = daysLeft(h.ve);
+      var usedPct = h.tgtHdr > 0 ? Math.min(100, Math.max(0, (1 - h.totalOpen / h.tgtHdr) * 100)) : null;
+      return '<a class="card oa-card" href="#/kontrak/' + esc(h.po) + '">' +
+        '<div class="toolbar"><span class="po">' + esc(h.po) + '</span><span class="spacer"></span>' +
+        (h.active ? '<span class="badge ' + (dl < 60 ? 'warn' : 'ok') + '">Aktif · ' + dl + ' hari</span>' : '<span class="badge bad">Berakhir</span>') + '</div>' +
+        '<div class="vendor">' + esc(h.vendor) + '</div>' +
+        (st.cat ? '<div class="cat">' + esc(st.cat) + '</div>' : '') +
+        '<div class="meta"><span><b>' + h.lines.length + '</b> item</span><span><b>' + st.used + '</b> pernah dipakai ' + esc(homeName()) + '</span>' + (st.zero ? '<span style="color:var(--warn)"><b>' + st.zero + '</b> stok ' + esc(homeName()) + ' habis</span>' : '') + '</div>' +
+        '<div class="meta"><span>s/d <b>' + fmtDate(h.ve) + '</b></span><span>PG <b>' + esc(h.pg) + '</b></span><span>Sisa nilai <b>' + fmtBig(h.totalOpen, h.cur) + '</b></span></div>' +
+        (usedPct != null ? '<div class="progress" title="Terpakai ' + nf0.format(usedPct) + '% dari nilai kontrak"><i style="width:' + usedPct.toFixed(1) + '%"></i></div>' : '') +
+        '</a>';
+    }).join('');
+    $('#oaList').innerHTML = list.length ? '<div class="result-meta" style="margin-bottom:10px"><b>' + list.length + '</b> kontrak</div><div class="oa-grid">' + html + '</div>'
+      : '<div class="card empty"><h3>Tidak ada kontrak yang cocok</h3><p>Ubah kata kunci atau matikan filter "Hanya kontrak aktif".</p></div>';
+  }
+
+  // ================= Halaman: Detail Kontrak =================
+  function renderOADetail(po) {
+    if (!S.idx) { view.innerHTML = emptyData(); return; }
+    var h = S.idx.oaMap.get(po);
+    if (!h) { view.innerHTML = '<div class="card empty"><h3>Kontrak ' + esc(po) + ' tidak ditemukan</h3><p>Pastikan data ME3N terbaru sudah diupload.</p><a class="btn" href="#/kontrak">' + ICON.back + ' Kembali</a></div>'; return; }
+    $('#pageTitle').textContent = 'Kontrak ' + po;
+    $('#pageSub').textContent = h.vendor;
+    var st = oaStats(h), dl = daysLeft(h.ve);
+    view.innerHTML =
+      '<div style="margin-bottom:12px"><a class="btn sm" href="#/kontrak">' + ICON.back + ' Semua kontrak</a></div>' +
+      '<div class="card head-card"><div><div class="mono muted">Outline Agreement · PG ' + esc(h.pg) + ' · Vendor ' + esc(h.vendorCode) + '</div><h2>' + esc(h.vendor) + '</h2>' +
+      '<div class="meta muted">' + esc(st.cat) + '</div></div>' +
+      '<div>' + (h.active ? '<span class="badge ' + (dl < 60 ? 'warn' : 'ok') + '">Aktif · sisa ' + dl + ' hari</span>' : '<span class="badge bad">Kontrak berakhir</span>') + '</div></div>' +
+      '<div class="kpis" style="margin:14px 0">' +
+      '<div class="kpi"><div class="k">Masa berlaku</div><div class="v" style="font-size:16px">' + fmtDate(h.vs) + ' – ' + fmtDate(h.ve) + '</div></div>' +
+      '<div class="kpi"><div class="k">Nilai kontrak</div><div class="v">' + fmtBig(h.tgtHdr, h.cur) + '</div></div>' +
+      '<div class="kpi"><div class="k">Sisa nilai</div><div class="v" style="color:var(--brand)">' + fmtBig(h.totalOpen, h.cur) + '</div><div class="s">' + (h.tgtHdr > 0 ? nf0.format(h.totalOpen / h.tgtHdr * 100) + '% tersisa' : '') + '</div></div>' +
+      '<div class="kpi"><div class="k">Item kontrak</div><div class="v">' + h.lines.length + '</div><div class="s">' + st.used + ' pernah dipakai ' + esc(homeName()) + '</div></div>' +
+      '</div>' +
+      '<div class="card card-pad toolbar" style="margin-bottom:12px">' +
+      '<input id="oadq" class="input" style="flex:1;min-width:220px" placeholder="Filter item dalam kontrak ini…" value="' + esc(S.oaD.q) + '">' +
+      '<span class="chip-toggle' + (S.oaD.used ? ' on' : '') + '" data-oad="used">Pernah dipakai ' + esc(homeName()) + '</span>' +
+      '<span class="chip-toggle' + (S.oaD.zero ? ' on' : '') + '" data-oad="zero">Stok ' + esc(homeName()) + ' habis</span>' +
+      '<button class="btn" data-act="check-all" data-po="' + esc(po) + '">Centang semua yang tampil</button>' +
+      '<button class="btn" data-act="uncheck-all" data-po="' + esc(po) + '">Hapus centang</button></div>' +
+      '<div id="oaItems" data-po="' + esc(po) + '"></div>';
+    renderOAItems(po);
+  }
+  function oaVisibleLines(h) {
+    var q = S.oaD.q.trim(), pq = Search.parseQuery(q);
+    return h.lines.filter(function (l) {
+      var o = S.idx.mats.get(l.m);
+      if (S.oaD.used && !(o.hist > 0 || o.ytd > 0)) return false;
+      if (S.oaD.zero && o.homeStock > 0) return false;
+      if (q) { var r = Search.score(pq, o.ix); if (!(r.missed === 0 && r.s > 0)) return false; }
+      return true;
+    });
+  }
+  function renderOAItems(po) {
+    var h = S.idx.oaMap.get(po), lines = oaVisibleLines(h);
+    var F = fields().filter(function (f) { return !f.home; });
+    var rows = lines.map(function (l) {
+      var o = S.idx.mats.get(l.m), it = item(l.m);
+      var sel = it && it.ro.on && it.ro.oa === l.key;
+      var other = it && it.ro.on && it.ro.oa && it.ro.oa !== l.key;
+      var sug = suggestion(o);
+      return '<tr class="' + (sel ? 'in-cart' : '') + '" data-m="' + esc(l.m) + '">' +
+        '<td class="c">' + pick('ro', l.m, sel, false, other ? 'Saat ini memakai OA ' + it.ro.oa : '', ' data-key="' + esc(l.key) + '"') + '</td>' +
+        '<td class="mat-cell"><div class="mat-desc"><a href="#" data-act="detail" data-m="' + esc(l.m) + '" style="color:inherit">' + esc(o.d || l.d) + '</a><span class="uom">' + esc(l.u) + '</span></div><div class="mat-code">' + esc(l.m) + ' · item ' + esc(l.item) + (other ? ' · <span style="color:var(--warn)">RO via ' + esc(it.ro.oa.split('/')[0]) + '</span>' : '') + '</div></td>' +
+        '<td class="num price">' + fmtMoney(l.price, l.cur) + '</td>' +
+        '<td class="num small">' + (l.tgtQty > 0 ? fmtQ(l.openQty) + ' / ' + fmtQ(l.tgtQty) : '<span class="muted">—</span>') + '</td>' +
+        '<td class="num">' + qtyPill(o.homeStock, true) + '</td>' +
+        F.map(function (f) { return '<td class="num">' + qtyPill(o.fs[fields().indexOf(f)], false, fieldTitle(o, f)) + '</td>'; }).join('') +
+        '<td class="num">' + fmtQ(o.hist) + '</td><td class="num">' + fmtQ(Math.round(o.avg12 * 10) / 10) + '</td>' +
+        '<td class="num"><input class="input num sm" type="number" min="0" step="any" data-oaqty="' + esc(l.m) + '" data-key="' + esc(l.key) + '" value="' + (sel && it.ro.qty != null ? it.ro.qty : '') + '" placeholder="' + (sug || '') + '"></td></tr>';
+    }).join('');
+    $('#oaItems').innerHTML = '<div class="result-meta" style="margin-bottom:8px"><b>' + lines.length + '</b> dari ' + h.lines.length + ' item ditampilkan · centang <b>RO</b> untuk menarik material ke Call Order</div>' +
+      '<div class="table-wrap tall"><table class="grid"><thead><tr><th class="c">Tarik</th><th>Material</th><th class="num">Net Price</th><th class="num">Sisa Qty</th><th class="num th-field">' + esc(homeName()) + '<small>' + ddmm(S.idx.homeDate) + '</small></th>' +
+      F.map(function (f) { return '<th class="num th-field">' + esc(f.name) + '<small>' + esc(f.plants.join('/')) + '</small></th>'; }).join('') +
+      '<th class="num">Pakai ' + S.idx.histYear + '</th><th class="num">Rata²/bln</th><th class="num">Qty Call</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="12" class="center muted" style="padding:30px">Tidak ada item sesuai filter</td></tr>') + '</tbody></table></div>';
+  }
+
+  // ================= Halaman: Call Order =================
+  function coMeta() {
+    var m = S.cart.meta, now = new Date();
+    if (m.month == null) m.month = now.getMonth();
+    if (!m.year) m.year = now.getFullYear();
+    return m;
+  }
+  function coTitle() {
+    var m = coMeta();
+    return m.title || ('PLAN CALL ORDER MATERIAL STOCK ZONA 1 - ' + BULAN[m.month].toUpperCase());
+  }
+  function groupTitle(po) {
+    if (S.cart.groupTitles[po]) return S.cart.groupTitles[po];
+    var h = S.idx.oaMap.get(po);
+    if (!h) return 'Kontrak ' + po;
+    var cat = oaStats(h).cat;
+    return (cat ? cat + ' - ' : '') + 'Kontrak ' + po + ' (' + h.vendor + ')';
+  }
+  function bauSources(o) {
+    var out = [];
+    fields().forEach(function (f) {
+      if (f.home) return;
+      var q = 0, withStock = [];
+      f.plants.forEach(function (p) { if (o.st[p] > 0) { q += o.st[p]; withStock.push(p); } });
+      out.push({ key: 'F:' + f.name, label: f.name, plants: withStock.length ? withStock : f.plants, stock: q, field: true });
+    });
+    o.otherPlants.forEach(function (p) { out.push({ key: 'P:' + p, label: p, plants: [p], stock: o.st[p], field: false }); });
+    return out;
+  }
+  function srcPrice(o, src) {
+    var q = 0, v = 0;
+    src.plants.forEach(function (p) { if (o.st[p] > 0 && o.stv[p] != null) { q += o.st[p]; v += o.stv[p]; } });
+    return q > 0 ? v / q : (o.map || null);
+  }
+
+  // Susun data Call Order (dipakai halaman & export)
+  function buildCO() {
+    var idx = S.idx, ro = {}, roOrder = [], bau = {}, bauOrder = [];
+    var items = Object.keys(S.cart.items).map(function (k) { return S.cart.items[k]; })
+      .filter(function (it) { return idx.mats.has(it.m); })
+      .sort(function (a, b) { return a.t - b.t; });
+    items.forEach(function (it) {
+      var o = idx.mats.get(it.m);
+      if (it.ro.on) {
+        var l = lineOf(o, it.ro.oa);
+        var po = l ? l.po : '-';
+        if (!ro[po]) { ro[po] = { po: po, items: [] }; roOrder.push(po); }
+        ro[po].items.push({
+          it: it, o: o, l: l, m: o.m, d: o.d, u: o.u || (l && l.u), stock: o.homeStock, actual: it.ro.actual, hist: o.hist,
+          qty: it.ro.qty, price: l ? l.price : null, cur: l ? l.cur : 'IDR', oa: l ? l.po : '', oaMat: l ? l.m : '',
+          note: it.ro.note || autoNote(o), sug: suggestion(o)
+        });
+      }
+      if (it.bau.on) {
+        bauSources(o).forEach(function (src) {
+          var q = it.bau.alloc[src.key];
+          if (!(q > 0)) return;
+          if (!bau[src.key]) { bau[src.key] = { key: src.key, label: src.label, field: src.field, plants: {}, items: [] }; bauOrder.push(src.key); }
+          src.plants.forEach(function (p) { bau[src.key].plants[p] = 1; });
+          bau[src.key].items.push({ m: o.m, d: o.d, u: o.u, homeStock: o.homeStock, plants: src.plants.join('/'), srcStock: src.stock, qty: q, price: srcPrice(o, src), note: it.bau.note });
+        });
+      }
+    });
+    var letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    var roGroups = roOrder.map(function (po, i) { var g = ro[po]; g.letter = letters[i % 26]; g.title = po === '-' ? 'Tanpa kontrak (pilih OA)' : groupTitle(po); return g; });
+    var bauGroups = bauOrder.map(function (k, i) {
+      var g = bau[k]; g.letter = letters[i % 26];
+      g.title = (g.field ? 'BAU dari Field ' + g.label : 'BAU dari Plant ' + g.label) + ' (' + Object.keys(g.plants).join('/') + ')';
+      return g;
+    });
+    return {
+      title: coTitle(), meta: coMeta(), homeName: homeName(), homeDate: idx.homeDate, histYear: idx.histYear,
+      roGroups: roGroups, bauGroups: bauGroups, items: items
+    };
+  }
+
+  function renderCO() {
+    if (!hasData()) { view.innerHTML = emptyData(); return; }
+    var co = buildCO(), meta = co.meta;
+    var activeItems = co.items.filter(active);
+    $('#pageActions').innerHTML = '<button class="btn danger" data-act="clear-co">' + ICON.trash + ' Kosongkan</button>' +
+      '<button class="btn success" data-act="export"' + (activeItems.length ? '' : ' disabled') + '>' + ICON.excel + ' Export Excel (Template MIM)</button>';
+    var head = '<div class="card card-pad" style="display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:end">' +
+      '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Judul (baris 1 template)</div><input class="input" style="width:100%;font-weight:700" id="coTitle" value="' + esc(co.title) + '"></label>' +
+      '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Bulan</div><select class="select" id="coMonth">' + BULAN.map(function (b, i) { return '<option value="' + i + '"' + (meta.month === i ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select></label>' +
+      '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Tahun</div><input class="input" style="width:90px" type="number" id="coYear" value="' + meta.year + '"></label></div>';
+    if (!activeItems.length) {
+      view.innerHTML = head + '<div class="card empty" style="margin-top:16px"><div class="ico">' + ICON.list + '</div><h3>Call Order masih kosong</h3><p>Cari material lalu centang <b>RO</b> (tarik via kontrak) atau <b>BAU</b> (Bantuan Antar Unit dari Field lain). Anda juga bisa membuka satu kontrak dan mencentang banyak item sekaligus.</p>' +
+        '<div class="toolbar" style="justify-content:center"><a class="btn primary" href="#/cari">' + ICON.search + ' Cari Material</a><a class="btn" href="#/kontrak">Lihat Kontrak</a></div></div>';
+      return;
+    }
+    var roCount = co.roGroups.reduce(function (a, g) { return a + g.items.length; }, 0);
+    var totals = {};
+    co.roGroups.forEach(function (g) { g.items.forEach(function (x) { if (x.qty > 0 && x.price != null) totals[x.cur] = (totals[x.cur] || 0) + x.qty * x.price; }); });
+    var bauItems = activeItems.filter(function (it) { return it.bau.on; });
+    var kpis = '<div class="kpis" style="margin:14px 0">' +
+      '<div class="kpi"><div class="k">Item RO</div><div class="v" style="color:var(--ro)">' + roCount + '</div><div class="s">' + co.roGroups.length + ' kontrak</div></div>' +
+      '<div class="kpi"><div class="k">Nilai RO</div><div class="v" id="kpiTotal">' + (Object.keys(totals).map(function (c) { return fmtBig(totals[c], c); }).join(' + ') || 'Rp 0') + '</div><div class="s">qty × net price</div></div>' +
+      '<div class="kpi"><div class="k">Item BAU</div><div class="v" style="color:var(--bau)">' + bauItems.length + '</div><div class="s" id="kpiBauSrc">' + co.bauGroups.length + ' sumber field/plant</div></div>' +
+      '<div class="kpi"><div class="k">Data SAP ' + esc(homeName()) + '</div><div class="v" style="font-size:18px">' + fmtDate(co.homeDate) + '</div><div class="s">History = pemakaian ' + co.histYear + '</div></div></div>';
+
+    // ---- Tabel RO ----
+    var no = 0;
+    var roHtml = co.roGroups.map(function (g) {
+      var rows = g.items.map(function (x) {
+        no++;
+        var opts = x.o.oa.map(function (l) {
+          return '<option value="' + esc(l.key) + '"' + (x.l && x.l.key === l.key ? ' selected' : '') + '>' + esc(l.po) + ' · ' + fmtMoney(l.price, l.cur) + (l.active ? '' : ' · BERAKHIR') + '</option>';
+        }).join('');
+        var total = x.qty > 0 && x.price != null ? fmtMoney(x.qty * x.price, x.cur) : '—';
+        return '<tr data-m="' + esc(x.m) + '">' +
+          '<td class="c muted">' + no + '</td>' +
+          '<td class="mat-cell"><div class="mat-desc"><a href="#" data-act="detail" data-m="' + esc(x.m) + '" style="color:inherit">' + esc(x.d) + '</a><span class="uom">' + esc(x.u) + '</span></div><div class="mat-code">' + esc(x.m) + (x.oaMat && x.oaMat !== x.m ? ' · KIMAP OA ' + esc(x.oaMat) : '') + '</div>' +
+          '<input class="input sm note-input" style="margin-top:6px" data-f="note" value="' + esc(x.it.ro.note) + '" placeholder="' + esc('Note: ' + (autoNote(x.o) || 'catatan')) + '" title="Kolom Note di Excel. Kosong = catatan otomatis"></td>' +
+          '<td class="num">' + qtyPill(x.stock, true) + '</td>' +
+          '<td class="num"><input class="input num sm" type="number" min="0" step="any" data-f="actual" value="' + (x.actual != null ? x.actual : '') + '" placeholder="—"></td>' +
+          '<td class="num">' + fmtQ(x.hist) + '</td>' +
+          '<td class="num"><input class="input num sm" type="number" min="0" step="any" data-f="qty" value="' + (x.qty != null ? x.qty : '') + '" placeholder="0">' +
+          (x.sug > 0 ? '<button class="hint-btn" data-act="sug" data-v="' + x.sug + '" title="Rata-rata pakai ' + S.settings.coverMonths + ' bulan dikurangi stok">saran ' + fmtQ(x.sug) + '</button>' : '') + '</td>' +
+          '<td class="num price">' + fmtMoney(x.price, x.cur) + '</td>' +
+          '<td class="num price" data-total>' + total + '</td>' +
+          '<td><select class="select sm" data-f="oa" style="max-width:150px">' + opts + '</select></td>' +
+          '<td class="pick-col"><div class="picks mode">' + pick('ro', x.m, true, false) + pick('bau', x.m, x.it.bau.on, false) +
+          '<button class="icon-btn" data-act="remove" data-m="' + esc(x.m) + '" title="Hapus dari Call Order">' + ICON.trash + '</button></div></td></tr>';
+      }).join('');
+      return '<tr class="group"><td class="c"><span class="letter">' + g.letter + '</span></td><td colspan="9">' +
+        (g.po === '-' ? '<span style="color:var(--bad)">' + esc(g.title) + '</span>' : '<input class="group-title" data-po="' + esc(g.po) + '" value="' + esc(g.title) + '">') + '</td></tr>' + rows;
+    }).join('');
+    var roTable = co.roGroups.length ? '<div class="table-wrap"><table class="grid" id="roTable"><thead><tr><th class="c">No</th><th>Material &amp; Note</th><th class="num th-field">Data SAP<small>' + ddmm(co.homeDate) + '</small></th><th class="num">Stok Aktual</th><th class="num th-field">History<small>' + co.histYear + '</small></th><th class="num">Call RO</th><th class="num">Net Price</th><th class="num">Total Harga</th><th>OA</th><th class="pick-col">Mode</th></tr></thead><tbody>' + roHtml + '</tbody></table></div>'
+      : '<div class="card card-pad muted">Belum ada material RO.</div>';
+
+    // ---- Tabel BAU ----
+    var bauHtml = bauItems.map(function (it, i) {
+      var o = S.idx.mats.get(it.m);
+      var srcs = bauSources(o);
+      var total = 0;
+      function allocBox(s) {
+        var v = it.bau.alloc[s.key];
+        if (v > 0) total += v;
+        var dis = !(s.stock > 0) && !(v > 0);
+        return '<div class="alloc-item' + (v > 0 ? ' has' : '') + '"><div class="n">' + esc(s.label) + '<small>' + esc(s.plants.join('/')) + ' · stok ' + fmtQ(s.stock) + '</small></div>' +
+          '<input class="input num sm" type="number" min="0" step="any" data-alloc="' + esc(s.key) + '" value="' + (v > 0 ? v : '') + '" placeholder="0"' + (dis ? ' disabled title="Tidak ada stok"' : '') + '></div>';
+      }
+      var main = srcs.filter(function (s) { return s.field; });
+      var extra = srcs.filter(function (s) { return !s.field; });
+      var extraUsed = extra.some(function (s) { return it.bau.alloc[s.key] > 0; });
+      var alloc = main.map(allocBox).join('') +
+        (extra.length ? '<details class="alloc-more"' + (extraUsed ? ' open' : '') + '><summary>+ Plant lain di luar Zona 1 (' + extra.length + ')</summary><div class="alloc">' + extra.map(allocBox).join('') + '</div></details>' : '');
+      return '<tr data-m="' + esc(it.m) + '"><td class="c muted">' + (i + 1) + '</td>' +
+        '<td class="mat-cell"><div class="mat-desc"><a href="#" data-act="detail" data-m="' + esc(it.m) + '" style="color:inherit">' + esc(o.d) + '</a><span class="uom">' + esc(o.u) + '</span></div><div class="mat-code">' + esc(o.m) + '</div></td>' +
+        '<td class="num">' + qtyPill(o.homeStock, true) + '</td>' +
+        '<td><div class="alloc">' + alloc + '</div></td>' +
+        '<td class="num"><b data-bautotal>' + fmtQ(total) + '</b></td>' +
+        '<td><input class="input sm note-input" data-f="baunote" value="' + esc(it.bau.note) + '" placeholder="Catatan BAU"></td>' +
+        '<td class="pick-col"><div class="picks mode">' + pick('ro', it.m, it.ro.on, !o.oa.length) + pick('bau', it.m, true, false) +
+        '<button class="icon-btn" data-act="remove" data-m="' + esc(it.m) + '" title="Hapus dari Call Order">' + ICON.trash + '</button></div></td></tr>';
+    }).join('');
+    var bauTable = bauItems.length ? '<div class="table-wrap"><table class="grid" id="bauTable"><thead><tr><th class="c">No</th><th>Material</th><th class="num th-field">Stok ' + esc(homeName()) + '<small>' + ddmm(co.homeDate) + '</small></th><th>Sumber BAU &amp; Qty diminta</th><th class="num">Total</th><th>Note</th><th class="pick-col">Mode</th></tr></thead><tbody>' + bauHtml + '</tbody></table></div>'
+      : '<div class="card card-pad muted">Belum ada material BAU.</div>';
+
+    view.innerHTML = head + kpis +
+      '<div class="co-section"><div class="co-section-head"><span class="badge ro">RO</span><h3>Release Order via Kontrak</h3><span class="muted small">— dikelompokkan per OA seperti template "Call Order to MIM"</span></div>' + roTable + '</div>' +
+      '<div class="co-section"><div class="co-section-head"><span class="badge bau">BAU</span><h3>Bantuan Antar Unit</h3><span class="muted small">— isi qty yang diminta dari tiap Field</span></div>' + bauTable + '</div>';
+  }
+
+  function refreshCOTotals() {
+    var co = buildCO(), totals = {};
+    co.roGroups.forEach(function (g) { g.items.forEach(function (x) { if (x.qty > 0 && x.price != null) totals[x.cur] = (totals[x.cur] || 0) + x.qty * x.price; }); });
+    var kb = $('#kpiBauSrc');
+    if (kb) kb.textContent = co.bauGroups.length + ' sumber field/plant';
+    var k = $('#kpiTotal');
+    if (k) k.textContent = Object.keys(totals).map(function (c) { return fmtBig(totals[c], c); }).join(' + ') || 'Rp 0';
+  }
+
+  // ================= Halaman: Data =================
+  function bundleCard() {
+    var b = window.SAP_BUNDLE, applied = Store.load('bundleApplied');
+    var status = b ? '<div>Versi di website: <b>' + fmtDate(b.builtAt.slice(0, 10)) + '</b> ' +
+      (applied === b.builtAt ? '<span class="badge ok">Sudah dimuat</span>' : '<span class="badge warn">Belum dimuat</span>') + '</div>' + bundleInfoHtml(b.info)
+      : '<div class="muted">Belum ada file <span class="mono">data/sap-data.js</span> di website.</div>';
+    return '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Data bawaan website (untuk semua pengguna)</h4>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">' +
+      '<div style="display:flex;flex-direction:column;gap:10px">' + status +
+      (b ? '<div><button class="btn sm" data-act="reload-bundle">Muat ulang data bawaan (ganti data di browser ini)</button></div>' : '') + '</div>' +
+      '<div><div style="font-weight:700;margin-bottom:6px">Update data bawaan</div>' +
+      '<ol class="steps small" style="margin-bottom:10px"><li>Upload file Excel SAP terbaru di kotak atas.</li><li>Isi password lalu klik <b>Buat file data bawaan</b> → file <span class="mono">sap-data.js</span> ter-download.</li>' +
+      '<li>Buka <a href="' + REPO_URL + '/upload/main/data" target="_blank" rel="noopener">GitHub › folder data › Upload files</a>, tarik <span class="mono">sap-data.js</span>, klik <b>Commit changes</b>. Website ter-update ±1–2 menit.</li></ol>' +
+      '<div class="toolbar"><input type="password" class="input sm" id="mbPw" placeholder="Password (min. 8 karakter)" autocomplete="new-password">' +
+      '<input type="password" class="input sm" id="mbPw2" placeholder="Ulangi password" autocomplete="new-password">' +
+      '<button class="btn primary sm" data-act="make-bundle">Buat file data bawaan</button></div>' +
+      '<div class="small hidden" id="mbDone" style="margin-top:8px;color:var(--ok)">✓ File dibuat. Lanjutkan langkah 3 (upload ke GitHub). Pengguna lain perlu password yang baru jika Anda menggantinya.</div>' +
+      '</div></div></div>';
+  }
+
+  function renderData() {
+    var ds = S.ds;
+    var stockPlants = ds.stock ? Object.keys(ds.stock.plants).sort() : [];
+    var stockList = stockPlants.map(function (p) {
+      var P = ds.stock.plants[p], f = S.idx && S.idx.fieldOfPlant(p);
+      return '<tr><td class="mono">' + esc(p) + '</td><td>' + (f ? esc(f.name) : '<span class="muted">—</span>') + '</td><td class="num">' + nf0.format(P.rows.length) + '</td><td>' + fmtDate(P.date) + '</td><td class="small muted">' + esc(P.file) + '</td></tr>';
+    }).join('');
+    view.innerHTML =
+      '<div class="card card-pad" style="margin-bottom:16px;display:flex;gap:14px;align-items:flex-start;background:linear-gradient(135deg,#f0f6ff,#fff)">' +
+      '<div class="empty" style="padding:0"><div class="ico" style="margin:0;width:48px;height:48px;border-radius:14px">' + ICON.box.replace('<svg', '<svg style="width:24px;height:24px"') + '</div></div>' +
+      '<div><b>Data aman di komputer Anda.</b> File Excel dibaca langsung oleh browser dan disimpan di penyimpanan lokal browser ini (IndexedDB). Tidak ada data yang dikirim ke internet, sehingga website ini aman di-hosting publik (GitHub Pages) tanpa membocorkan data stok &amp; harga kontrak.' +
+      '<div class="small muted" style="margin-top:6px">Upload ulang kapan saja untuk memperbarui. File MB52 terbaru akan menggantikan stok plant yang sama; plant lain tetap.</div></div></div>' +
+      '<div class="dropzone" id="dropzone">' + ICON.upload + '<h3>Tarik &amp; lepas file Excel SAP di sini</h3><div class="muted">atau klik untuk memilih — boleh beberapa file sekaligus (MB52/ZMB52, ME3N, MB51). Jenis file dikenali otomatis.</div></div>' +
+      (S.lastLog ? '<div class="log" style="margin-top:14px">' + esc(S.lastLog) + '</div>' : '') +
+      bundleCard() +
+      '<div class="ds-grid" style="margin-top:18px">' +
+      '<div class="card ds-card"><h4><i class="dot ' + (ds.stock ? 'on' : '') + '"></i>Stok — MB52 / ZMB52</h4><div class="muted small">Kolom: Plant, Material, Material Description, Unrestricted, (Value Unrestricted)</div>' +
+      (ds.stock ? '<div class="table-wrap" style="max-height:260px"><table class="grid"><thead><tr><th>Plant</th><th>Field</th><th class="num">Baris</th><th>Tanggal</th><th>File</th></tr></thead><tbody>' + stockList + '</tbody></table></div><div><button class="btn sm danger" data-act="del-ds" data-k="stock">' + ICON.trash + ' Hapus data stok</button></div>' : '<div class="muted">Belum ada</div>') + '</div>' +
+      '<div class="card ds-card"><h4><i class="dot ' + (ds.oa ? 'on' : '') + '"></i>Kontrak — ME3N</h4><div class="muted small">Kolom: Purchasing Document, Item, Material, Short Text, Net price, Validity Period End, Target/Open value</div>' +
+      (ds.oa ? '<div><b>' + nf0.format(ds.oa.rows.length) + '</b> item · <b>' + (S.idx ? S.idx.oaMap.size : 0) + '</b> kontrak</div><div class="small muted">' + esc(ds.oa.file) + ' · ' + fmtDate(ds.oa.date) + '</div><div><button class="btn sm danger" data-act="del-ds" data-k="oa">' + ICON.trash + ' Hapus data kontrak</button></div>' : '<div class="muted">Belum ada</div>') + '</div>' +
+      '<div class="card ds-card"><h4><i class="dot ' + (ds.mb51 ? 'on' : '') + '"></i>Pemakaian — MB51</h4><div class="muted small">Movement GI dihitung: 201/202, 221/222, 261/262, 291/292, 949/950, 963/964</div>' +
+      (ds.mb51 ? '<div>Periode <b>' + fmtDate(ds.mb51.min) + '</b> s/d <b>' + fmtDate(ds.mb51.max) + '</b></div><div><b>' + nf0.format(Object.keys(ds.mb51.agg).length) + '</b> material</div><div class="small muted">' + ds.mb51.files.map(function (f) { return esc(f.name); }).join('<br>') + '</div><div><button class="btn sm danger" data-act="del-ds" data-k="mb51">' + ICON.trash + ' Hapus data pemakaian</button></div>' : '<div class="muted">Belum ada</div>') + '</div>' +
+      '</div>' +
+      '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Cara menyiapkan file dari SAP</h4><ol class="steps">' +
+      '<li><b>Stok</b>: jalankan <span class="mono">ZMB52</span>/<span class="mono">MB52</span> untuk plant Zona 1 (W101, W102, W802, W803, W104, …) → export ke Excel.</li>' +
+      '<li><b>Kontrak</b>: jalankan <span class="mono">ME3N</span> (Purch. Org 2021) → export ke Excel.</li>' +
+      '<li><b>Pemakaian</b>: jalankan <span class="mono">MB51</span> dengan movement type GI → export. File yang berisi pivot juga bisa, sheet data mentah akan dicari otomatis.</li>' +
+      '<li>Tarik semua file ke kotak di atas. Tanggal data dibaca dari nama file (contoh <span class="mono">10.14_ZMB52.xlsx</span> = 14 Oktober).</li></ol></div>';
+  }
+
+  // ================= Halaman: Pengaturan =================
+  function renderSettings() {
+    var st = S.settings;
+    var years = [];
+    var y0 = S.idx ? S.idx.dataYear : new Date().getFullYear();
+    for (var y = y0; y >= y0 - 5; y--) years.push(y);
+    var rows = st.fields.map(function (f, i) {
+      return '<tr><td><input type="radio" name="home" data-home="' + i + '"' + (f.home ? ' checked' : '') + '></td>' +
+        '<td><input class="input sm" data-fname="' + i + '" value="' + esc(f.name) + '"></td>' +
+        '<td><input class="input sm mono" style="width:100%" data-fplants="' + i + '" value="' + esc(f.plants.join(', ')) + '"></td>' +
+        '<td><button class="icon-btn" data-act="del-field" data-i="' + i + '">' + ICON.trash + '</button></td></tr>';
+    }).join('');
+    var known = S.idx ? S.idx.plantsAll.join(', ') : '-';
+    view.innerHTML =
+      '<div class="card card-pad"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
+      '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Field lain tampil sebagai kolom stok dan sumber BAU. Satu field boleh punya beberapa plant, pisahkan dengan koma (contoh Lirik: W803, W104).</p>' +
+      '<div class="table-wrap"><table class="grid"><thead><tr><th>Home</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="toolbar" style="margin-top:10px"><button class="btn sm" data-act="add-field">+ Tambah Field</button><span class="small muted">Plant di data saat ini: <span class="mono">' + esc(known) + '</span></span></div></div>' +
+      '<div class="card card-pad" style="margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = rata-rata pemakaian/bulan × cover − stok ' + esc(homeName()) + '</div></label>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div>' +
+      '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Hapus semua data &amp; Call Order</button></div>';
+  }
+  function readSettingsForm() {
+    var st = clone(S.settings);
+    st.fields.forEach(function (f, i) {
+      var n = $('[data-fname="' + i + '"]'), p = $('[data-fplants="' + i + '"]'), h = $('[data-home="' + i + '"]');
+      if (n) f.name = n.value.trim() || f.name;
+      if (p) f.plants = p.value.toUpperCase().split(/[\s,;\/]+/).filter(Boolean);
+      if (h) f.home = h.checked;
+    });
+    var c = $('#setCover'); if (c) st.coverMonths = Math.max(1, +c.value || 3);
+    var hy = $('#setHist'); if (hy) st.historyYear = hy.value ? +hy.value : null;
+    return st;
+  }
+
+  // ================= Data: load, upload, rebuild =================
+  function rebuild() {
+    S.idx = Model.build(S.ds, S.settings);
+  }
+  function parseInWorker(buf, name, lm) {
+    function main() {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () {
+          try { resolve(Parser.parseFile(XLSX, buf, name, lm)); } catch (e) { reject(e); }
+        }, 60);
+      });
+    }
+    if (location.protocol === 'file:' || typeof Worker === 'undefined') return main();
+    return new Promise(function (resolve, reject) {
+      var w;
+      try { w = new Worker('js/worker.js'); } catch (e) { main().then(resolve, reject); return; }
+      w.onmessage = function (e) { w.terminate(); if (e.data.ok) resolve(e.data.res); else reject(new Error(e.data.error)); };
+      w.onerror = function (e) { e.preventDefault(); w.terminate(); main().then(resolve, reject); };
+      w.postMessage({ buf: buf, name: name, lastModified: lm });
+    });
+  }
+  async function handleFiles(files) {
+    files = Array.prototype.slice.call(files || []);
+    if (!files.length) return;
+    var parsed = [], log = [];
+    try {
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        loading('Membaca ' + f.name + ' (' + (i + 1) + '/' + files.length + ')… file MB51 besar bisa ±10–20 detik');
+        try {
+          var buf = await f.arrayBuffer();
+          var res = await parseInWorker(buf, f.name, f.lastModified);
+          parsed.push(res);
+        } catch (e) {
+          log.push('✗ ' + f.name + ': ' + e.message);
+        }
+      }
+      parsed.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+      parsed.forEach(function (p) {
+        var notes = Model.ingest(S.ds, p);
+        log.push('✓ ' + p.name + ' (tanggal data ' + p.date + ')\n   ' + notes.join('\n   '));
+      });
+      loading('Menyimpan & menyusun index…');
+      await Store.set('stock', S.ds.stock);
+      await Store.set('oa', S.ds.oa);
+      await Store.set('mb51', S.ds.mb51);
+      rebuild();
+      S.lastLog = log.join('\n');
+      toast(parsed.length + ' file berhasil diproses');
+    } finally {
+      loading(false);
+      render();
+    }
+  }
+
+  // ================= Data bawaan (terenkripsi) =================
+  async function applyBundle(pw, force) {
+    var b = window.SAP_BUNDLE;
+    var data = await Bundle.decrypt(b.payload, pw);
+    if (force) S.ds = { stock: null, oa: null, mb51: null };
+    Bundle.merge(S.ds, data);
+    await Store.set('stock', S.ds.stock);
+    await Store.set('oa', S.ds.oa);
+    await Store.set('mb51', S.ds.mb51);
+    Store.save('bundleApplied', b.builtAt);
+    rebuild();
+  }
+  function bundleInfoHtml(info) {
+    if (!info) return '';
+    return '<div class="lock-info">' +
+      '<div><i class="dot on"></i>Stok SAP <b>' + fmtDate(info.stockDate) + '</b> · ' + info.stockPlants + ' plant</div>' +
+      '<div><i class="dot on"></i>Kontrak ME3N <b>' + fmtDate(info.oaDate) + '</b></div>' +
+      '<div><i class="dot on"></i>Pemakaian MB51 <b>' + fmtDate(info.mb51Min) + ' – ' + fmtDate(info.mb51Max) + '</b></div></div>';
+  }
+  function showLock() {
+    var b = window.SAP_BUNDLE, el = $('#lock');
+    el.innerHTML = '<div class="lock-card">' +
+      '<div class="brand-mark" style="margin:0 auto 14px;width:52px;height:52px">' + ICON.box.replace('<svg', '<svg width="26" height="26"') + '</div>' +
+      '<h2>Data SAP Material Warehouse</h2>' +
+      '<p class="muted">Data stok, kontrak & pemakaian sudah tersedia di website ini dalam bentuk <b>terenkripsi</b>. Masukkan password untuk membukanya — cukup sekali di browser ini.</p>' +
+      bundleInfoHtml(b.info) +
+      '<input type="password" class="input" id="lockPw" placeholder="Password data" autocomplete="current-password" style="width:100%;height:46px;font-size:15px">' +
+      '<label class="small" style="display:flex;gap:8px;align-items:center;margin:10px 0 14px"><input type="checkbox" id="lockRemember" checked> Ingat password di browser ini</label>' +
+      '<div class="lock-err" id="lockErr"></div>' +
+      '<button class="btn primary" style="width:100%;height:44px" data-act="unlock">Buka Data</button>' +
+      '<button class="btn ghost sm" style="margin-top:10px" data-act="skip-lock">Lewati — saya upload file Excel sendiri</button></div>';
+    el.classList.remove('hidden');
+    setTimeout(function () { var i = $('#lockPw'); if (i) i.focus(); }, 50);
+  }
+  function unlockBundle() {
+    var pw = $('#lockPw').value;
+    if (!pw) return;
+    $('#lockErr').textContent = '';
+    loading('Membuka data…');
+    applyBundle(pw, !!S.forceBundle).then(function () {
+      Store.save('bundlePw', $('#lockRemember').checked ? pw : null);
+      S.needPw = false; S.forceBundle = false;
+      $('#lock').classList.add('hidden');
+      toast('Data SAP berhasil dibuka');
+      render();
+    }).catch(function (err) {
+      $('#lockErr').textContent = err.message === 'Password salah' ? 'Password salah, coba lagi.' : err.message;
+    }).then(function () { loading(false); });
+  }
+  function makeBundle() {
+    var p1 = $('#mbPw').value, p2 = $('#mbPw2').value;
+    if (!S.ds.stock && !S.ds.oa && !S.ds.mb51) { toast('Belum ada data untuk dijadikan data bawaan', true); return; }
+    if (p1.length < 8) { toast('Password minimal 8 karakter', true); return; }
+    if (p1 !== p2) { toast('Konfirmasi password tidak sama', true); return; }
+    loading('Mengenkripsi data…');
+    Bundle.fileContent(S.ds, p1).then(function (txt) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([txt], { type: 'text/javascript' }));
+      a.download = 'sap-data.js';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      Store.save('bundlePw', p1);
+      $('#mbDone').classList.remove('hidden');
+      toast('sap-data.js dibuat — upload ke GitHub folder data/');
+    }).catch(function (err) { toast('Gagal: ' + err.message, true); })
+      .then(function () { loading(false); });
+  }
+
+  // ================= Event handlers =================
+  document.addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.id === 'q') {
+      S.q = t.value; S.limit = 60;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(renderResults, 120);
+    } else if (t.id === 'oaq') {
+      S.oaF.q = t.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(renderOACards, 150);
+    } else if (t.id === 'oadq') {
+      S.oaD.q = t.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { renderOAItems($('#oaItems').getAttribute('data-po')); }, 150);
+    } else if (t.id === 'coTitle') {
+      S.cart.meta.title = t.value; saveCart();
+    } else if (t.id === 'coYear') {
+      S.cart.meta.year = +t.value || new Date().getFullYear(); saveCart();
+    } else if (t.classList.contains('group-title')) {
+      S.cart.groupTitles[t.getAttribute('data-po')] = t.value; saveCart();
+    } else if (t.hasAttribute('data-oaqty')) {
+      var m = t.getAttribute('data-oaqty'), key = t.getAttribute('data-key');
+      var it = item(m, true), v = numVal(t.value);
+      if (v > 0 && !(it.ro.on && it.ro.oa === key)) {
+        setRO(m, true, key);
+        var cb = t.closest('tr').querySelector('[data-pick="ro"]'); if (cb) cb.checked = true;
+        t.closest('tr').classList.add('in-cart');
+      }
+      if (it.ro.oa === key) { it.ro.qty = v; saveCart(); }
+    } else {
+      var tr = t.closest('#roTable tr[data-m], #bauTable tr[data-m]');
+      if (!tr) return;
+      var it2 = item(tr.getAttribute('data-m'));
+      if (!it2) return;
+      var f = t.getAttribute('data-f');
+      if (f === 'qty') {
+        it2.ro.qty = numVal(t.value);
+        var o = S.idx.mats.get(it2.m), l = lineOf(o, it2.ro.oa);
+        var cell = tr.querySelector('[data-total]');
+        if (cell) cell.textContent = it2.ro.qty > 0 && l ? fmtMoney(it2.ro.qty * l.price, l.cur) : '—';
+        saveCart(); refreshCOTotals();
+      } else if (f === 'actual') { it2.ro.actual = numVal(t.value); saveCart(); }
+      else if (f === 'note') { it2.ro.note = t.value; saveCart(); }
+      else if (f === 'baunote') { it2.bau.note = t.value; saveCart(); }
+      else if (t.hasAttribute('data-alloc')) {
+        var v2 = numVal(t.value);
+        if (v2 > 0) it2.bau.alloc[t.getAttribute('data-alloc')] = v2; else delete it2.bau.alloc[t.getAttribute('data-alloc')];
+        var sum = 0; Object.keys(it2.bau.alloc).forEach(function (k) { sum += it2.bau.alloc[k]; });
+        var tt = tr.querySelector('[data-bautotal]'); if (tt) tt.textContent = fmtQ(sum);
+        t.closest('.alloc-item').classList.toggle('has', v2 > 0);
+        saveCart(); refreshCOTotals();
+      }
+    }
+  });
+
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.hasAttribute('data-pick')) {
+      var m = t.getAttribute('data-m'), kind = t.getAttribute('data-pick');
+      if (kind === 'ro') setRO(m, t.checked, t.getAttribute('data-key'));
+      else setBAU(m, t.checked);
+      var r = currentRoute().name;
+      // sinkronkan tampilan
+      $$('[data-pick="' + kind + '"][data-m="' + CSS.escape(m) + '"]').forEach(function (cb) {
+        if (cb !== t && !cb.hasAttribute('data-key')) cb.checked = t.checked;
+      });
+      var row = t.closest('tr');
+      if (row && r === 'cari') row.classList.toggle('in-cart', active(item(m)));
+      if (r === 'kontrak' && $('#oaItems')) renderOAItems($('#oaItems').getAttribute('data-po'));
+      if (r === 'call-order') renderCO();
+      if ($('#drawer').classList.contains('open') && $('#drawer').getAttribute('data-m') === m && !t.closest('#drawer')) openDrawer(m);
+      if (t.checked) toast((kind === 'ro' ? 'RO' : 'BAU') + ' ditambahkan: ' + (S.idx.mats.get(m).d || m));
+    } else if (t.getAttribute('data-f') === 'oa') {
+      var tr = t.closest('tr'), it = item(tr.getAttribute('data-m'));
+      it.ro.oa = t.value; saveCart(); renderCO();
+    } else if (t.id === 'coMonth') {
+      S.cart.meta.month = +t.value;
+      if (S.cart.meta.title && /ZONA 1 - [A-Z]+$/.test(S.cart.meta.title)) S.cart.meta.title = null;
+      saveCart(); renderCO();
+    } else if (t.id === 'oapg') { S.oaF.pg = t.value; renderOACards(); }
+    else if (t.id === 'oasort') { S.oaF.sort = t.value; renderOACards(); }
+    else if (t.getAttribute('data-act') === 'drawer-all') { S.drawerAll = t.checked; openDrawer($('#drawer').getAttribute('data-m')); }
+    else if (t.id === 'fileInput') { handleFiles(t.files); t.value = ''; }
+  });
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var chip = t.closest('[data-filter]');
+    if (chip) { var k = chip.getAttribute('data-filter'); S.filters[k] = !S.filters[k]; chip.classList.toggle('on', S.filters[k]); S.limit = 60; renderResults(); return; }
+    var oaf = t.closest('[data-oafilter]');
+    if (oaf) { S.oaF.active = !S.oaF.active; oaf.classList.toggle('on', S.oaF.active); renderOACards(); return; }
+    var oad = t.closest('[data-oad]');
+    if (oad) { var k2 = oad.getAttribute('data-oad'); S.oaD[k2] = !S.oaD[k2]; oad.classList.toggle('on', S.oaD[k2]); renderOAItems($('#oaItems').getAttribute('data-po')); return; }
+    var ex = t.closest('[data-ex]');
+    if (ex) { e.preventDefault(); S.q = ex.getAttribute('data-ex'); $('#q').value = S.q; renderResults(); return; }
+    if (t.closest('#dropzone')) { $('#fileInput').click(); return; }
+    if (t.closest('#scrim')) { closeDrawer(); return; }
+
+    var a = t.closest('[data-act]');
+    if (a) {
+      var act = a.getAttribute('data-act');
+      if (act === 'more') { S.limit += 60; renderResults(); }
+      else if (act === 'close-drawer') closeDrawer();
+      else if (act === 'detail') { e.preventDefault(); openDrawer(a.getAttribute('data-m')); }
+      else if (act === 'copy') { navigator.clipboard && navigator.clipboard.writeText(a.getAttribute('data-text')).then(function () { toast('KIMAP disalin'); }); }
+      else if (act === 'use-oa') {
+        var mm = a.getAttribute('data-m');
+        setRO(mm, true, a.getAttribute('data-key'));
+        openDrawer(mm);
+        toast('RO memakai OA ' + a.getAttribute('data-key').split('/')[0]);
+        if (currentRoute().name === 'cari') renderResults();
+        if (currentRoute().name === 'call-order') renderCO();
+      }
+      else if (act === 'check-all' || act === 'uncheck-all') {
+        var h = S.idx.oaMap.get(a.getAttribute('data-po'));
+        var lines = oaVisibleLines(h), n = 0;
+        lines.forEach(function (l) {
+          var it = item(l.m);
+          if (act === 'check-all') { if (!(it && it.ro.on && it.ro.oa === l.key)) { setRO(l.m, true, l.key); n++; } }
+          else if (it && it.ro.on && it.ro.oa === l.key) { setRO(l.m, false); n++; }
+        });
+        renderOAItems(h.po);
+        toast(n + ' item ' + (act === 'check-all' ? 'ditambahkan ke' : 'dihapus dari') + ' RO');
+      }
+      else if (act === 'sug') {
+        var inp = a.parentNode.querySelector('input');
+        inp.value = a.getAttribute('data-v');
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      else if (act === 'remove') { delete S.cart.items[a.getAttribute('data-m')]; saveCart(); renderCO(); }
+      else if (act === 'clear-co') {
+        if (confirm('Kosongkan semua material di Call Order?')) { S.cart.items = {}; saveCart(); renderCO(); }
+      }
+      else if (act === 'export') {
+        var co = buildCO();
+        loading('Menyiapkan file Excel…');
+        Exporter.exportCallOrder(co).then(function (fn) { toast('File dibuat: ' + fn); })
+          .catch(function (err) { console.error(err); toast('Gagal export: ' + err.message, true); })
+          .then(function () { loading(false); });
+      }
+      else if (act === 'del-ds') {
+        var key = a.getAttribute('data-k');
+        if (!confirm('Hapus data ini dari browser?')) return;
+        S.ds[key] = null; Store.del(key); rebuild(); render();
+      }
+      else if (act === 'add-field') { S.settings = readSettingsForm(); S.settings.fields.push({ name: 'Field baru', plants: [] }); renderSettings(); }
+      else if (act === 'del-field') { S.settings = readSettingsForm(); S.settings.fields.splice(+a.getAttribute('data-i'), 1); renderSettings(); }
+      else if (act === 'save-settings') {
+        var st = readSettingsForm();
+        if (!st.fields.some(function (f) { return f.home; }) && st.fields.length) st.fields[0].home = true;
+        S.settings = st; Store.save('settings', st); rebuild(); toast('Pengaturan disimpan'); render();
+      }
+      else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
+      else if (act === 'unlock') { unlockBundle(); }
+      else if (act === 'skip-lock') { S.needPw = false; $('#lock').classList.add('hidden'); render(); }
+      else if (act === 'reload-bundle') {
+        var pw0 = Store.load('bundlePw');
+        if (!pw0) { S.needPw = true; S.forceBundle = true; showLock(); return; }
+        loading('Memuat ulang data bawaan…');
+        applyBundle(pw0, true).then(function () { toast('Data bawaan dimuat ulang'); })
+          .catch(function (err) { toast(err.message, true); })
+          .then(function () { loading(false); render(); });
+      }
+      else if (act === 'make-bundle') { makeBundle(); }
+      else if (act === 'wipe') {
+        if (!confirm('Hapus SEMUA data SAP dan Call Order dari browser ini?')) return;
+        ['stock', 'oa', 'mb51'].forEach(function (k3) { S.ds[k3] = null; Store.del(k3); });
+        Store.save('bundleApplied', null);
+        S.cart = { items: {}, meta: {}, groupTitles: {} }; saveCart(); rebuild(); render();
+      }
+      return;
+    }
+
+    // klik baris hasil pencarian -> detail
+    var row = t.closest('#resTable tbody tr.clickable');
+    if (row && !t.closest('a, label, input, button')) openDrawer(row.getAttribute('data-m'));
+  });
+
+  // drag & drop
+  document.addEventListener('dragover', function (e) {
+    var dz = $('#dropzone');
+    e.preventDefault();
+    if (dz) dz.classList.add('drag');
+  });
+  document.addEventListener('dragleave', function (e) {
+    var dz = $('#dropzone');
+    if (dz && !e.relatedTarget) dz.classList.remove('drag');
+  });
+  document.addEventListener('drop', function (e) {
+    e.preventDefault();
+    var dz = $('#dropzone'); if (dz) dz.classList.remove('drag');
+    if (e.dataTransfer && e.dataTransfer.files.length) {
+      if (currentRoute().name !== 'data') location.hash = '#/data';
+      handleFiles(e.dataTransfer.files);
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.id === 'lockPw') { unlockBundle(); return; }
+    if (e.key === 'Escape') closeDrawer();
+    if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
+      e.preventDefault();
+      if (currentRoute().name !== 'cari') location.hash = '#/cari';
+      setTimeout(function () { var q = $('#q'); if (q) q.focus(); }, 30);
+    }
+  });
+
+  window.addEventListener('hashchange', render);
+
+  // ================= Start =================
+  (async function init() {
+    loading('Memuat data tersimpan…');
+    try {
+      var r = await Promise.all([Store.get('stock'), Store.get('oa'), Store.get('mb51')]);
+      S.ds.stock = r[0] || null; S.ds.oa = r[1] || null; S.ds.mb51 = r[2] || null;
+    } catch (e) { console.warn(e); }
+    var b = window.SAP_BUNDLE;
+    if (b && b.payload && Store.load('bundleApplied') !== b.builtAt) {
+      var pw = Store.load('bundlePw');
+      if (pw) {
+        loading('Memuat data SAP bawaan…');
+        try { await applyBundle(pw, false); toast('Data SAP diperbarui (' + fmtDate(b.info.stockDate) + ')'); }
+        catch (e) { Store.save('bundlePw', null); S.needPw = true; }
+      } else S.needPw = true;
+    }
+    rebuild();
+    loading(false);
+    render();
+    if (S.needPw) showLock();
+  })();
+})();

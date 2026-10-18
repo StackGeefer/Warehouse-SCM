@@ -1,0 +1,8 @@
+# Jangan pernah commit data SAP (stok, harga kontrak, pemakaian)
+*.xlsx
+*.XLSX
+*.xls
+*.xlsm
+*.csv
+.DS_Store
+Thumbs.db
