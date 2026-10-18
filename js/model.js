@@ -186,6 +186,7 @@
     settings.fields.forEach(function (f, i) { f.plants.forEach(function (p) { fieldPlantIdx[p] = i; }); });
 
     var list = [];
+    root.Search.beginIndex();
     mats.forEach(function (o) {
       o.ix = root.Search.prepare(o.m, o.d);
       // stok per field

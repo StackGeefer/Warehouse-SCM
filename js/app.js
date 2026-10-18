@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261018f'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261019a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -318,7 +318,7 @@
 
   var searchTimer;
   function computeResults() {
-    var pq = Search.parseQuery(S.q), f = S.filters, res = [], fuzzy = false;
+    var pq = { raw: String(S.q || '').trim() }, f = S.filters, res = [], fuzzy = false;
     var hasQ = !!pq.raw;
     function pass(o) {
       if (f.home && !(o.homeStock > 0)) return false;
@@ -328,39 +328,13 @@
       if (S.aging && (o.aging !== S.aging || !(o.homeStock > 0 || o.hist > 0 || o.ytd > 0))) return false;
       return true;
     }
-    var list = S.idx.list;
-    // perluasan sinonim: kcl -> potassium chloride, majun -> cotton waste, ...
-    var ex = hasQ && !pq.codeLike ? Search.expand(S.q) : { alts: [], labels: [] };
-    var apqs = ex.alts.map(Search.parseQuery), viaSyn = 0;
-    for (var i = 0; i < list.length; i++) {
-      var o = list[i];
-      if (!pass(o)) continue;
-      if (!hasQ) { res.push({ o: o, s: 0 }); continue; }
-      var r = Search.score(pq, o.ix), best = r.missed === 0 && r.s > 0 ? r.s : 0, syn = false;
-      for (var a = 0; a < apqs.length; a++) {
-        var ra = Search.score(apqs[a], o.ix);
-        if (ra.missed === 0 && ra.s > 0 && ra.s * 0.95 > best) { best = ra.s * 0.95; syn = !(r.missed === 0 && r.s > 0); }
-      }
-      if (best > 0) { res.push({ o: o, s: best, syn: syn }); if (syn) viaSyn++; }
-    }
-    if (hasQ && !res.length && pq.hard.length > 1) {
-      fuzzy = true;
-      for (var j = 0; j < list.length; j++) {
-        var o2 = list[j];
-        if (!pass(o2)) continue;
-        var r2 = Search.score(pq, o2.ix);
-        if (r2.missed === 1 && r2.s > 0) res.push({ o: o2, s: r2.s });
-      }
-    }
-    if (hasQ) {
-      res.sort(function (a, b) {
-        return b.s - a.s || (b.o.homeStock > 0) - (a.o.homeStock > 0) || (!!b.o.bestOA) - (!!a.o.bestOA) ||
-          (b.o.hist + b.o.ytd) - (a.o.hist + a.o.ytd) || a.o.d.localeCompare(b.o.d);
-      });
-    } else {
+    var R = hasQ ? Search.run(S.q, S.idx.list, pass) : null;
+    if (R) { res = R.res; fuzzy = R.fuzzy; pq = R.pq; }
+    else {
+      S.idx.list.forEach(function (o) { if (pass(o)) res.push({ o: o, s: 0 }); });
       res.sort(function (a, b) { return (b.o.hist + b.o.ytd) - (a.o.hist + a.o.ytd) || b.o.homeStock - a.o.homeStock; });
     }
-    return { res: res, fuzzy: fuzzy, pq: pq, hasQ: hasQ, syn: ex.labels, viaSyn: viaSyn };
+    return { res: res, fuzzy: fuzzy, pq: pq, hasQ: hasQ, syn: R ? R.syn : [], viaSyn: R ? R.viaSyn : 0 };
   }
 
   function renderResults() {
@@ -376,6 +350,7 @@
     }
     if (meta) {
       meta.innerHTML = R.hasQ ? '<b>' + nf0.format(R.res.length) + '</b> material' + (R.fuzzy ? ' (hasil mirip — 1 kata kunci tidak cocok)' : '') +
+        (R.pq.fixes && R.pq.fixes.length ? '<div class="syn-line">Dibaca sebagai: ' + R.pq.fixes.map(function (x) { return '<span class="syn-chip">' + esc(x.from) + ' → ' + esc(x.to.join(' / ')) + '</span>'; }).join('') + ' <span class="muted">(' + (R.pq.fixes.some(function (x) { return x.kind === 'typo'; }) ? 'kemungkinan salah ketik' : 'singkatan') + ')</span></div>' : '') +
         (R.syn.length ? '<div class="syn-line">Termasuk sinonim: ' + R.syn.slice(0, 6).map(function (x) { return '<span class="syn-chip">' + esc(x) + '</span>'; }).join('') + (R.viaSyn ? ' <span class="muted">(' + R.viaSyn + ' hasil dari sinonim)</span>' : '') + '</div>' : '')
         : '<b>' + nf0.format(R.res.length) + '</b> material · tanpa kata kunci: urut berdasarkan pemakaian ' + esc(homeName()) + ' terbanyak';
     }
