@@ -6,14 +6,15 @@
  *   password-nya (PBKDF2-SHA256). Login berhasil = kunci data terbuka.
  * - File di repo (data/*.js) aman walau repo publik: tanpa login yang benar
  *   isinya tidak bisa dibaca.
- * - Setiap jenis data (stok, kontrak, pemakaian) disimpan maksimal 2 versi.
+ * - Setiap jenis data (stok, kontrak, pemakaian) disimpan maksimal 3 versi.
+ * - Riwayat order & dokumen TKO (PDF) juga disimpan terenkripsi.
  *
  * Dipakai di browser dan Node (tools/init-data.js).
  */
 (function (root) {
   'use strict';
   var ITER = 250000;
-  var KEEP_VERSIONS = 2;
+  var KEEP_VERSIONS = 3;
   var C = root.crypto || globalThis.crypto;
   var TYPES = ['stock', 'oa', 'mb51'];
 
@@ -92,6 +93,23 @@
     }).then(function (json) { return JSON.parse(new TextDecoder().decode(json)); });
   }
 
+  // File biner (PDF) — tanpa gzip karena PDF sudah terkompres
+  function encryptBytes(raw, u8) {
+    var iv = C.getRandomValues(new Uint8Array(12));
+    return aesKey(raw).then(function (k) { return C.subtle.encrypt({ name: 'AES-GCM', iv: iv }, k, u8); }).then(function (ct) {
+      var c = new Uint8Array(ct), out = new Uint8Array(12 + c.length);
+      out.set(iv, 0); out.set(c, 12);
+      return 'MWB1.' + toB64(out);
+    });
+  }
+  function decryptBytes(raw, str) {
+    if (String(str).slice(0, 5) !== 'MWB1.') return Promise.reject(new Error('Format file tidak dikenal'));
+    var u8 = fromB64(str.slice(5));
+    return aesKey(raw).then(function (k) {
+      return C.subtle.decrypt({ name: 'AES-GCM', iv: u8.subarray(0, 12) }, k, u8.subarray(12));
+    }).then(function (b) { return new Uint8Array(b); });
+  }
+
   // ---------- Isi file data/*.js ----------
   function usersFile(users) {
     return '/* Pengguna Material Warehouse. Hanya hash username & kunci terenkripsi — tidak ada password. */\n' +
@@ -105,6 +123,14 @@
     return '/* Data SAP terenkripsi — ' + id + ' */\nwindow.MW_SNAP = window.MW_SNAP || {};\nwindow.MW_SNAP[' + JSON.stringify(id) + '] = ' + JSON.stringify(payload) + ';\n';
   }
   function snapPath(id) { return 'data/' + id + '.js'; }
+  // Riwayat order & daftar dokumen: satu file terenkripsi masing-masing
+  function listFile(varName, payload, note) {
+    return '/* ' + note + ' — TERENKRIPSI */\nwindow.' + varName + ' = ' + JSON.stringify(payload) + ';\n';
+  }
+  function docPath(id) { return 'data/docs/' + id + '.js'; }
+  function docFile(id, payload) {
+    return '/* Dokumen terenkripsi — ' + id + ' */\nwindow.MW_FILE = window.MW_FILE || {};\nwindow.MW_FILE[' + JSON.stringify(id) + '] = ' + JSON.stringify(payload) + ';\n';
+  }
 
   // Ringkasan (tidak rahasia) untuk daftar versi
   function summary(type, d) {
@@ -137,8 +163,9 @@
   root.Vault = {
     TYPES: TYPES, KEEP_VERSIONS: KEEP_VERSIONS,
     newDataKey: newDataKey, makeUser: makeUser, login: login, hashUser: hashUser,
-    encrypt: encrypt, decrypt: decrypt, toB64: toB64, fromB64: fromB64,
+    encrypt: encrypt, decrypt: decrypt, encryptBytes: encryptBytes, decryptBytes: decryptBytes, toB64: toB64, fromB64: fromB64,
     usersFile: usersFile, manifestFile: manifestFile, snapFile: snapFile, snapPath: snapPath,
+    listFile: listFile, docPath: docPath, docFile: docFile,
     summary: summary, addVersion: addVersion, emptyManifest: emptyManifest
   };
 })(typeof self !== 'undefined' ? self : (typeof window !== 'undefined' ? window : globalThis));

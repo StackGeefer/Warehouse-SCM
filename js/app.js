@@ -53,12 +53,16 @@
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
+  var RECENT_MS = 15 * 60 * 1000;
 
   // ================= State =================
   var S = {
     ds: { stock: null, oa: null, mb51: null },
     idx: null,
-    settings: Store.load('settings', clone(Model.DEFAULT_SETTINGS)),
+    settings: (function () {
+      var st = Store.load('settings', null);
+      return st && st.v === Model.DEFAULT_SETTINGS.v ? st : clone(Model.DEFAULT_SETTINGS);
+    })(),
     cart: Store.load('cart', { items: {}, meta: {}, groupTitles: {} }),
     q: '', filters: { home: false, zone: false, oa: false, used: false }, limit: 60,
     oaF: { q: '', active: true, pg: '', sort: 'rel' },
@@ -75,6 +79,11 @@
 
   function homeName() { return S.idx && S.idx.home ? S.idx.home.name : 'Home'; }
   function fields() { return S.settings.fields; }
+  // Kolom utama (Rantau + 3 field Zona 1); simpan index asli untuk o.fs
+  function mainFields() {
+    return fields().map(function (f, i) { return { f: f, i: i }; }).filter(function (x) { return x.f.main || x.f.home; });
+  }
+  function fieldLabel(f) { return (f.full || f.name); }
   function hasData() { return !!(S.idx && S.idx.list.length); }
 
   // ================= Toast & loading =================
@@ -149,14 +158,16 @@
 
   // Catatan otomatis seperti template: "Stok alternatif Zona 1: Jambi (W802) 83"
   function autoNote(o) {
-    var parts = [];
+    var parts = [], others = [];
     fields().forEach(function (f) {
       if (f.home) return;
       f.plants.forEach(function (p) {
-        if (o.st[p] > 0) parts.push(f.name + ' (' + p + ') ' + fmtQ(o.st[p]));
+        if (o.st[p] > 0) (f.main ? parts : others).push(fieldLabel(f) + ' (' + p + ') ' + fmtQ(o.st[p]));
       });
     });
-    return parts.length ? 'Stok alternatif Zona 1: ' + parts.join(', ') : '';
+    var txt = parts.length ? 'Stok alternatif Zona 1: ' + parts.join(', ') : '';
+    if (!parts.length && others.length) txt = 'Stok di field lain: ' + others.slice(0, 4).join(', ') + (others.length > 4 ? ', …' : '');
+    return txt;
   }
   function suggestion(o) {
     var c = +S.settings.coverMonths || 3;
@@ -230,7 +241,9 @@
     kontrak: ['Kontrak (OA / RO)', 'Daftar Outline Agreement dari ME3N — klik untuk melihat semua material yang bisa ditarik'],
     'call-order': ['Call Order ke MIM', 'Atur material RO & BAU, lalu export ke template Excel'],
     data: ['Data SAP', 'Versi data yang dipakai website · Owner dapat upload/update langsung di sini'],
-    pengaturan: ['Pengaturan', 'Akun, pengguna, koneksi GitHub, Field & kode plant']
+    pengaturan: ['Pengaturan', 'Akun, pengguna, koneksi GitHub, Field & kode plant'],
+    riwayat: ['Riwayat Order ke MIM', 'Semua Call Order yang sudah di-export, lengkap dengan tanggal & status'],
+    tko: ['TKO & Referensi Warehouse', 'Tata Kerja, Pedoman & SOP — preview langsung atau download PDF']
   };
   function render() {
     if (!S.user) return;
@@ -247,6 +260,8 @@
     else if (r.name === 'call-order') renderCO();
     else if (r.name === 'data') renderData();
     else if (r.name === 'pengaturan') renderSettings();
+    else if (r.name === 'riwayat') renderOrders();
+    else if (r.name === 'tko') renderDocs();
     updateCartUI();
     renderSide();
   }
@@ -344,30 +359,61 @@
       return;
     }
     var shown = R.res.slice(0, S.limit);
-    var F = fields();
+    var F = mainFields();
     var head = '<tr><th>Material</th><th>Harga &amp; Kontrak OA</th>' +
-      F.map(function (f) { return '<th class="num th-field">' + esc(f.name) + '<small>' + esc(f.plants.join('/')) + (f.home ? ' · ' + ddmm(idx.homeDate) : '') + '</small></th>'; }).join('') +
-      '<th class="num th-field">Lain<small>plant lain</small></th><th>Pemakaian ' + esc(homeName()) + '</th><th class="c pick-col">Pilih</th></tr>';
+      F.map(function (x) { var f = x.f; return '<th class="num th-field">' + esc(f.name) + '<small>' + esc(f.plants.join('/')) + (f.home ? ' · ' + ddmm(idx.homeDate) : '') + '</small></th>'; }).join('') +
+      '<th class="c th-field">Field lain<small>di luar kolom</small></th><th>Pemakaian ' + esc(homeName()) + '</th><th class="c pick-col">Pilih</th></tr>';
     var rows = shown.map(function (x) { return resultRow(x.o); }).join('');
     var more = R.res.length > shown.length ? '<tr class="more-row"><td colspan="' + (F.length + 5) + '"><button class="btn" data-act="more">Tampilkan ' + Math.min(60, R.res.length - shown.length) + ' lagi (' + nf0.format(R.res.length - shown.length) + ' tersisa)</button></td></tr>' : '';
     box.innerHTML = banner + '<div class="table-wrap tall"><table class="grid" id="resTable"><thead>' + head + '</thead><tbody>' + rows + more + '</tbody></table></div>';
   }
 
   function resultRow(o) {
-    var it = item(o.m), F = fields();
+    var it = item(o.m), F = mainFields();
     var canBau = o.zoneStock > 0 || o.other > 0;
-    var otherTitle = o.otherPlants.map(function (p) { return p + ': ' + fmtQ(o.st[p]); }).join(' · ');
     return '<tr class="clickable' + (active(it) ? ' in-cart' : '') + '" data-m="' + esc(o.m) + '">' +
       '<td class="mat-cell"><div class="mat-desc">' + esc(o.d) + (o.u ? '<span class="uom">' + esc(o.u) + '</span>' : '') + '</div><div class="mat-code">' + esc(o.m) + '</div></td>' +
       '<td>' + priceCell(o) + '</td>' +
-      F.map(function (f, i) { return '<td class="num">' + qtyPill(o.fs[i], f.home, fieldTitle(o, f)) + '</td>'; }).join('') +
-      '<td class="num">' + (o.other > 0 ? qtyPill(o.other, false, otherTitle) : '<span class="qty na">—</span>') + '</td>' +
+      F.map(function (x) { return '<td class="num">' + qtyPill(o.fs[x.i], x.f.home, fieldTitle(o, x.f)) + '</td>'; }).join('') +
+      '<td class="c">' + otherBtn(o) + '</td>' +
       '<td>' + useCell(o) + '</td>' +
       '<td class="c pick-col"><div class="picks">' +
       pick('ro', o.m, it && it.ro.on, !o.oa.length, o.oa.length ? 'Tarik lewat RO (kontrak)' : 'Tidak ada kontrak OA untuk material ini') +
       pick('bau', o.m, it && it.bau.on, !canBau && !(it && it.bau.on), canBau ? 'Bantuan Antar Unit dari Field lain' : 'Tidak ada stok di Field lain') +
       '</div></td></tr>';
   }
+
+  // Tombol "Cek field lain": menonjol jika stok Zona 1 (selain home) kosong semua
+  function otherBtn(o) {
+    if (!(o.other > 0)) return '<span class="qty na">—</span>';
+    var nF = {};
+    o.otherPlants.forEach(function (p) { var f = S.idx.fieldOfPlant(p); nF[f ? f.name : p] = 1; });
+    var n = Object.keys(nF).length;
+    var strong = !(o.zoneStock > 0);
+    return '<button class="other-btn' + (strong ? ' strong' : '') + '" data-act="other" data-m="' + esc(o.m) + '" title="Lihat stok di field lain">Cek ' + n + ' field</button>';
+  }
+  function otherRows(o) {
+    return o.otherPlants.map(function (p) {
+      var f = S.idx.fieldOfPlant(p);
+      return { zone: f ? f.zone : '—', name: f ? fieldLabel(f) : 'Plant lain', plant: p, qty: o.st[p] };
+    }).sort(function (a, b) { return a.zone.localeCompare(b.zone, 'id', { numeric: true }) || b.qty - a.qty; });
+  }
+  function showOther(btn, m) {
+    var o = S.idx.mats.get(m), pop = $('#popover');
+    var rows = otherRows(o).map(function (r) {
+      return '<tr><td class="small muted">' + esc(r.zone) + '</td><td><b>' + esc(r.name) + '</b></td><td class="mono small">' + esc(r.plant) + '</td><td class="num">' + qtyPill(r.qty) + '</td></tr>';
+    }).join('');
+    pop.innerHTML = '<div class="toolbar" style="margin-bottom:8px"><b>Stok di field lain</b><span class="spacer"></span><button class="icon-btn" data-act="close-pop">' + ICON.close + '</button></div>' +
+      '<div class="small muted" style="margin-bottom:8px">' + esc(o.d) + '</div>' +
+      '<table class="grid"><thead><tr><th>Zona</th><th>Field</th><th>Plant</th><th class="num">Stok</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="toolbar" style="margin-top:10px"><button class="btn sm" data-act="detail" data-m="' + esc(m) + '">Detail lengkap</button></div>';
+    pop.classList.remove('hidden');
+    var r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    var left = Math.min(window.innerWidth - w - 12, Math.max(12, r.right - w));
+    var top = r.bottom + 6 + h > window.innerHeight ? Math.max(12, r.top - h - 6) : r.bottom + 6;
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  }
+  function closePop() { var p = $('#popover'); if (p) p.classList.add('hidden'); }
 
   // ================= Drawer detail material =================
   function openDrawer(m) {
@@ -377,11 +423,11 @@
     var F = fields();
     // stok per plant
     var rows = o.rows.slice().filter(function (r) { return S.drawerAll || r.qty !== 0; });
-    function rank(p) { var f = idx.fieldOfPlant(p); if (!f) return 99; return f.home ? 0 : F.indexOf(f) + 1; }
+    function rank(p) { var f = idx.fieldOfPlant(p); if (!f) return 999; return f.home ? 0 : (f.main ? 0 : 100) + F.indexOf(f) + 1; }
     rows.sort(function (a, b) { return rank(a.plant) - rank(b.plant) || a.plant.localeCompare(b.plant) || b.qty - a.qty; });
     var stockRows = rows.map(function (r) {
       var f = idx.fieldOfPlant(r.plant);
-      return '<tr><td>' + (f ? '<b>' + esc(f.name) + '</b>' : '<span class="muted">Plant lain</span>') + '</td><td class="mono">' + esc(r.plant) + '</td><td class="mono">' + esc(r.sloc) + '</td><td class="small">' + esc(r.batch || '-') + '</td><td class="num">' + qtyPill(r.qty, f && f.home) + '</td><td class="small muted">' + ddmm(idx.plantDates[r.plant]) + '</td></tr>';
+      return '<tr><td>' + (f ? '<b>' + esc(fieldLabel(f)) + '</b> <span class="small muted">' + esc(f.zone || '') + '</span>' : '<span class="muted">Plant lain</span>') + '</td><td class="mono">' + esc(r.plant) + '</td><td class="mono">' + esc(r.sloc) + '</td><td class="small">' + esc(r.batch || '-') + '</td><td class="num">' + qtyPill(r.qty, f && f.home) + '</td><td class="small muted">' + ddmm(idx.plantDates[r.plant]) + '</td></tr>';
     }).join('') || '<tr><td colspan="6" class="muted center">Tidak ada stok tercatat' + (S.drawerAll ? '' : ' (selain 0)') + '</td></tr>';
 
     // grafik pemakaian 24 bulan
@@ -405,9 +451,9 @@
         '<td><button class="btn sm' + (sel ? ' primary' : '') + '" data-act="use-oa" data-m="' + esc(o.m) + '" data-key="' + esc(l.key) + '">' + (sel ? 'Dipakai' : 'Pakai RO') + '</button></td></tr>';
     }).join('');
 
-    var fieldKpis = F.filter(function (f) { return !f.home; }).map(function (f) {
+    var fieldKpis = F.filter(function (f) { return !f.home && f.main; }).map(function (f) {
       var i = F.indexOf(f);
-      return '<div class="kpi"><div class="k">Stok ' + esc(f.name) + '</div><div class="v">' + fmtQ(o.fs[i]) + '</div><div class="s">' + esc(fieldTitle(o, f)) + '</div></div>';
+      return '<div class="kpi"><div class="k">Stok ' + esc(fieldLabel(f)) + '</div><div class="v">' + fmtQ(o.fs[i]) + '</div><div class="s">' + esc(fieldTitle(o, f)) + '</div></div>';
     }).join('');
 
     d.innerHTML =
@@ -427,6 +473,7 @@
       '<div class="table-wrap" style="margin-top:8px"><table class="grid"><thead><tr><th>Field</th><th>Plant</th><th>SLoc</th><th>Batch</th><th class="num">Qty</th><th>Data</th></tr></thead><tbody>' + stockRows + '</tbody></table></div></div>' +
       '<div><h4 class="section-title">Pemakaian ' + esc(homeName()) + ' (24 bulan, MB51)</h4>' +
       (idx.mb51Max ? '<div class="bars">' + bars + '</div><div class="bar-labels">' + labels + '</div>' : '<p class="muted">Data MB51 belum diupload.</p>') + '</div>' +
+      orderHistHtml(o) +
       '<div><h4 class="section-title">Kontrak tersedia (ME3N)</h4>' +
       (o.oa.length ? '<div class="table-wrap"><table class="grid"><thead><tr><th>OA</th><th>Vendor</th><th class="num">Harga</th><th class="num">Sisa Qty</th><th>Berlaku s/d</th><th></th></tr></thead><tbody>' + oaRows + '</tbody></table></div>'
         : '<p class="muted">Tidak ada kontrak untuk material ini — pertimbangkan BAU dari Field lain.</p>') +
@@ -435,6 +482,14 @@
     d.classList.add('open');
     d.setAttribute('aria-hidden', 'false');
     $('#scrim').classList.add('open');
+  }
+  function orderHistHtml(o) {
+    var h = materialHistory(o.m);
+    if (!h.length) return '';
+    return '<div><h4 class="section-title">Riwayat order material ini</h4><div class="table-wrap"><table class="grid"><thead><tr><th>Tanggal</th><th>Order</th><th>Jenis</th><th class="num">Qty</th><th>Keterangan</th></tr></thead><tbody>' +
+      h.slice(0, 10).map(function (x) {
+        return '<tr><td class="small">' + fmtDateTime(x.r.createdAt) + '</td><td class="mono small"><a href="#/riwayat">' + esc(x.r.id) + '</a></td><td><span class="badge ' + (x.kind === 'RO' ? 'ro' : 'bau') + '">' + x.kind + '</span></td><td class="num">' + fmtQ(x.qty) + '</td><td class="small">' + esc(x.info) + ' · ' + esc(x.r.status) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
   }
   function closeDrawer() {
     var d = $('#drawer');
@@ -555,7 +610,7 @@
   }
   function renderOAItems(po) {
     var h = S.idx.oaMap.get(po), lines = oaVisibleLines(h);
-    var F = fields().filter(function (f) { return !f.home; });
+    var F = fields().filter(function (f) { return !f.home && f.main; });
     var rows = lines.map(function (l) {
       var o = S.idx.mats.get(l.m), it = item(l.m);
       var sel = it && it.ro.on && it.ro.oa === l.key;
@@ -602,9 +657,13 @@
       if (f.home) return;
       var q = 0, withStock = [];
       f.plants.forEach(function (p) { if (o.st[p] > 0) { q += o.st[p]; withStock.push(p); } });
-      out.push({ key: 'F:' + f.name, label: f.name, plants: withStock.length ? withStock : f.plants, stock: q, field: true });
+      if (!f.main && !(q > 0)) return;
+      out.push({ key: 'F:' + f.name, label: fieldLabel(f), zone: f.zone, plants: withStock.length ? withStock : f.plants, stock: q, field: true, main: !!f.main });
     });
-    o.otherPlants.forEach(function (p) { out.push({ key: 'P:' + p, label: p, plants: [p], stock: o.st[p], field: false }); });
+    o.otherPlants.forEach(function (p) {
+      if (S.idx.fieldOfPlant(p)) return;
+      out.push({ key: 'P:' + p, label: p, plants: [p], stock: o.st[p], field: false, main: false });
+    });
     return out;
   }
   function srcPrice(o, src) {
@@ -721,11 +780,11 @@
         return '<div class="alloc-item' + (v > 0 ? ' has' : '') + '"><div class="n">' + esc(s.label) + '<small>' + esc(s.plants.join('/')) + ' · stok ' + fmtQ(s.stock) + '</small></div>' +
           '<input class="input num sm" type="number" min="0" step="any" data-alloc="' + esc(s.key) + '" value="' + (v > 0 ? v : '') + '" placeholder="0"' + (dis ? ' disabled title="Tidak ada stok"' : '') + '></div>';
       }
-      var main = srcs.filter(function (s) { return s.field; });
-      var extra = srcs.filter(function (s) { return !s.field; });
+      var main = srcs.filter(function (s) { return s.main; });
+      var extra = srcs.filter(function (s) { return !s.main; });
       var extraUsed = extra.some(function (s) { return it.bau.alloc[s.key] > 0; });
       var alloc = main.map(allocBox).join('') +
-        (extra.length ? '<details class="alloc-more"' + (extraUsed ? ' open' : '') + '><summary>+ Plant lain di luar Zona 1 (' + extra.length + ')</summary><div class="alloc">' + extra.map(allocBox).join('') + '</div></details>' : '');
+        (extra.length ? '<details class="alloc-more"' + (extraUsed ? ' open' : '') + '><summary>+ Field lain (' + extra.length + ')</summary><div class="alloc">' + extra.map(allocBox).join('') + '</div></details>' : '');
       return '<tr data-m="' + esc(it.m) + '"><td class="c muted">' + (i + 1) + '</td>' +
         '<td class="mat-cell"><div class="mat-desc"><a href="#" data-act="detail" data-m="' + esc(it.m) + '" style="color:inherit">' + esc(o.d) + '</a><span class="uom">' + esc(o.u) + '</span></div><div class="mat-code">' + esc(o.m) + '</div></td>' +
         '<td class="num">' + qtyPill(o.homeStock, true) + '</td>' +
@@ -750,6 +809,267 @@
     if (kb) kb.textContent = co.bauGroups.length + ' sumber field/plant';
     var k = $('#kpiTotal');
     if (k) k.textContent = Object.keys(totals).map(function (c) { return fmtBig(totals[c], c); }).join(' + ') || 'Rp 0';
+  }
+
+  // ================= Halaman: Riwayat Order =================
+  var ORDER_STATUS = ['Dikirim ke MIM', 'Diproses MIM', 'Selesai', 'Dibatalkan'];
+  function allOrders() {
+    var local = (Store.load('localOrders', []) || []).map(function (o) { return Object.assign({ local: true }, o); });
+    return (S.orders || []).concat(local).sort(function (a, b) { return b.createdAt < a.createdAt ? -1 : 1; });
+  }
+  function orderTotals(rec) {
+    var t = {};
+    rec.roGroups.forEach(function (g) { g.items.forEach(function (x) { if (x.qty > 0 && x.price != null) t[x.cur || 'IDR'] = (t[x.cur || 'IDR'] || 0) + x.qty * x.price; }); });
+    return t;
+  }
+  function orderCounts(rec) {
+    var ro = 0, bau = {};
+    rec.roGroups.forEach(function (g) { ro += g.items.length; });
+    rec.bauGroups.forEach(function (g) { g.items.forEach(function (x) { bau[x.m] = 1; }); });
+    return { ro: ro, bau: Object.keys(bau).length };
+  }
+  function recToCo(rec) {
+    return { title: rec.title, meta: { month: rec.month, year: rec.year }, homeName: rec.homeName, homeDate: rec.homeDate, histYear: rec.histYear, roGroups: rec.roGroups, bauGroups: rec.bauGroups };
+  }
+  async function recordOrder(co) {
+    var rec = {
+      id: 'CO-' + Date.now().toString(36).toUpperCase(), createdAt: new Date().toISOString(), by: S.user.name,
+      title: co.title, month: co.meta.month, year: co.meta.year, homeName: co.homeName, homeDate: co.homeDate, histYear: co.histYear,
+      status: ORDER_STATUS[0],
+      roGroups: co.roGroups.map(function (g) {
+        return { po: g.po, letter: g.letter, title: g.title, items: g.items.map(function (x) {
+          return { m: x.m, d: x.d, u: x.u, stock: x.stock, actual: x.actual, hist: x.hist, qty: x.qty, price: x.price, cur: x.cur, oa: x.oa, oaMat: x.oaMat, note: x.note };
+        }) };
+      }),
+      bauGroups: co.bauGroups.map(function (g) {
+        return { key: g.key, letter: g.letter, title: g.title, label: g.label, items: g.items.map(function (x) { return Object.assign({}, x); }) };
+      })
+    };
+    if (isOwner()) await saveOrders([rec].concat(S.orders || []), 'riwayat order ' + rec.id);
+    else { var lo = Store.load('localOrders', []) || []; lo.unshift(rec); Store.save('localOrders', lo); }
+    return rec;
+  }
+  async function saveOrders(orders, msg) {
+    S.orders = orders;
+    var payload = await Vault.encrypt(S.key, orders);
+    await queuePending({ files: { 'data/orders.js': Vault.listFile('MW_ORDERS', payload, 'Riwayat Call Order') }, deletes: [] }, [msg], null, null, { orders: orders });
+    if (Store.load('ghToken')) await publish();
+  }
+  function renderOrders() {
+    var list = allOrders(), q = (S.ordQ || '').trim().toUpperCase(), stF = S.ordStatus || '';
+    var shown = list.filter(function (r) {
+      if (stF && r.status !== stF) return false;
+      if (!q) return true;
+      var hay = [r.id, r.title, r.by, BULAN[r.month], r.year].join(' ');
+      r.roGroups.forEach(function (g) { g.items.forEach(function (x) { hay += ' ' + x.m + ' ' + x.d + ' ' + x.oa; }); });
+      r.bauGroups.forEach(function (g) { g.items.forEach(function (x) { hay += ' ' + x.m + ' ' + x.d; }); });
+      return hay.toUpperCase().indexOf(q) >= 0;
+    });
+    var yr = new Date().getFullYear(), sumYear = 0, nMonth = 0, now = new Date();
+    list.forEach(function (r) {
+      var d = new Date(r.createdAt);
+      if (d.getFullYear() === yr) sumYear += orderTotals(r).IDR || 0;
+      if (d.getFullYear() === yr && d.getMonth() === now.getMonth()) nMonth++;
+    });
+    var cards = shown.map(function (r) {
+      var c = orderCounts(r), t = orderTotals(r), open = S.ordOpen === r.id;
+      var statusCtl = isOwner() && !r.local
+        ? '<select class="select sm" data-ordstatus="' + esc(r.id) + '">' + ORDER_STATUS.map(function (s) { return '<option' + (s === r.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>'
+        : '<span class="badge ' + (r.status === 'Selesai' ? 'ok' : r.status === 'Dibatalkan' ? 'bad' : 'ro') + '">' + esc(r.status) + '</span>';
+      var detail = '';
+      if (open) {
+        var rows = [];
+        r.roGroups.forEach(function (g) {
+          rows.push('<tr class="group"><td colspan="7">' + esc(g.letter + '. ' + g.title) + '</td></tr>');
+          g.items.forEach(function (x) {
+            rows.push('<tr><td><span class="badge ro">RO</span></td><td class="mono small">' + esc(x.m) + '</td><td>' + esc(x.d) + '</td><td class="num">' + fmtQ(x.qty) + ' ' + esc(x.u || '') + '</td><td class="num">' + fmtMoney(x.price, x.cur) + '</td><td class="num">' + (x.qty > 0 && x.price != null ? fmtMoney(x.qty * x.price, x.cur) : '—') + '</td><td class="mono small">' + esc(x.oa) + '</td></tr>');
+          });
+        });
+        r.bauGroups.forEach(function (g) {
+          rows.push('<tr class="group"><td colspan="7">' + esc(g.letter + '. ' + g.title) + '</td></tr>');
+          g.items.forEach(function (x) {
+            rows.push('<tr><td><span class="badge bau">BAU</span></td><td class="mono small">' + esc(x.m) + '</td><td>' + esc(x.d) + '</td><td class="num">' + fmtQ(x.qty) + ' ' + esc(x.u || '') + '</td><td class="num">' + fmtMoney(x.price) + '</td><td class="num">' + (x.price != null ? fmtMoney(x.qty * x.price) : '—') + '</td><td class="small">' + esc(g.label + ' ' + x.plants) + '</td></tr>');
+          });
+        });
+        detail = '<div class="table-wrap" style="margin-top:12px"><table class="grid"><thead><tr><th>Jenis</th><th>Material</th><th>Deskripsi</th><th class="num">Qty</th><th class="num">Harga</th><th class="num">Total</th><th>OA / Sumber</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>';
+      }
+      return '<div class="card card-pad order-card">' +
+        '<div class="toolbar"><span class="mono" style="font-weight:700;color:var(--brand)">' + esc(r.id) + '</span>' + statusCtl +
+        (r.local ? '<span class="badge warn" title="Dibuat oleh Viewer — hanya tersimpan di perangkat ini">Lokal</span>' : '') +
+        '<span class="spacer"></span><span class="muted small">' + fmtDateTime(r.createdAt) + ' · ' + esc(r.by) + '</span></div>' +
+        '<div style="font-weight:700;font-size:15px;margin:8px 0 6px">' + esc(r.title) + '</div>' +
+        '<div class="meta muted small" style="display:flex;gap:16px;flex-wrap:wrap"><span>Periode <b>' + BULAN[r.month] + ' ' + r.year + '</b></span><span>Data SAP <b>' + fmtDate(r.homeDate) + '</b></span>' +
+        '<span><b>' + c.ro + '</b> item RO</span><span><b>' + c.bau + '</b> item BAU</span><span>Nilai RO <b>' + (Object.keys(t).map(function (k) { return fmtMoney(t[k], k); }).join(' + ') || 'Rp 0') + '</b></span></div>' +
+        '<div class="toolbar" style="margin-top:10px"><button class="btn sm" data-act="ord-toggle" data-id="' + esc(r.id) + '">' + (open ? 'Tutup detail' : 'Lihat detail') + '</button>' +
+        '<button class="btn sm success" data-act="ord-excel" data-id="' + esc(r.id) + '">' + ICON.excel + ' Download Excel</button>' +
+        '<button class="btn sm" data-act="ord-copy" data-id="' + esc(r.id) + '">Salin ke Call Order</button>' +
+        ((isOwner() && !r.local) || r.local ? '<button class="btn sm danger" data-act="ord-del" data-id="' + esc(r.id) + '">' + ICON.trash + '</button>' : '') + '</div>' +
+        detail + '</div>';
+    }).join('');
+    view.innerHTML = pendingBanner() +
+      '<div class="kpis" style="margin-bottom:14px"><div class="kpi"><div class="k">Total order</div><div class="v">' + list.length + '</div></div>' +
+      '<div class="kpi"><div class="k">Order bulan ini</div><div class="v">' + nMonth + '</div></div>' +
+      '<div class="kpi"><div class="k">Nilai RO ' + yr + '</div><div class="v">' + fmtBig(sumYear) + '</div></div></div>' +
+      '<div class="card card-pad toolbar" style="margin-bottom:14px"><input class="input" id="ordQ" style="flex:1;min-width:220px" placeholder="Cari nomor order, KIMAP, material, OA…" value="' + esc(S.ordQ || '') + '">' +
+      '<select class="select" id="ordStatus"><option value="">Semua status</option>' + ORDER_STATUS.map(function (s) { return '<option' + (s === stF ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>' +
+      (cards || '<div class="card empty"><div class="ico">' + ICON.list + '</div><h3>Belum ada riwayat</h3><p>Setiap kali Anda klik <b>Export Excel</b> di halaman Call Order, order otomatis tercatat di sini lengkap dengan tanggalnya.</p><a class="btn primary" href="#/call-order">Buka Call Order</a></div>');
+  }
+  function materialHistory(m) {
+    var out = [];
+    allOrders().forEach(function (r) {
+      r.roGroups.forEach(function (g) { g.items.forEach(function (x) { if (x.m === m) out.push({ r: r, kind: 'RO', qty: x.qty, info: 'OA ' + x.oa }); }); });
+      r.bauGroups.forEach(function (g) { g.items.forEach(function (x) { if (x.m === m) out.push({ r: r, kind: 'BAU', qty: x.qty, info: g.label }); }); });
+    });
+    return out;
+  }
+  function copyOrderToCart(rec) {
+    var n = 0;
+    rec.roGroups.forEach(function (g) {
+      g.items.forEach(function (x) {
+        var o = S.idx.mats.get(x.m); if (!o) return;
+        var l = o.oa.filter(function (y) { return y.po === x.oa; })[0];
+        var it = item(x.m, true);
+        it.ro.on = true; it.ro.oa = l ? l.key : (o.bestOA ? o.bestOA.key : null); it.ro.qty = x.qty; it.ro.note = x.note || ''; n++;
+      });
+    });
+    rec.bauGroups.forEach(function (g) {
+      g.items.forEach(function (x) {
+        if (!S.idx.mats.get(x.m)) return;
+        var it = item(x.m, true);
+        it.bau.on = true; it.bau.alloc[g.key] = x.qty; n++;
+      });
+    });
+    saveCart();
+    return n;
+  }
+
+  // ================= Halaman: TKO & Referensi =================
+  var DOC_CATS = ['TKO', 'TKI', 'TKPA', 'Pedoman', 'SOP', 'Form', 'Lainnya'];
+  function fmtSize(b) { return b > 1048576 ? nf2.format(b / 1048576) + ' MB' : nf0.format(b / 1024) + ' KB'; }
+  function renderDocs() {
+    var q = (S.docQ || '').trim().toUpperCase(), cat = S.docCat || '';
+    var docs = (S.docs || []).filter(function (d) {
+      if (cat && d.cat !== cat) return false;
+      return !q || [d.title, d.no, d.cat, d.desc, d.fileName].join(' ').toUpperCase().indexOf(q) >= 0;
+    });
+    var counts = {};
+    (S.docs || []).forEach(function (d) { counts[d.cat] = (counts[d.cat] || 0) + 1; });
+    var form = !isOwner() ? '' :
+      '<details class="card card-pad" style="margin-bottom:14px"' + ((S.docs || []).length ? '' : ' open') + '><summary style="cursor:pointer;font-weight:700">+ Tambah dokumen (PDF)</summary>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px">' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">File PDF</div><input type="file" id="docFile" accept="application/pdf,.pdf" class="input" style="width:100%"></label>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Judul</div><input class="input" id="docTitle" style="width:100%" placeholder="mis. TKO Penerimaan Material"></label>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Nomor dokumen</div><input class="input" id="docNo" style="width:100%" placeholder="mis. B-001/PEP…"></label>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Kategori</div><select class="select" id="docCat" style="width:100%">' + DOC_CATS.map(function (c) { return '<option>' + c + '</option>'; }).join('') + '</select></label>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tanggal berlaku</div><input class="input" type="date" id="docDate" style="width:100%"></label>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Keterangan</div><input class="input" id="docDesc" style="width:100%" placeholder="Ringkasan isi / lingkup"></label></div>' +
+      '<div class="toolbar" style="margin-top:12px"><button class="btn primary" data-act="doc-upload">' + ICON.upload + ' Upload dokumen</button><span class="small muted">Dokumen disimpan terenkripsi — hanya bisa dibuka setelah login.</span></div></details>';
+    var cards = docs.map(function (d) {
+      return '<div class="card doc-card"><div class="doc-ico">PDF</div><div style="min-width:0;flex:1">' +
+        '<div class="toolbar" style="gap:6px"><span class="badge ro">' + esc(d.cat) + '</span>' + (d.no ? '<span class="mono small muted">' + esc(d.no) + '</span>' : '') + '</div>' +
+        '<div class="doc-title">' + esc(d.title) + '</div>' +
+        (d.desc ? '<div class="small muted" style="margin-bottom:4px">' + esc(d.desc) + '</div>' : '') +
+        '<div class="small muted">' + (d.date ? 'Berlaku ' + fmtDate(d.date) + ' · ' : '') + fmtSize(d.size) + ' · upload ' + fmtDateTime(d.uploadedAt) + '</div>' +
+        '<div class="toolbar" style="margin-top:10px"><button class="btn sm primary" data-act="doc-view" data-id="' + esc(d.id) + '">Preview</button>' +
+        '<button class="btn sm" data-act="doc-dl" data-id="' + esc(d.id) + '">Download</button>' +
+        (isOwner() ? '<button class="btn sm danger" data-act="doc-del" data-id="' + esc(d.id) + '">' + ICON.trash + '</button>' : '') + '</div></div></div>';
+    }).join('');
+    view.innerHTML = pendingBanner() + form +
+      '<div class="card card-pad toolbar" style="margin-bottom:14px"><input class="input" id="docQ" style="flex:1;min-width:220px" placeholder="Cari judul, nomor, isi…" value="' + esc(S.docQ || '') + '">' +
+      '<div class="chips"><span class="chip-toggle' + (!cat ? ' on' : '') + '" data-doccat="">Semua (' + (S.docs || []).length + ')</span>' +
+      DOC_CATS.filter(function (c) { return counts[c]; }).map(function (c) { return '<span class="chip-toggle' + (cat === c ? ' on' : '') + '" data-doccat="' + c + '">' + c + ' (' + counts[c] + ')</span>'; }).join('') + '</div></div>' +
+      (cards ? '<div class="doc-grid">' + cards + '</div>' : '<div class="card empty"><div class="ico">' + ICON.doc + '</div><h3>' + ((S.docs || []).length ? 'Tidak ada dokumen yang cocok' : 'Belum ada dokumen') + '</h3><p>' + (isOwner() ? 'Upload TKO, TKI, Pedoman, atau SOP Warehouse lewat form di atas.' : 'Owner belum meng-upload dokumen referensi.') + '</p></div>');
+  }
+  async function docBlob(id) {
+    S.docCache = S.docCache || {};
+    if (S.docCache[id]) return S.docCache[id];
+    var path = Vault.docPath(id);
+    var payload = localPayload(path);
+    if (!payload) {
+      await loadScript(path + '?v=' + encodeURIComponent(id));
+      payload = window.MW_FILE && window.MW_FILE[id];
+      if (window.MW_FILE) delete window.MW_FILE[id];
+    }
+    if (!payload) throw new Error('File dokumen tidak ditemukan (mungkin belum terpublikasi)');
+    var bytes = await Vault.decryptBytes(S.key, payload);
+    var url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    S.docCache[id] = url;
+    return url;
+  }
+  async function saveDocs(docs, changes, msg) {
+    S.docs = docs;
+    var idxPayload = await Vault.encrypt(S.key, docs);
+    changes.files['data/docs.js'] = Vault.listFile('MW_DOCS', idxPayload, 'Daftar dokumen TKO & referensi');
+    await queuePending(changes, [msg], null, null, { docs: docs });
+    if (Store.load('ghToken')) await publish();
+    else render();
+  }
+  async function uploadDoc() {
+    var f = $('#docFile').files[0];
+    if (!f) { toast('Pilih file PDF dulu', true); return; }
+    if (!/pdf$/i.test(f.name) && f.type !== 'application/pdf') { toast('File harus PDF', true); return; }
+    if (f.size > 40 * 1048576) { toast('Ukuran maksimal 40 MB', true); return; }
+    var title = $('#docTitle').value.trim() || f.name.replace(/\.pdf$/i, '');
+    loading('Mengenkripsi & menyimpan dokumen…');
+    try {
+      var id = 'doc-' + Date.now().toString(36);
+      var payload = await Vault.encryptBytes(S.key, new Uint8Array(await f.arrayBuffer()));
+      var meta = { id: id, title: title, no: $('#docNo').value.trim(), cat: $('#docCat').value, date: $('#docDate').value || null,
+        desc: $('#docDesc').value.trim(), fileName: f.name, size: f.size, uploadedAt: new Date().toISOString(), by: S.user.name };
+      S.docCache = S.docCache || {};
+      S.docCache[id] = URL.createObjectURL(new Blob([f], { type: 'application/pdf' }));
+      var changes = { files: {}, deletes: [], payloads: {} };
+      changes.files[Vault.docPath(id)] = Vault.docFile(id, payload);
+      changes.payloads[Vault.docPath(id)] = payload;
+      await saveDocs([meta].concat(S.docs || []), changes, 'dokumen ' + title);
+      toast('Dokumen ditambahkan: ' + title);
+    } catch (e) {
+      toast('Gagal upload dokumen: ' + e.message, true);
+    } finally { loading(false); render(); }
+  }
+  function openViewer(d, url) {
+    var v = $('#viewer');
+    v.innerHTML = '<div class="viewer-bar"><div style="min-width:0"><b>' + esc(d.title) + '</b><div class="small" style="opacity:.75">' + esc([d.cat, d.no].filter(Boolean).join(' · ')) + '</div></div><span class="spacer"></span>' +
+      '<a class="btn sm" href="' + url + '" download="' + esc(d.fileName || (d.title + '.pdf')) + '">Download</a>' +
+      '<a class="btn sm" href="' + url + '" target="_blank" rel="noopener">Buka di tab baru</a>' +
+      '<button class="btn sm" data-act="viewer-close">' + ICON.close + ' Tutup</button></div>' +
+      '<div class="pdf-pages" id="pdfPages"><div class="pdf-msg">Memuat dokumen…</div></div>';
+    v.classList.remove('hidden');
+    renderPdf($('#pdfPages'), url).catch(function (e) {
+      console.error(e);
+      var box = $('#pdfPages');
+      if (box) box.innerHTML = '<iframe src="' + url + '" title="' + esc(d.title) + '"></iframe>';
+    });
+  }
+  // Render PDF dengan PDF.js agar preview jalan di semua browser (termasuk HP)
+  function loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve();
+    return loadScript('vendor/pdf.min.js').then(function () {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+    });
+  }
+  async function renderPdf(box, url) {
+    await loadPdfJs();
+    var pdf = await window.pdfjsLib.getDocument({ url: url }).promise;
+    if (!box.isConnected) return;
+    box.innerHTML = '';
+    var width = Math.min(box.clientWidth - 24, 1000), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    for (var i = 1; i <= pdf.numPages; i++) {
+      if (!box.isConnected) return;
+      var page = await pdf.getPage(i);
+      var vp = page.getViewport({ scale: 1 });
+      var scale = width / vp.width;
+      var view2 = page.getViewport({ scale: scale * dpr });
+      var c = document.createElement('canvas');
+      c.width = view2.width; c.height = view2.height;
+      c.style.width = width + 'px'; c.style.height = (vp.height * scale) + 'px';
+      box.appendChild(c);
+      await page.render({ canvasContext: c.getContext('2d'), viewport: view2 }).promise;
+    }
+    var end = document.createElement('div');
+    end.className = 'pdf-msg';
+    end.textContent = pdf.numPages + ' halaman';
+    box.appendChild(end);
   }
 
   // ================= Halaman: Data =================
@@ -799,10 +1119,11 @@
       (S.lastLog ? '<div class="log" style="margin-top:14px">' + esc(S.lastLog) + '</div>' : '') +
       '<div class="ds-grid" style="margin-top:18px">' + Vault.TYPES.map(versionsCard).join('') + '</div>' +
       '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Aturan penyimpanan versi</h4><ol class="steps">' +
-      '<li>Setiap jenis data (stok, kontrak, pemakaian) disimpan <b>maksimal ' + Vault.KEEP_VERSIONS + ' versi</b>. Contoh: upload 15.10 → upload 16.10 (15.10 tetap disimpan) → upload 17.10 → versi 15.10 dihapus otomatis.</li>' +
+      '<li>Setiap jenis data (stok, kontrak, pemakaian) disimpan <b>maksimal ' + Vault.KEEP_VERSIONS + ' versi</b>. Contoh: upload 15.10 → 16.10 → 17.10 (ketiganya disimpan) → upload 18.10 → versi 15.10 dihapus otomatis.</li>' +
       '<li>Website selalu memakai versi <b>terbaru</b>; versi sebelumnya disimpan sebagai cadangan.</li>' +
       '<li>Upload ulang dengan <b>tanggal yang sama</b> akan menggantikan versi tanggal itu (tidak menambah versi).</li>' +
-      '<li>File stok Rantau saja (W101) boleh di-upload terpisah dari All Field — plant lain tetap memakai data terakhirnya.</li>' +
+      '<li><b>Stok</b>: cukup upload <b>ZMB52 All Field</b> → stok semua plant langsung terbaru. <b>ME3N</b>: upload file terbaru → kontrak diganti seluruhnya.</li>' +
+      '<li><b>MB51</b>: cukup tarik periode terbaru saja (mis. 01.09 – 15.10). Data di periode itu diganti, data sebelumnya tetap → riwayat pemakaian otomatis tersambung.</li>' +
       '<li>Data tersimpan <b>terenkripsi</b> di repo GitHub dan hanya terbuka setelah login.</li></ol>' +
       (owner ? '<h4 class="section-title" style="margin-top:16px">Cara menyiapkan file dari SAP</h4><ol class="steps">' +
         '<li><b>Stok</b>: <span class="mono">ZMB52</span>/<span class="mono">MB52</span> plant Zona 1 (W101, W102, W802, W803, W104, …) → export Excel.</li>' +
@@ -818,7 +1139,9 @@
     var y0 = S.idx ? S.idx.dataYear : new Date().getFullYear();
     for (var y = y0; y >= y0 - 5; y--) years.push(y);
     var rows = st.fields.map(function (f, i) {
-      return '<tr><td><input type="radio" name="home" data-home="' + i + '"' + (f.home ? ' checked' : '') + '></td>' +
+      return '<tr' + (f.main || f.home ? ' class="in-cart"' : '') + '><td class="c"><input type="radio" name="home" data-home="' + i + '"' + (f.home ? ' checked' : '') + '></td>' +
+        '<td class="c"><input type="checkbox" data-fmain="' + i + '"' + (f.main || f.home ? ' checked' : '') + (f.home ? ' disabled' : '') + '></td>' +
+        '<td><input class="input sm" style="width:90px" data-fzone="' + i + '" value="' + esc(f.zone || '') + '"></td>' +
         '<td><input class="input sm" data-fname="' + i + '" value="' + esc(f.name) + '"></td>' +
         '<td><input class="input sm mono" style="width:100%" data-fplants="' + i + '" value="' + esc(f.plants.join(', ')) + '"></td>' +
         '<td><button class="icon-btn" data-act="del-field" data-i="' + i + '">' + ICON.trash + '</button></td></tr>';
@@ -859,8 +1182,8 @@
       '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + (owner ? '<span class="badge ok">Owner</span>' : '<span class="badge">Viewer</span>') + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
       ownerHtml +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
-      '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Field lain tampil sebagai kolom stok dan sumber BAU. Satu field boleh punya beberapa plant, pisahkan dengan koma (contoh Lirik: W803, W104). Pengaturan ini berlaku di browser ini.</p>' +
-      '<div class="table-wrap"><table class="grid"><thead><tr><th>Home</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Centang "Kolom utama" agar field tampil sebagai kolom di Cari Material (default: Lirik, Jambi, Pangkalan Susu). Field lain dicek lewat tombol <b>Cek field lain</b>. Satu field boleh punya beberapa plant, pisahkan dengan koma. Pengaturan ini berlaku di browser ini.</p>' +
+      '<div class="table-wrap"><table class="grid"><thead><tr><th class="c">Home</th><th class="c">Kolom utama</th><th>Zona</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div class="toolbar" style="margin-top:10px"><button class="btn sm" data-act="add-field">+ Tambah Field</button><span class="small muted">Plant di data saat ini: <span class="mono">' + esc(known) + '</span></span></div></div>' +
       '<div class="card card-pad" style="margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = rata-rata pemakaian/bulan × cover − stok ' + esc(homeName()) + '</div></label>' +
@@ -871,6 +1194,9 @@
     var st = clone(S.settings);
     st.fields.forEach(function (f, i) {
       var n = $('[data-fname="' + i + '"]'), p = $('[data-fplants="' + i + '"]'), h = $('[data-home="' + i + '"]');
+      var mn = $('[data-fmain="' + i + '"]'), z = $('[data-fzone="' + i + '"]');
+      if (mn) f.main = mn.checked;
+      if (z) f.zone = z.value.trim();
       if (n) f.name = n.value.trim() || f.name;
       if (p) f.plants = p.value.toUpperCase().split(/[\s,;\/]+/).filter(Boolean);
       if (h) f.home = h.checked;
@@ -953,7 +1279,7 @@
           files: touched[t].files, info: Vault.summary(t, ds[t])
         });
         changes.files[Vault.snapPath(id)] = Vault.snapFile(id, payload);
-        changes.payloads[id] = payload;
+        changes.payloads[Vault.snapPath(id)] = payload;
         removed.forEach(function (rid) {
           changes.deletes.push(Vault.snapPath(rid));
           log.push('   ↳ versi lama dihapus: ' + rid);
@@ -977,7 +1303,26 @@
     }
   }
 
-  async function queuePending(changes, msgs, man, users) {
+  // Perubahan yang belum/baru saja dipublikasikan (GitHub Pages perlu ±1–2 menit untuk tayang)
+  function localPayload(path) {
+    return (S.pending && S.pending.payloads[path]) || (S.recent && S.recent.payloads && S.recent.payloads[path]) || null;
+  }
+  function localVal(key) {
+    if (S.pending && S.pending[key]) return S.pending[key];
+    if (S.recent && S.recent[key]) return S.recent[key];
+    return null;
+  }
+  async function rememberPublished(P) {
+    var R = (await Store.get('recent')) || null;
+    var merged = { at: Date.now(), payloads: Object.assign({}, R && Date.now() - R.at < RECENT_MS ? R.payloads : {}, P.payloads) };
+    ['man', 'users', 'orders', 'docs'].forEach(function (k) {
+      if (P[k]) merged[k] = P[k];
+      else if (R && Date.now() - R.at < RECENT_MS && R[k]) merged[k] = R[k];
+    });
+    S.recent = merged;
+    await Store.set('recent', merged);
+  }
+  async function queuePending(changes, msgs, man, users, extra) {
     var P = S.pending || { files: {}, deletes: [], payloads: {}, msgs: [] };
     Object.keys(changes.files).forEach(function (path) {
       P.files[path] = changes.files[path];
@@ -988,9 +1333,10 @@
       else if (P.deletes.indexOf(path) < 0) P.deletes.push(path);
     });
     Object.assign(P.payloads, changes.payloads || {});
-    Object.keys(P.payloads).forEach(function (id) { if (!P.files[Vault.snapPath(id)]) delete P.payloads[id]; });
+    Object.keys(P.payloads).forEach(function (path) { if (!P.files[path]) delete P.payloads[path]; });
     if (man) P.man = man;
     if (users) P.users = users;
+    if (extra) Object.assign(P, extra);
     msgs.forEach(function (m) { if (P.msgs.indexOf(m) < 0) P.msgs.push(m); });
     S.pending = P;
     await Store.set('pending', P);
@@ -1041,6 +1387,7 @@
     loading('Mempublikasikan ke website (GitHub)…');
     try {
       await ghCommit(S.pending.files, S.pending.deletes, 'Update data: ' + (S.pending.msgs || []).join(', '));
+      await rememberPublished(S.pending);
       S.pending = null;
       await Store.del('pending');
       toast('Berhasil dipublikasikan. Website ter-update untuk semua pengguna ±1–2 menit lagi.');
@@ -1076,8 +1423,11 @@
     await loadScript('data/users.js?t=' + t).catch(function () {});
     await loadScript('data/manifest.js?t=' + t).catch(function () {});
     S.pending = (await Store.get('pending')) || null;
-    S.users = (S.pending && S.pending.users) || window.MW_USERS || [];
-    S.man = (S.pending && S.pending.man) || window.MW_MANIFEST || Vault.emptyManifest();
+    var R = (await Store.get('recent')) || null;
+    S.recent = R && Date.now() - R.at < RECENT_MS ? R : null;
+    var repoMan = window.MW_MANIFEST || null, locMan = localVal('man');
+    S.man = locMan && (!repoMan || locMan.updatedAt > repoMan.updatedAt) ? locMan : (repoMan || Vault.emptyManifest());
+    S.users = (S.pending && S.pending.users) || (S.recent && S.recent.users) || window.MW_USERS || [];
   }
   async function loadData() {
     var ds = { stock: null, oa: null, mb51: null };
@@ -1088,7 +1438,7 @@
         var cached = await Store.get('ds-' + type);
         if (cached && cached.id === v.id) { ds[type] = cached.data; continue; }
         loading('Memuat data ' + TYPE_SHORT[type] + ' ' + fmtDate(v.date) + '…');
-        var payload = S.pending && S.pending.payloads[v.id];
+        var payload = localPayload(Vault.snapPath(v.id));
         if (!payload) {
           await loadScript(Vault.snapPath(v.id) + '?v=' + encodeURIComponent(v.id));
           payload = window.MW_SNAP && window.MW_SNAP[v.id];
@@ -1103,7 +1453,18 @@
       }
     }
     S.ds = ds;
+    S.orders = await loadList('orders', 'data/orders.js', 'MW_ORDERS');
+    S.docs = await loadList('docs', 'data/docs.js', 'MW_DOCS');
     rebuild();
+  }
+  async function loadList(key, path, varName) {
+    var loc = localVal(key);
+    if (loc) return loc;
+    try {
+      window[varName] = null;
+      await loadScript(path + '?t=' + Date.now());
+      return window[varName] ? await Vault.decrypt(S.key, window[varName]) : [];
+    } catch (e) { return []; }
   }
   function showLogin(err) {
     var el = $('#login');
@@ -1172,6 +1533,14 @@
       S.oaD.q = t.value;
       clearTimeout(searchTimer);
       searchTimer = setTimeout(function () { renderOAItems($('#oaItems').getAttribute('data-po')); }, 150);
+    } else if (t.id === 'ordQ') {
+      S.ordQ = t.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { renderOrders(); var i = $('#ordQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250);
+    } else if (t.id === 'docQ') {
+      S.docQ = t.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(function () { renderDocs(); var i = $('#docQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250);
     } else if (t.id === 'coTitle') {
       S.cart.meta.title = t.value; saveCart();
     } else if (t.id === 'coYear') {
@@ -1237,7 +1606,14 @@
       S.cart.meta.month = +t.value;
       if (S.cart.meta.title && /ZONA 1 - [A-Z]+$/.test(S.cart.meta.title)) S.cart.meta.title = null;
       saveCart(); renderCO();
-    } else if (t.id === 'oapg') { S.oaF.pg = t.value; renderOACards(); }
+    } else if (t.id === 'ordStatus') { S.ordStatus = t.value; renderOrders(); }
+    else if (t.hasAttribute('data-ordstatus')) {
+      var oid = t.getAttribute('data-ordstatus');
+      var nl = (S.orders || []).map(function (r) { return r.id === oid ? Object.assign({}, r, { status: t.value }) : r; });
+      saveOrders(nl, 'status ' + oid + ': ' + t.value).then(function () { toast('Status ' + oid + ' → ' + t.value); });
+    }
+    else if (t.id === 'docFile' && t.files[0] && !$('#docTitle').value) { $('#docTitle').value = t.files[0].name.replace(/\.pdf$/i, '').replace(/[_]+/g, ' '); }
+    else if (t.id === 'oapg') { S.oaF.pg = t.value; renderOACards(); }
     else if (t.id === 'oasort') { S.oaF.sort = t.value; renderOACards(); }
     else if (t.getAttribute('data-act') === 'drawer-all') { S.drawerAll = t.checked; openDrawer($('#drawer').getAttribute('data-m')); }
     else if (t.id === 'fileInput') { handleFiles(t.files); t.value = ''; }
@@ -1254,6 +1630,9 @@
     var ex = t.closest('[data-ex]');
     if (ex) { e.preventDefault(); S.q = ex.getAttribute('data-ex'); $('#q').value = S.q; renderResults(); return; }
     if (t.closest('#dropzone')) { $('#fileInput').click(); return; }
+    if (!t.closest('#popover') && !t.closest('[data-act="other"]')) closePop();
+    var dc = t.closest('[data-doccat]');
+    if (dc) { S.docCat = dc.getAttribute('data-doccat'); renderDocs(); return; }
     if (t.closest('#scrim')) { closeDrawer(); return; }
 
     var a = t.closest('[data-act]');
@@ -1294,11 +1673,13 @@
       else if (act === 'export') {
         var co = buildCO();
         loading('Menyiapkan file Excel…');
-        Exporter.exportCallOrder(co).then(function (fn) { toast('File dibuat: ' + fn); })
+        Exporter.exportCallOrder(co).then(function (fn) {
+          return recordOrder(co).then(function (rec) { toast('File dibuat: ' + fn + ' — tercatat di Riwayat Order (' + rec.id + ')'); });
+        })
           .catch(function (err) { console.error(err); toast('Gagal export: ' + err.message, true); })
           .then(function () { loading(false); });
       }
-      else if (act === 'add-field') { S.settings = readSettingsForm(); S.settings.fields.push({ name: 'Field baru', plants: [] }); renderSettings(); }
+      else if (act === 'add-field') { S.settings = readSettingsForm(); S.settings.fields.push({ name: 'Field baru', zone: '', plants: [], main: false }); renderSettings(); }
       else if (act === 'del-field') { S.settings = readSettingsForm(); S.settings.fields.splice(+a.getAttribute('data-i'), 1); renderSettings(); }
       else if (act === 'save-settings') {
         var st = readSettingsForm();
@@ -1307,6 +1688,45 @@
       }
       else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
       else if (act === 'logout') { logout(); }
+      else if (act === 'other') { e.stopPropagation(); showOther(a, a.getAttribute('data-m')); }
+      else if (act === 'close-pop') closePop();
+      else if (act === 'ord-toggle') { S.ordOpen = S.ordOpen === a.getAttribute('data-id') ? null : a.getAttribute('data-id'); renderOrders(); }
+      else if (act === 'ord-excel' || act === 'ord-copy' || act === 'ord-del') {
+        var rid = a.getAttribute('data-id');
+        var rec = allOrders().filter(function (r) { return r.id === rid; })[0];
+        if (!rec) return;
+        if (act === 'ord-excel') {
+          loading('Menyiapkan file Excel…');
+          Exporter.exportCallOrder(recToCo(rec)).then(function (fn) { toast('File dibuat: ' + fn); })
+            .catch(function (err) { toast('Gagal export: ' + err.message, true); }).then(function () { loading(false); });
+        } else if (act === 'ord-copy') {
+          if (!confirm('Salin ' + rid + ' ke Call Order? Isi Call Order yang sama akan ditimpa.')) return;
+          var nn = copyOrderToCart(rec);
+          toast(nn + ' baris disalin ke Call Order');
+          location.hash = '#/call-order';
+        } else {
+          if (!confirm('Hapus ' + rid + ' dari riwayat?')) return;
+          if (rec.local) { Store.save('localOrders', (Store.load('localOrders', []) || []).filter(function (r) { return r.id !== rid; })); renderOrders(); }
+          else saveOrders(S.orders.filter(function (r) { return r.id !== rid; }), 'hapus order ' + rid).then(renderOrders);
+        }
+      }
+      else if (act === 'doc-upload') { uploadDoc(); }
+      else if (act === 'doc-view' || act === 'doc-dl') {
+        var did0 = a.getAttribute('data-id'), dmeta = (S.docs || []).filter(function (x) { return x.id === did0; })[0];
+        loading('Membuka dokumen…');
+        docBlob(did0).then(function (url) {
+          if (act === 'doc-view') openViewer(dmeta, url);
+          else { var dl = document.createElement('a'); dl.href = url; dl.download = dmeta.fileName || (dmeta.title + '.pdf'); document.body.appendChild(dl); dl.click(); dl.remove(); }
+        }).catch(function (err) { toast(err.message, true); }).then(function () { loading(false); });
+      }
+      else if (act === 'doc-del') {
+        var did1 = a.getAttribute('data-id'), dm = (S.docs || []).filter(function (x) { return x.id === did1; })[0];
+        if (!dm || !confirm('Hapus dokumen "' + dm.title + '"?')) return;
+        loading('Menghapus dokumen…');
+        saveDocs(S.docs.filter(function (x) { return x.id !== did1; }), { files: {}, deletes: [Vault.docPath(did1)], payloads: {} }, 'hapus dokumen ' + dm.title)
+          .then(function () { toast('Dokumen dihapus'); }).catch(function (err) { toast(err.message, true); }).then(function () { loading(false); render(); });
+      }
+      else if (act === 'viewer-close') { $('#viewer').classList.add('hidden'); $('#viewer').innerHTML = ''; }
       else if (act === 'publish') { publish(); }
       else if (act === 'gh-save') {
         var repo = $('#ghRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
@@ -1392,7 +1812,7 @@
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') closeDrawer();
+    if (e.key === 'Escape') { closeDrawer(); closePop(); var vw = $('#viewer'); if (!vw.classList.contains('hidden')) { vw.classList.add('hidden'); vw.innerHTML = ''; } }
     if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
       e.preventDefault();
       if (currentRoute().name !== 'cari') location.hash = '#/cari';

@@ -5,12 +5,33 @@
 (function (root) {
   'use strict';
 
+  // Field & plant sesuai tabel Regional/Zona. main = tampil sebagai kolom utama.
+  function F(name, zone, plants, extra) { return Object.assign({ name: name, zone: zone, plants: plants, main: false }, extra || {}); }
   var DEFAULT_SETTINGS = {
+    v: 2,
     fields: [
-      { name: 'Rantau', plants: ['W101'], home: true },
-      { name: 'Lirik', plants: ['W803', 'W104'] },
-      { name: 'Jambi', plants: ['W802'] },
-      { name: 'Pangsu', plants: ['W102'] }
+      F('Rantau', 'Zona 1', ['W101'], { home: true, main: true }),
+      F('Lirik', 'Zona 1', ['W803'], { main: true }),
+      F('Jambi', 'Zona 1', ['W802'], { main: true }),
+      F('Pangsu', 'Zona 1', ['W102'], { main: true, full: 'Pangkalan Susu' }),
+      F('Ramba', 'Zona 4', ['W811']),
+      F('Prabumulih', 'Zona 4', ['W105']),
+      F('Pendopo', 'Zona 4', ['W106']),
+      F('Limau', 'Zona 4', ['W801']),
+      F('Adera', 'Zona 4', ['W809']),
+      F('Tambun', 'Zona 7', ['W204']),
+      F('Subang', 'Zona 7', ['W201']),
+      F('Jatibarang', 'Zona 7', ['W202']),
+      F('Sanggata', 'Zona 9', ['W302']),
+      F('Tanjung', 'Zona 9', ['W804']),
+      F('Sanga-sanga', 'Zona 9', ['W807']),
+      F('Tarakan', 'Zona 9', ['W808'], { full: 'Tarakan Maratua' }),
+      F('Bunyu', 'Zona 10', ['W301']),
+      F('Cepu', 'Zona 11', ['W203']),
+      F('Sukowati', 'Zona 11', ['W402']),
+      F('Poleng', 'Zona 11', ['W812']),
+      F('Donggi Matindok', 'Zona 13', ['W401']),
+      F('Papua', 'Zona 14', ['W303'])
     ],
     coverMonths: 3,
     historyYear: null
@@ -49,13 +70,19 @@
         notes.push('Kontrak ME3N: ' + p.rows.length.toLocaleString('id-ID') + ' item kontrak');
       } else if (p.type === 'mb51') {
         var cur51 = ds.mb51 || { files: [], agg: {}, min: null, max: null };
-        var drop = {};
-        p.keys.forEach(function (k) { drop[k] = 1; });
-        // Bulan+plant yang ada di file baru menggantikan data lama
+        var inPlant = {};
+        p.plants.forEach(function (pl) { inPlant[pl] = 1; });
+        // Periode (tanggal min s/d max) + plant yang ada di file baru menggantikan data lama;
+        // data di luar periode itu tetap dipakai -> MB51 cukup ditarik periode terbaru saja.
+        function covered(k) {
+          if (k.length === 10) return k >= p.min && k <= p.max;
+          return k + '-01' >= p.min && k + '-31' <= p.max; // data lama per bulan
+        }
         Object.keys(cur51.agg).forEach(function (m) {
           var a = cur51.agg[m];
           Object.keys(a.p).forEach(function (pl) {
-            Object.keys(a.p[pl]).forEach(function (ym) { if (drop[pl + '|' + ym]) delete a.p[pl][ym]; });
+            if (!inPlant[pl]) return;
+            Object.keys(a.p[pl]).forEach(function (k) { if (covered(k)) delete a.p[pl][k]; });
           });
         });
         Object.keys(p.agg).forEach(function (m) {
@@ -63,14 +90,14 @@
           var dst = cur51.agg[m] || (cur51.agg[m] = { d: src.d, u: src.u, p: {} });
           Object.keys(src.p).forEach(function (pl) {
             var dp = dst.p[pl] || (dst.p[pl] = {});
-            Object.keys(src.p[pl]).forEach(function (ym) { dp[ym] = src.p[pl][ym]; });
+            Object.keys(src.p[pl]).forEach(function (k) { dp[k] = (dp[k] || 0) + src.p[pl][k]; });
           });
         });
         cur51.files.push({ name: parsed.name, min: p.min, max: p.max, rows: p.rows });
         if (!cur51.min || p.min < cur51.min) cur51.min = p.min;
         if (!cur51.max || p.max > cur51.max) cur51.max = p.max;
         ds.mb51 = cur51;
-        notes.push('Pemakaian MB51: ' + p.rows.toLocaleString('id-ID') + ' transaksi GI (' + p.min + ' s/d ' + p.max + ')');
+        notes.push('Pemakaian MB51: ' + p.rows.toLocaleString('id-ID') + ' transaksi GI (' + p.min + ' s/d ' + p.max + ') digabung — total data ' + cur51.min + ' s/d ' + cur51.max);
       }
     });
     return notes;
@@ -152,15 +179,17 @@
         f.plants.forEach(function (p) { if (o.st[p] != null || plantsAll[p]) { q += o.st[p] || 0; has = true; } });
         return has ? q : null;
       });
+      // stok di luar kolom utama (field lain + plant tak terdaftar)
       o.other = 0; o.otherPlants = [];
       Object.keys(o.st).forEach(function (p) {
-        if (fieldPlantIdx[p] == null && o.st[p] > 0) { o.other += o.st[p]; o.otherPlants.push(p); }
+        var fi = fieldPlantIdx[p];
+        if ((fi == null || !settings.fields[fi].main) && o.st[p] > 0) { o.other += o.st[p]; o.otherPlants.push(p); }
       });
       // pemakaian di field home
       var hu = {};
       homePlants.forEach(function (p) {
         var u = o.use[p]; if (!u) return;
-        Object.keys(u).forEach(function (ym) { hu[ym] = (hu[ym] || 0) + u[ym]; });
+        Object.keys(u).forEach(function (k) { var ym = k.slice(0, 7); hu[ym] = (hu[ym] || 0) + u[k]; });
       });
       o.homeUse = hu;
       o.useY = {};
@@ -181,7 +210,7 @@
       Object.keys(o.stv).forEach(function (p) { if (o.st[p] > 0) { mq += o.st[p]; mv += o.stv[p]; } });
       o.map = mq > 0 ? mv / mq : null;
       o.homeStock = o.fs[settings.fields.indexOf(home)] || 0;
-      o.zoneStock = o.fs.reduce(function (a, b, i) { return a + (settings.fields[i] === home ? 0 : (b || 0)); }, 0);
+      o.zoneStock = o.fs.reduce(function (a, b, i) { var f = settings.fields[i]; return a + (f === home || !f.main ? 0 : (b || 0)); }, 0);
       list.push(o);
     });
 

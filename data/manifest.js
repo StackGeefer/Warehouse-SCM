@@ -1,13 +1,13 @@
-/* Daftar versi data SAP (maks. 2 versi per jenis). Diperbarui 2026-10-18T00:56:55.014Z */
+/* Daftar versi data SAP (maks. 3 versi per jenis). Diperbarui 2026-10-18T01:27:15.665Z */
 window.MW_MANIFEST = {
  "v": 2,
- "updatedAt": "2026-10-18T00:56:55.014Z",
+ "updatedAt": "2026-10-18T01:27:15.665Z",
  "versions": {
   "stock": [
    {
-    "id": "stock-2026-10-14-mvd480oa",
+    "id": "stock-2026-10-14-mvd5b1dt",
     "date": "2026-10-14",
-    "uploadedAt": "2026-10-18T00:56:55.400Z",
+    "uploadedAt": "2026-10-18T01:27:15.903Z",
     "by": "Gerald.samosir",
     "files": [
      "10.14_ZMB52.XLSX"
@@ -18,9 +18,9 @@ window.MW_MANIFEST = {
     }
    },
    {
-    "id": "stock-2026-10-13-mvd480lp",
+    "id": "stock-2026-10-13-mvd5b1c2",
     "date": "2026-10-13",
-    "uploadedAt": "2026-10-18T00:56:55.308Z",
+    "uploadedAt": "2026-10-18T01:27:15.841Z",
     "by": "Gerald.samosir",
     "files": [
      "10.13_ZMB52_All_Field.xlsx"
@@ -33,9 +33,9 @@ window.MW_MANIFEST = {
   ],
   "oa": [
    {
-    "id": "oa-2026-10-12-mvd480f1",
+    "id": "oa-2026-10-12-mvd5b188",
     "date": "2026-10-12",
-    "uploadedAt": "2026-10-18T00:56:55.069Z",
+    "uploadedAt": "2026-10-18T01:27:15.704Z",
     "by": "Gerald.samosir",
     "files": [
      "ME3N_100_10122026.XLSX"
@@ -47,9 +47,9 @@ window.MW_MANIFEST = {
   ],
   "mb51": [
    {
-    "id": "mb51-2026-10-18-mvd480ra",
+    "id": "mb51-2026-10-18-mvd5b1gc",
     "date": "2026-10-18",
-    "uploadedAt": "2026-10-18T00:56:55.507Z",
+    "uploadedAt": "2026-10-18T01:27:15.993Z",
     "by": "Gerald.samosir",
     "files": [
      "MB51_Z1_100_MRP_Jan - Aug 2026.xlsx"

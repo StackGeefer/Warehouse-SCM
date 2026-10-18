@@ -172,7 +172,7 @@
   }
 
   function extractMB51(rows, hr, c) {
-    var agg = {}, keys = {}, min = null, max = null, used = 0;
+    var agg = {}, plants = {}, min = null, max = null, used = 0;
     for (var i = hr + 1; i < rows.length; i++) {
       var r = rows[i];
       if (!r) continue;
@@ -181,17 +181,16 @@
       var plant = str(r[c.plant]), mat = str(r[c.material]);
       var date = xlDate(r[c.date]);
       if (!plant || !mat || !date) continue;
-      var ym = date.slice(0, 7);
       if (!min || date < min) min = date;
       if (!max || date > max) max = date;
-      keys[plant + '|' + ym] = 1;
+      plants[plant] = 1;
       var a = agg[mat] || (agg[mat] = { d: str(r[c.desc]), u: str(r[c.uom]), p: {} });
       var p = a.p[plant] || (a.p[plant] = {});
-      // Quantity GI bernilai negatif; pemakaian = -Quantity
-      p[ym] = (p[ym] || 0) - num(r[c.qty]);
+      // Quantity GI bernilai negatif; pemakaian = -Quantity (disimpan per tanggal)
+      p[date] = (p[date] || 0) - num(r[c.qty]);
       used++;
     }
-    return { type: 'mb51', agg: agg, keys: Object.keys(keys), min: min, max: max, rows: used };
+    return { type: 'mb51', agg: agg, plants: Object.keys(plants).sort(), min: min, max: max, rows: used };
   }
 
   function parseFile(XLSX, buf, name, lastModified) {

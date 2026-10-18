@@ -5,7 +5,7 @@
  *
  * Pemakaian:
  *   OWNER_USER="Nama.user" OWNER_PASSWORD="..." node tools/init-data.js file1.xlsx file2.xlsx ...
- * PERHATIAN: menimpa data/users.js & data/manifest.js (kunci data baru).
+ * Versi data SAP dibuat ulang; pengguna, riwayat order & dokumen dipertahankan.
  */
 'use strict';
 const fs = require('fs');
@@ -27,11 +27,28 @@ const Vault = self.Vault;
   }
   const dir = path.join(__dirname, '..', 'data');
   fs.mkdirSync(dir, { recursive: true });
-  fs.readdirSync(dir).filter((f) => f.endsWith('.js')).forEach((f) => fs.unlinkSync(path.join(dir, f)));
 
-  const key = Vault.newDataKey();
-  const owner = await Vault.makeUser(user, pw, 'owner', key, user);
-  fs.writeFileSync(path.join(dir, 'users.js'), Vault.usersFile([owner]));
+  // Pakai kunci & daftar pengguna yang sudah ada bila login Owner cocok (riwayat & dokumen tetap terbaca)
+  let key, users;
+  const usersPath = path.join(dir, 'users.js');
+  if (fs.existsSync(usersPath)) {
+    global.window = global;
+    eval(fs.readFileSync(usersPath, 'utf8'));
+    try {
+      key = (await Vault.login(window.MW_USERS, user, pw)).key;
+      users = window.MW_USERS;
+      console.log('Kunci data lama dipakai (' + users.length + ' pengguna).');
+    } catch (e) {
+      console.error('Login Owner tidak cocok dengan data/users.js — batal agar data lama tidak rusak.');
+      process.exit(1);
+    }
+  } else {
+    key = Vault.newDataKey();
+    users = [await Vault.makeUser(user, pw, 'owner', key, user)];
+  }
+  const keep = { 'users.js': 1, 'orders.js': 1, 'docs.js': 1 };
+  fs.readdirSync(dir).filter((f) => f.endsWith('.js') && !keep[f]).forEach((f) => fs.unlinkSync(path.join(dir, f)));
+  fs.writeFileSync(usersPath, Vault.usersFile(users));
 
   const parsed = files.map((f) => self.Parser.parseFile(XLSX, fs.readFileSync(f), path.basename(f), fs.statSync(f).mtimeMs));
   parsed.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));

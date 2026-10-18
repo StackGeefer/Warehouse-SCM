@@ -1,0 +1,2 @@
+/* Riwayat Call Order — TERENKRIPSI */
+window.MW_ORDERS = "MWK1.HNNsFYcIL6SWFR0e2ANx0CYYCjNUivaLTybdUknYMpX0HWSqbGPPENwGiGG8bgnkzjw=";

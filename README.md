@@ -2,7 +2,7 @@
 
 **Call Order Field Rantau → MIM** · Warehouse & Distribution Zona 1
 
-Website untuk mencari material, mengecek stok SAP Zona 1, melihat harga & kontrak (OA/RO), memilih **RO** atau **BAU**, lalu export **Call Order** sesuai template MIM.
+Website untuk mencari material, mengecek stok SAP Zona 1 & field lain, melihat harga & kontrak (OA/RO), memilih **RO** atau **BAU**, export **Call Order** sesuai template MIM, menyimpan **Riwayat Order**, dan membuka **TKO & Referensi Warehouse** (PDF).
 
 🌐 Website: **https://stackgeefer.github.io/Warehouse-SCM/**
 
@@ -24,18 +24,22 @@ Owner menambah/menghapus pengguna dan mengganti password di menu **Pengaturan**.
 ## Update data SAP (Owner)
 
 1. Login sebagai Owner → menu **Data SAP**.
-2. Tarik file Excel SAP ke kotak upload (ZMB52/MB52, ME3N, MB51 — boleh sekaligus). Tanggal dibaca dari nama file, contoh `10.15_ZMB52.xlsx` = 15 Oktober.
+2. Tarik file Excel SAP ke kotak upload (boleh sekaligus). Tanggal dibaca dari nama file, contoh `10.15_ZMB52.xlsx` = 15 Oktober.
+   - **ZMB52 All Field** → stok semua plant langsung diganti yang terbaru.
+   - **ME3N** → daftar kontrak diganti yang terbaru.
+   - **MB51** → cukup tarik **periode terbaru** (mis. 01.09 – 15.10). Data dalam periode itu diganti, data sebelumnya (2017 dst.) tetap, jadi riwayat pemakaian tersambung otomatis.
 3. Data langsung dipublikasikan ke website (perlu koneksi GitHub sekali saja, lihat di bawah). Pengguna lain melihat data baru ±1–2 menit kemudian.
 
-**Aturan versi** — tiap jenis data (stok, kontrak, pemakaian) disimpan **maksimal 2 versi**:
+**Aturan versi** — tiap jenis data (stok, kontrak, pemakaian) disimpan **maksimal 3 versi**:
 
 ```
 upload 15.10  →  [15.10]
-upload 16.10  →  [16.10 aktif, 15.10 cadangan]
-upload 17.10  →  [17.10 aktif, 16.10 cadangan]   ← 15.10 dihapus otomatis
+upload 16.10  →  [16.10 aktif, 15.10]
+upload 17.10  →  [17.10 aktif, 16.10, 15.10]
+upload 18.10  →  [18.10 aktif, 17.10, 16.10]   ← 15.10 dihapus otomatis
 ```
 
-Upload ulang dengan tanggal yang sama menggantikan versi tanggal itu. File stok Rantau saja (W101) boleh di-upload terpisah — plant lain tetap memakai data terakhirnya.
+Upload ulang dengan tanggal yang sama menggantikan versi tanggal itu.
 
 ## Koneksi GitHub (sekali saja, oleh Owner)
 
@@ -50,9 +54,24 @@ Token hanya tersimpan di browser Owner dan hanya punya akses ke repo ini.
 
 ## Fitur
 
-- **Cari Material** — KIMAP atau deskripsi; `flange 3" 150` = `FLG 3IN 150LB` = `CL.150 3 IN`. Stok Rantau (W101), Lirik (W803/W104), Jambi (W802), Pangsu (W102) & plant lain, harga, kontrak, pemakaian 2025/2026.
+- **Cari Material** — KIMAP atau deskripsi; `flange 3" 150` = `FLG 3IN 150LB` = `CL.150 3 IN`. Kolom utama: Rantau (W101), Lirik (W803), Jambi (W802), Pangkalan Susu (W102). Field lain (Zona 4, 7, 9, 10, 11, 13, 14) dicek lewat tombol **Cek field lain** — tombol berwarna oranye bila stok Zona 1 kosong.
 - **Kontrak (OA/RO)** — klik nomor OA → semua material di kontrak itu, centang banyak item sekaligus.
 - **Call Order** — centang RO/BAU per material, saran qty (rata-rata pemakaian × 3 bulan − stok), export Excel: sheet `Call <Bulan>` (format template MIM) + sheet `BAU <Bulan>`.
+- **Riwayat Order** — setiap export otomatis tercatat (nomor order, tanggal, pembuat, item RO/BAU, nilai). Status: Dikirim ke MIM → Diproses MIM → Selesai / Dibatalkan. Bisa download Excel lagi atau salin kembali ke Call Order. Riwayat juga tampil di detail tiap material.
+- **TKO & Referensi** — Owner upload PDF (TKO, TKI, TKPA, Pedoman, SOP, Form); semua pengguna bisa preview langsung (juga di HP) atau download. PDF disimpan terenkripsi.
+
+### Daftar Field & Plant (default, bisa diubah di Pengaturan)
+
+| Zona | Field (Plant) |
+|---|---|
+| Zona 1 | **Rantau (W101, home)**, **Lirik (W803)**, **Jambi (W802)**, **Pangkalan Susu (W102)** |
+| Zona 4 | Ramba (W811), Prabumulih (W105), Pendopo (W106), Limau (W801), Adera (W809) |
+| Zona 7 | Tambun (W204), Subang (W201), Jatibarang (W202) |
+| Zona 9 | Sanggata (W302), Tanjung (W804), Sanga-sanga (W807), Tarakan Maratua (W808) |
+| Zona 10 | Bunyu (W301) |
+| Zona 11 | Cepu (W203), Sukowati (W402), Poleng (W812) |
+| Zona 13 | Donggi Matindok (W401) |
+| Zona 14 | Papua (W303) |
 
 ## Aktifkan / preview website
 
@@ -73,7 +92,10 @@ js/model.js           Menggabungkan stok + kontrak + pemakaian
 js/export.js          Export Excel template MIM
 data/users.js         Daftar pengguna (hash + kunci terenkripsi, tanpa password)
 data/manifest.js      Daftar versi data
-data/<jenis>-<tgl>-*.js  Data SAP terenkripsi
+data/<jenis>-<tgl>-*.js  Data SAP terenkripsi (maks. 3 versi per jenis)
+data/orders.js        Riwayat order (terenkripsi)
+data/docs.js          Daftar dokumen TKO (terenkripsi)
+data/docs/*.js        File PDF (terenkripsi)
 tools/init-data.js    (opsional) membuat ulang data awal via Node
-vendor/               SheetJS & ExcelJS
+vendor/               SheetJS, ExcelJS, PDF.js
 ```
