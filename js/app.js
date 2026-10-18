@@ -1200,7 +1200,7 @@
       '<li><b>Permissions › Repository permissions › Contents</b> → <b>Read and write</b>.</li>' +
       '<li>Klik <b>Generate token</b>, salin token (diawali <span class="mono">github_pat_</span>), tempel di bawah lalu klik <b>Simpan &amp; Tes</b>.</li></ol>' +
       '<div class="toolbar" style="margin-top:8px"><input class="input sm mono" id="ghRepo" style="width:240px" value="' + esc(ghRepo()) + '" title="owner/nama-repo">' +
-      '<input class="input sm mono" id="ghTok" type="password" style="flex:1;min-width:260px" placeholder="' + (tok ? 'Token tersimpan — isi untuk mengganti' : 'github_pat_…') + '" autocomplete="off">' +
+      '<input class="input sm mono masked" id="ghTok" type="text" name="gh-token-' + Date.now() + '" style="flex:1;min-width:260px" placeholder="' + (tok ? 'Token tersimpan — isi untuk mengganti' : 'github_pat_…') + '" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore>' +
       '<button class="btn sm primary" data-act="gh-save">Simpan &amp; Tes</button>' + (tok ? '<button class="btn sm danger" data-act="gh-remove">Putuskan</button>' : '') + '</div>' +
       '<div class="small muted" style="margin-top:8px">Token hanya disimpan di browser ini dan hanya punya akses ke repo tersebut.</div></div>';
     view.innerHTML =
@@ -1525,22 +1525,40 @@
   }
   function showLogin(err) {
     var el = $('#login');
+    var icUser = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
+    var icLock = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+    var icEye = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+    var feats = [
+      [ICON.search, 'Pencarian pintar', 'KIMAP, deskripsi & sinonim — <i>kcl</i> = <i>potassium chloride</i>'],
+      [ICON.box, 'Stok SAP per Field', 'Rantau, Lirik, Jambi, Pangsu &amp; field lain'],
+      [ICON.doc, 'Kontrak OA / RO', 'Harga, sisa kontrak, tarik banyak item sekaligus'],
+      [ICON.excel, 'Call Order ke MIM', 'RO &amp; BAU langsung jadi template Excel']
+    ];
     el.innerHTML =
-      '<div class="login-hero"><div class="brand"><div class="brand-mark">' + ICON.box.replace('<svg', '<svg width="22" height="22"') + '</div>' +
-      '<div><div class="brand-title">Material Warehouse</div><div class="brand-sub">Call Order Field Rantau · Zona 1</div></div></div>' +
-      '<h1>Cari material, cek stok Zona 1, dan buat Call Order ke MIM — di satu tempat.</h1>' +
-      '<ul class="login-feats"><li>' + ICON.search + '<span><b>Pencarian pintar</b> — KIMAP atau deskripsi, <i>flange 3" 150</i> = <i>FLG 3IN 150LB</i></span></li>' +
-      '<li>' + ICON.box + '<span><b>Stok SAP per Field</b> — Rantau, Lirik, Jambi, Pangsu &amp; plant lain</span></li>' +
-      '<li>' + ICON.doc + '<span><b>Kontrak OA/RO</b> — harga, sisa kontrak, tarik banyak item sekaligus</span></li>' +
-      '<li>' + ICON.excel + '<span><b>Export template MIM</b> — RO &amp; BAU siap kirim</span></li></ul></div>' +
+      '<div class="login-hero">' +
+      '<div class="lg-bg" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="lg-grid"></span>' +
+      '<span class="slash s1"></span><span class="slash s2"></span><span class="slash s3"></span></div>' +
+      '<div class="lg-hero-inner">' +
+      '<div class="lg-logo">' + Brand.full('anim', '#ffffff') + '</div>' +
+      '<div class="lg-copy"><div class="lg-eyebrow">Supply Chain Management · Warehouse &amp; Distribution</div>' +
+      '<h1>Material <span class="lg-grad">Warehouse</span></h1>' +
+      '<p>Cari material, cek stok Zona 1, dan buat Call Order ke MIM — di satu tempat.</p></div>' +
+      '<ul class="login-feats">' + feats.map(function (f, i) {
+        return '<li style="animation-delay:' + (1.1 + i * 0.12).toFixed(2) + 's"><span class="fi">' + f[0] + '</span><span><b>' + f[1] + '</b><small>' + f[2] + '</small></span></li>';
+      }).join('') + '</ul></div></div>' +
       '<div class="login-side"><form class="login-card" id="loginForm" autocomplete="on">' +
-      '<h2>Masuk</h2><p class="muted">Gunakan akun yang diberikan Owner.</p>' +
-      '<label class="lbl">Username</label><input class="input" id="lgUser" name="username" autocomplete="username" required>' +
-      '<label class="lbl">Password</label><input class="input" id="lgPw" name="password" type="password" autocomplete="current-password" required>' +
+      '<div class="lc-logo">' + Brand.mark() + '</div>' +
+      '<h2>Selamat datang</h2><p class="muted">Masuk dengan akun yang diberikan Owner.</p>' +
+      '<label class="lbl" for="lgUser">Username</label>' +
+      '<div class="field">' + icUser + '<input class="input" id="lgUser" name="username" autocomplete="username" placeholder="nama.pengguna" required></div>' +
+      '<label class="lbl" for="lgPw">Password</label>' +
+      '<div class="field">' + icLock + '<input class="input" id="lgPw" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required>' +
+      '<button type="button" class="eye" data-act="toggle-pw" title="Tampilkan password">' + icEye + '</button></div>' +
       '<label class="small remember"><input type="checkbox" id="lgRemember" checked> Ingat saya di perangkat ini</label>' +
       '<div class="lock-err" id="lgErr">' + esc(err || '') + '</div>' +
-      '<button class="btn primary" type="submit" style="width:100%;height:46px;font-size:15px">Masuk</button>' +
+      '<button class="btn primary lg-btn" type="submit"><span>Masuk</span>' + ICON.arrow + '</button>' +
       (S.users.length ? '' : '<div class="small" style="color:var(--bad);margin-top:10px">Data pengguna belum tersedia (data/users.js).</div>') +
+      '<div class="lc-foot"><span class="dot3"><i></i><i></i><i></i></span> Internal use only · Data terenkripsi</div>' +
       '</form></div>';
     el.classList.remove('hidden');
     setTimeout(function () { var i = $('#lgUser'); if (i) i.focus(); }, 50);
@@ -1567,6 +1585,8 @@
     for (var i = 0; i < Vault.TYPES.length; i++) await Store.del('ds-' + Vault.TYPES[i]);
     S.user = null; S.key = null; S.ds = { stock: null, oa: null, mb51: null }; S.idx = null;
     closeDrawer();
+    view.innerHTML = '';
+    $('#cartbar').classList.add('hidden');
     showLogin();
   }
   async function startApp() {
@@ -1746,6 +1766,7 @@
       }
       else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
       else if (act === 'logout') { logout(); }
+      else if (act === 'toggle-pw') { var pw = $('#lgPw'); pw.type = pw.type === 'password' ? 'text' : 'password'; a.classList.toggle('on', pw.type === 'text'); }
       else if (act === 'save-syn') {
         var groups = parseSynText($('#synText').value);
         loading('Menyimpan sinonim…');

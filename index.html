@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Material Warehouse</title>
   <meta name="description" content="Cari material, cek stok Zona 1, pilih RO/BAU dan buat Call Order ke MIM.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a5cc2'/%3E%3Cpath d='M8 12l8-4 8 4v9l-8 4-8-4z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M8 12l8 4 8-4M16 16v9' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%2240%20110%201780%201360%22%3E%3Cpath%20fill%3D%22%23ED1C2E%22%20d%3D%22M973%20132H1400Q1500%20132%201555%20215L1790%20578H1360Q1262%20578%201207%20495Z%22%2F%3E%3Cpath%20fill%3D%22%23ACC42A%22%20d%3D%22M1360%20690H1790L1555%201052Q1500%201135%201400%201135H973L1207%20773Q1262%20690%201360%20690Z%22%2F%3E%3Cpath%20fill%3D%22%23006CB8%22%20d%3D%22M655%20690H1110Q1050%20735%201020%20785L648%201362Q593%201447%20495%201447H64L500%20775Q555%20690%20655%20690Z%22%2F%3E%3C%2Fsvg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -15,13 +15,8 @@
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/></svg>
-        </div>
-        <div>
-          <div class="brand-title">Material Warehouse</div>
-          <div class="brand-sub">Call Order Field Rantau · Zona 1</div>
-        </div>
+        <div class="brand-mark"><svg class="pm-mark " viewBox="40 110 1780 1360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pertamina"><path class="pm-red" fill="#ED1C2E" d="M973 132H1400Q1500 132 1555 215L1790 578H1360Q1262 578 1207 495Z"/><path class="pm-green" fill="#ACC42A" d="M1360 690H1790L1555 1052Q1500 1135 1400 1135H973L1207 773Q1262 690 1360 690Z"/><path class="pm-blue" fill="#006CB8" d="M655 690H1110Q1050 735 1020 785L648 1362Q593 1447 495 1447H64L500 775Q555 690 655 690Z"/></svg></div>
+        <div class="brand-title">Material Warehouse</div>
       </div>
       <nav class="nav" id="nav">
         <a href="#/cari" data-route="cari">
@@ -83,6 +78,7 @@
   <script src="js/parser.js"></script>
   <script src="js/search.js"></script>
   <script src="js/synonyms.js"></script>
+  <script src="js/brand.js"></script>
   <script src="js/store.js"></script>
   <script src="js/vault.js"></script>
   <script src="js/model.js"></script>
