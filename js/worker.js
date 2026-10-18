@@ -1,5 +1,5 @@
 /* Web Worker: membaca file Excel di background supaya tampilan tidak macet */
-importScripts('../vendor/xlsx.full.min.js', 'parser.js');
+importScripts('../vendor/xlsx.full.min.js', 'parser.js' + (self.location.search || ''));
 
 self.onmessage = function (e) {
   try {
