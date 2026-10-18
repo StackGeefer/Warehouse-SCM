@@ -1,112 +1,79 @@
 # Material Warehouse
 
-**Call Order Field Rantau → MIM**
+**Call Order Field Rantau → MIM** · Warehouse & Distribution Zona 1
 
-Website untuk **Warehouse & Distribution – Field Rantau (Zona 1)** untuk:
+Website untuk mencari material, mengecek stok SAP Zona 1, melihat harga & kontrak (OA/RO), memilih **RO** atau **BAU**, lalu export **Call Order** sesuai template MIM.
 
-1. **Mencari material**: pakai KIMAP atau deskripsi. Penulisan yang berbeda tetap ketemu. Contoh: `flange 3" 150`, `flg 3in 150lb`, `FLANGE CL.150 3 IN`.
-2. **Cek stok SAP Zona 1 sekaligus**: Rantau (W101), Lirik (W803/W104), Jambi (W802), Pangkalan Susu (W102), dan plant lain.
-3. **Melihat harga & kontrak (OA/RO)** dari ME3N. Klik nomor OA untuk melihat **semua material** di kontrak itu yang bisa ikut ditarik.
-4. **Melihat pemakaian Rantau** dari MB51: total tahun lalu, YTD, rata-rata per bulan, dan grafik 24 bulan.
-5. **Memilih RO atau BAU** per material dengan centang, lalu **export ke Excel** sesuai template *Call Order – Field Rantau – To MIM*.
-
-> 🔒 **Data SAP sudah ada di website, tapi terkunci password.** File `data/sap-data.js` berisi data stok, kontrak & pemakaian yang dikompres lalu **dienkripsi AES-256-GCM** (kunci dari password, PBKDF2 250.000 iterasi). Repo & website boleh publik: tanpa password, isi file tidak bisa dibaca. File Excel mentah (`*.xlsx`) tidak pernah di-commit (diblokir `.gitignore`).
-
-## Membuka website
-
-1. Buka website → muncul layar **Data SAP Material Warehouse**.
-2. Masukkan **password data** → klik **Buka Data**. Centang "Ingat password" agar tidak ditanya lagi di browser itu.
-3. Data langsung siap dipakai. Tombol **Lewati** tersedia bila ingin memakai file Excel sendiri.
-
-## Update data SAP (tanpa coding)
-
-1. Menu **Data & Upload** → tarik file Excel SAP terbaru (ZMB52/MB52, ME3N, MB51). Data di browser Anda langsung ter-update.
-2. Di kartu **Data bawaan website**, isi password → klik **Buat file data bawaan** → file `sap-data.js` ter-download.
-3. Buka GitHub repo → folder **`data`** → **Add file › Upload files** → tarik `sap-data.js` → **Commit changes**.
-4. ±1–2 menit kemudian website ter-update untuk semua pengguna (mereka hanya perlu refresh; jika password diganti, mereka akan diminta password baru).
-
-Alternatif via terminal: `SAP_PASSWORD="..." node tools/build-data.js file1.xlsx file2.xlsx ...`
+🌐 Website: **https://stackgeefer.github.io/Warehouse-SCM/**
 
 ---
 
-## Preview di komputer sendiri (tanpa hosting)
+## Login
 
-1. Di GitHub: tombol hijau **Code › Download ZIP** → ekstrak.
-2. **Klik dua kali `index.html`** → website terbuka di Chrome/Edge, lengkap dengan data bawaan (masukkan password).
+Website dibuka lewat halaman **Login** (username + password).
 
-## Format file Excel yang bisa di-upload
+| Peran | Bisa apa |
+|---|---|
+| **Owner** | Semua fitur + upload/update data SAP, kelola pengguna, ganti password, koneksi GitHub |
+| **Viewer** | Cari material, lihat stok/kontrak, buat & export Call Order |
 
-1. Buka menu **Data & Upload**, lalu tarik file export SAP ke kotak upload (boleh sekaligus):
-   - `ZMB52` / `MB52`: stok. Bisa file Rantau saja (W101), file All Field, atau keduanya.
-   - `ME3N`: kontrak/OA.
-   - `MB51`: pemakaian. File yang berisi pivot juga bisa, sheet data mentahnya dicari otomatis.
-2. Data tetap tersimpan walaupun browser ditutup. Upload ulang kapan saja untuk memperbarui.
+Owner menambah/menghapus pengguna dan mengganti password di menu **Pengaturan**.
 
-Jenis file dikenali **otomatis dari nama kolom**. Tanggal data dibaca dari nama file, misalnya `10.14_ZMB52.xlsx` = 14 Oktober. Jika satu plant ada di dua file MB52, yang dipakai adalah **data dengan tanggal terbaru**.
+> 🔒 Data SAP di repo ini **terenkripsi (AES-256)** dan kuncinya hanya terbuka setelah login yang benar. Repo boleh publik — tanpa login, file di folder `data/` tidak bisa dibaca. File Excel mentah tidak pernah di-commit (`.gitignore`). Gunakan password yang kuat.
 
-## Alur kerja Call Order
+## Update data SAP (Owner)
 
-| Langkah | Menu | Yang dilakukan |
-|---|---|---|
-| 1 | **Cari Material** | Ketik kata kunci, lihat stok semua field, harga, kontrak, dan pemakaian. Klik baris untuk detail. |
-| 2 | **Cari Material** | Centang **RO** (tarik lewat kontrak) atau **BAU** (Bantuan Antar Unit). Boleh dua-duanya. |
-| 3 | **Kontrak (OA/RO)** | Buka satu OA, filter "Pernah dipakai Rantau" / "Stok Rantau habis", lalu centang banyak item sekaligus dan isi Qty. |
-| 4 | **Call Order** | Isi Qty Call RO (ada tombol *saran*), Stok Aktual, OA, dan Note. Untuk BAU, isi qty per Field sumber. |
-| 5 | **Call Order** | Klik **Export Excel (Template MIM)**. |
+1. Login sebagai Owner → menu **Data SAP**.
+2. Tarik file Excel SAP ke kotak upload (ZMB52/MB52, ME3N, MB51 — boleh sekaligus). Tanggal dibaca dari nama file, contoh `10.15_ZMB52.xlsx` = 15 Oktober.
+3. Data langsung dipublikasikan ke website (perlu koneksi GitHub sekali saja, lihat di bawah). Pengguna lain melihat data baru ±1–2 menit kemudian.
 
-**Isi file Excel:**
-- Sheet `Call <Bulan>`: format sama dengan template MIM: No, Material, Material Description, Uom, Data SAP dd.mm, Stock Aktual, History (tahun lalu), Call RO, Net Price, Total Harga (rumus), OA, Note, KIMAP (Ref OA). Material dikelompokkan A, B, C… per kontrak.
-- Sheet `BAU <Bulan>`: daftar BAU yang dikelompokkan per Field sumber, lengkap dengan stok field asal, qty, dan harga rata-rata.
+**Aturan versi** — tiap jenis data (stok, kontrak, pemakaian) disimpan **maksimal 2 versi**:
 
-**Rumus yang dipakai:**
-- *Pemakaian* = jumlah transaksi Goods Issue MB51 (mvt 201/202, 221/222, 261/262, 291/292, 949/950, 963/964), reversal ikut dihitung.
-- *Saran qty* = rata-rata pemakaian per bulan (12 bulan terakhir) × cover bulan (default 3) − stok Rantau. Cover bulan bisa diubah di Pengaturan.
-- *Kontrak aktif* = Validity Period End ≥ hari ini. Kalau ada beberapa OA, yang dipilih otomatis adalah OA aktif dengan harga termurah. Pilihan ini bisa diganti.
-
-Kode plant setiap Field, Field "home", dan tahun kolom History bisa diubah di menu **Pengaturan**.
-
----
-
-## Online-kan gratis dengan GitHub Pages
-
-Website ini **statis** (HTML + CSS + JavaScript saja, tanpa server/database), jadi bisa di-hosting gratis:
-
-1. Buka repo ini di GitHub, lalu masuk ke **Settings → Pages**.
-2. Di bagian *Build and deployment*, pilih **Source: Deploy from a branch**.
-3. Pilih branch **`main`** dan folder **`/ (root)`**, lalu **Save**.
-4. Tunggu 1–2 menit. Website akan aktif di **https://stackgeefer.github.io/Warehouse-SCM/**
-
-> GitHub Pages gratis hanya untuk **repo publik** (kecuali akun berbayar). Data SAP di repo ini terenkripsi, jadi tetap aman walau publik — **jangan pernah commit file Excel mentah** dan jangan tulis password di repo.
-
-## Nanti kalau sudah beli Hosting / Domain
-
-- **Hosting biasa (cPanel/shared hosting)**: upload seluruh isi folder ini (`index.html`, `css/`, `js/`, `vendor/`) ke `public_html` lewat File Manager atau FTP. Tidak perlu PHP atau database.
-- **Domain sendiri + GitHub Pages**: di *Settings → Pages → Custom domain*, isi domain Anda. Lalu di panel domain, buat record `CNAME` yang mengarah ke `<username>.github.io`.
-- Bisa juga memakai Netlify / Cloudflare Pages / Vercel (gratis): cukup hubungkan ke repo GitHub ini.
-
-## Menjalankan dengan server lokal (opsional)
-
-Membuka `index.html` langsung sudah cukup. Jika ingin proses upload file besar (MB51) berjalan di background tanpa layar membeku sesaat:
-
-```bash
-python -m http.server 8000
-# buka http://localhost:8000
 ```
+upload 15.10  →  [15.10]
+upload 16.10  →  [16.10 aktif, 15.10 cadangan]
+upload 17.10  →  [17.10 aktif, 16.10 cadangan]   ← 15.10 dihapus otomatis
+```
+
+Upload ulang dengan tanggal yang sama menggantikan versi tanggal itu. File stok Rantau saja (W101) boleh di-upload terpisah — plant lain tetap memakai data terakhirnya.
+
+## Koneksi GitHub (sekali saja, oleh Owner)
+
+Agar upload di website langsung tersimpan untuk semua pengguna, website perlu token GitHub:
+
+1. Buka https://github.com/settings/personal-access-tokens/new
+2. **Repository access** → *Only select repositories* → `Warehouse-SCM`
+3. **Permissions → Contents** → *Read and write* → **Generate token**
+4. Di website: **Pengaturan → Koneksi GitHub** → tempel token → **Simpan & Tes**
+
+Token hanya tersimpan di browser Owner dan hanya punya akses ke repo ini.
+
+## Fitur
+
+- **Cari Material** — KIMAP atau deskripsi; `flange 3" 150` = `FLG 3IN 150LB` = `CL.150 3 IN`. Stok Rantau (W101), Lirik (W803/W104), Jambi (W802), Pangsu (W102) & plant lain, harga, kontrak, pemakaian 2025/2026.
+- **Kontrak (OA/RO)** — klik nomor OA → semua material di kontrak itu, centang banyak item sekaligus.
+- **Call Order** — centang RO/BAU per material, saran qty (rata-rata pemakaian × 3 bulan − stok), export Excel: sheet `Call <Bulan>` (format template MIM) + sheet `BAU <Bulan>`.
+
+## Aktifkan / preview website
+
+- **Online (GitHub Pages)**: repo → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)` → Save.
+- **Preview lokal**: **Code → Download ZIP** → ekstrak → klik dua kali `index.html` → login.
+- **Hosting sendiri nanti**: upload seluruh isi folder ke `public_html` (tanpa PHP/database). Upload data dari website tetap tersimpan ke repo GitHub ini.
 
 ## Struktur folder
 
 ```
-index.html          Halaman utama
-css/style.css       Tampilan
-js/parser.js        Membaca Excel SAP & deteksi otomatis MB52/ME3N/MB51
-js/search.js        Logika pencarian (ukuran, rating, sinonim FLG=FLANGE, dst.)
-js/model.js         Menggabungkan stok + kontrak + pemakaian
-js/app.js           Halaman & interaksi
-js/export.js        Export Excel sesuai template MIM
-js/store.js         Penyimpanan lokal browser
-js/worker.js        Membaca file di background
-js/bundle.js        Enkripsi/dekripsi data bawaan
-data/sap-data.js    Data SAP bawaan (TERENKRIPSI)
-tools/build-data.js Membuat data/sap-data.js lewat Node (opsional)
-vendor/             Library SheetJS & ExcelJS (offline, tanpa CDN)
+index.html            Halaman utama
+css/style.css         Tampilan
+js/app.js             Halaman, login, upload & publikasi
+js/vault.js           Enkripsi, pengguna, aturan versi
+js/parser.js          Membaca Excel SAP (deteksi otomatis MB52/ME3N/MB51)
+js/search.js          Logika pencarian
+js/model.js           Menggabungkan stok + kontrak + pemakaian
+js/export.js          Export Excel template MIM
+data/users.js         Daftar pengguna (hash + kunci terenkripsi, tanpa password)
+data/manifest.js      Daftar versi data
+data/<jenis>-<tgl>-*.js  Data SAP terenkripsi
+tools/init-data.js    (opsional) membuat ulang data awal via Node
+vendor/               SheetJS & ExcelJS
 ```

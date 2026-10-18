@@ -50,8 +50,9 @@
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
-  // Repo GitHub tempat file data/sap-data.js di-upload
-  var REPO_URL = 'https://github.com/StackGeefer/Warehouse-SCM';
+  // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
+  var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
+  var GH_BRANCH = 'main';
 
   // ================= State =================
   var S = {
@@ -63,7 +64,8 @@
     oaF: { q: '', active: true, pg: '', sort: 'rel' },
     oaD: { q: '', used: false, zero: false },
     drawerAll: false,
-    lastLog: ''
+    lastLog: '',
+    user: null, key: null, users: [], man: null, pending: null
   };
   S.cart.items = S.cart.items || {};
   S.cart.meta = S.cart.meta || {};
@@ -211,9 +213,10 @@
       fmtQ(o.ytd) + '</b> <span class="muted small">' + S.idx.dataYear + '</span></div>' + spark(o.spark);
   }
   function emptyData() {
+    if (!isOwner()) return '<div class="card empty"><div class="ico">' + ICON.upload + '</div><h3>Belum ada data SAP</h3><p>Owner belum meng-upload data SAP. Silakan hubungi Owner.</p></div>';
     return '<div class="card empty"><div class="ico">' + ICON.upload + '</div><h3>Belum ada data SAP</h3>' +
       '<p>Upload file export SAP (MB52/ZMB52 untuk stok, ME3N untuk kontrak, MB51 untuk pemakaian) di halaman Data. ' +
-      'Data hanya disimpan di browser Anda, tidak dikirim ke mana pun.</p><a class="btn primary" href="#/data">' + ICON.upload + ' Upload Data SAP</a></div>';
+      'Data disimpan terenkripsi dan hanya bisa dibuka setelah login.</p><a class="btn primary" href="#/data">' + ICON.upload + ' Upload Data SAP</a></div>';
   }
 
   // ================= Routing =================
@@ -226,10 +229,11 @@
     cari: ['Cari Material', 'Cari dengan KIMAP atau deskripsi, cek stok Zona 1, harga & kontrak sekaligus'],
     kontrak: ['Kontrak (OA / RO)', 'Daftar Outline Agreement dari ME3N — klik untuk melihat semua material yang bisa ditarik'],
     'call-order': ['Call Order ke MIM', 'Atur material RO & BAU, lalu export ke template Excel'],
-    data: ['Data & Upload', 'Upload export SAP terbaru — data tersimpan hanya di browser ini'],
-    pengaturan: ['Pengaturan', 'Atur Field, kode plant, dan parameter saran replenishment']
+    data: ['Data SAP', 'Versi data yang dipakai website · Owner dapat upload/update langsung di sini'],
+    pengaturan: ['Pengaturan', 'Akun, pengguna, koneksi GitHub, Field & kode plant']
   };
   function render() {
+    if (!S.user) return;
     var r = currentRoute();
     if (!TITLES[r.name]) r.name = 'cari';
     $$('#nav a').forEach(function (a) { a.classList.toggle('active', a.getAttribute('data-route') === r.name); });
@@ -257,6 +261,9 @@
     out.push('<div class="row"><span><i class="dot ' + (ds.oa ? 'on' : '') + '"></i>Kontrak ME3N</span><b>' + (ds.oa ? ddmm(ds.oa.date) : '—') + '</b></div>');
     out.push('<div class="row"><span><i class="dot ' + (ds.mb51 ? 'on' : '') + '"></i>Pemakaian MB51</span><b>' + (ds.mb51 ? 's/d ' + BLN[+ds.mb51.max.slice(5, 7) - 1] + ' ' + ds.mb51.max.slice(2, 4) : '—') + '</b></div>');
     if (hp.length) out.push('<div class="small">Home: Field ' + esc(homeName()) + ' (' + esc(hp.join('/')) + ')</div>');
+    if (S.pending && isOwner()) out.push('<a class="side-warn" href="#/data">● ' + pendingCount() + ' perubahan belum dipublikasikan</a>');
+    if (S.user) out.push('<div class="side-user"><div class="avatar">' + esc(S.user.name.charAt(0).toUpperCase()) + '</div><div style="min-width:0"><b>' + esc(S.user.name) + '</b><div class="small">' + (isOwner() ? 'Owner' : 'Viewer') + '</div></div>' +
+      '<button class="icon-btn" data-act="logout" title="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></div>');
     $('#sideData').innerHTML = out.join('');
   }
 
@@ -746,58 +753,67 @@
   }
 
   // ================= Halaman: Data =================
-  function bundleCard() {
-    var b = window.SAP_BUNDLE, applied = Store.load('bundleApplied');
-    var status = b ? '<div>Versi di website: <b>' + fmtDate(b.builtAt.slice(0, 10)) + '</b> ' +
-      (applied === b.builtAt ? '<span class="badge ok">Sudah dimuat</span>' : '<span class="badge warn">Belum dimuat</span>') + '</div>' + bundleInfoHtml(b.info)
-      : '<div class="muted">Belum ada file <span class="mono">data/sap-data.js</span> di website.</div>';
-    return '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Data bawaan website (untuk semua pengguna)</h4>' +
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px">' +
-      '<div style="display:flex;flex-direction:column;gap:10px">' + status +
-      (b ? '<div><button class="btn sm" data-act="reload-bundle">Muat ulang data bawaan (ganti data di browser ini)</button></div>' : '') + '</div>' +
-      '<div><div style="font-weight:700;margin-bottom:6px">Update data bawaan</div>' +
-      '<ol class="steps small" style="margin-bottom:10px"><li>Upload file Excel SAP terbaru di kotak atas.</li><li>Isi password lalu klik <b>Buat file data bawaan</b> → file <span class="mono">sap-data.js</span> ter-download.</li>' +
-      '<li>Buka <a href="' + REPO_URL + '/upload/main/data" target="_blank" rel="noopener">GitHub › folder data › Upload files</a>, tarik <span class="mono">sap-data.js</span>, klik <b>Commit changes</b>. Website ter-update ±1–2 menit.</li></ol>' +
-      '<div class="toolbar"><input type="password" class="input sm" id="mbPw" placeholder="Password (min. 8 karakter)" autocomplete="new-password">' +
-      '<input type="password" class="input sm" id="mbPw2" placeholder="Ulangi password" autocomplete="new-password">' +
-      '<button class="btn primary sm" data-act="make-bundle">Buat file data bawaan</button></div>' +
-      '<div class="small hidden" id="mbDone" style="margin-top:8px;color:var(--ok)">✓ File dibuat. Lanjutkan langkah 3 (upload ke GitHub). Pengguna lain perlu password yang baru jika Anda menggantinya.</div>' +
-      '</div></div></div>';
+  var TYPE_LABEL = { stock: 'Stok — MB52 / ZMB52', oa: 'Kontrak — ME3N', mb51: 'Pemakaian — MB51' };
+  var TYPE_SHORT = { stock: 'stok', oa: 'kontrak ME3N', mb51: 'pemakaian MB51' };
+  function isOwner() { return !!(S.user && S.user.role === 'owner'); }
+  function fmtDateTime(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    return d.getDate() + ' ' + BLN[d.getMonth()] + ' ' + d.getFullYear() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
-
+  function pendingCount() {
+    if (!S.pending) return 0;
+    return Object.keys(S.pending.files).length + S.pending.deletes.length;
+  }
+  function pendingBanner() {
+    if (!isOwner() || !S.pending) return '';
+    var hasTok = !!Store.load('ghToken');
+    return '<div class="card card-pad pending-banner"><div><b>Ada perubahan yang belum dipublikasikan</b> (' + esc((S.pending.msgs || []).join(', ')) + ').<div class="small muted">Saat ini perubahan hanya ada di browser ini. Publikasikan agar semua pengguna melihat data terbaru.</div></div>' +
+      (hasTok ? '<button class="btn primary" data-act="publish">Publikasikan sekarang</button>'
+        : '<a class="btn primary" href="#/pengaturan">Hubungkan GitHub dulu</a>') + '</div>';
+  }
+  function versionsCard(type) {
+    var list = S.man.versions[type] || [];
+    var rows = list.map(function (v, i) {
+      var info = v.info || {};
+      var det = type === 'stock' ? info.plants + ' plant · ' + nf0.format(info.rows || 0) + ' baris'
+        : type === 'oa' ? nf0.format(info.rows || 0) + ' item kontrak'
+          : nf0.format(info.materials || 0) + ' material · ' + fmtDate(info.min) + ' – ' + fmtDate(info.max);
+      var unpub = S.pending && S.pending.files[Vault.snapPath(v.id)];
+      return '<div class="ver' + (i === 0 ? ' active' : '') + '"><div class="toolbar" style="gap:6px"><b>Data ' + fmtDate(v.date) + '</b>' +
+        (i === 0 ? '<span class="badge ok">Aktif dipakai</span>' : '<span class="badge">Versi sebelumnya</span>') +
+        (unpub ? '<span class="badge warn">Belum dipublikasikan</span>' : '') + '</div>' +
+        '<div class="small">' + esc(det) + '</div>' +
+        '<div class="small muted">Upload ' + fmtDateTime(v.uploadedAt) + (v.by ? ' · ' + esc(v.by) : '') + '</div>' +
+        '<div class="small mono muted" style="word-break:break-all">' + esc((v.files || []).join(', ')) + '</div></div>';
+    }).join('') || '<div class="muted">Belum ada data</div>';
+    return '<div class="card ds-card"><h4><i class="dot ' + (list.length ? 'on' : '') + '"></i>' + TYPE_LABEL[type] +
+      '<span class="spacer"></span><span class="badge">' + list.length + '/' + Vault.KEEP_VERSIONS + ' versi</span></h4>' + rows + '</div>';
+  }
   function renderData() {
-    var ds = S.ds;
-    var stockPlants = ds.stock ? Object.keys(ds.stock.plants).sort() : [];
-    var stockList = stockPlants.map(function (p) {
-      var P = ds.stock.plants[p], f = S.idx && S.idx.fieldOfPlant(p);
-      return '<tr><td class="mono">' + esc(p) + '</td><td>' + (f ? esc(f.name) : '<span class="muted">—</span>') + '</td><td class="num">' + nf0.format(P.rows.length) + '</td><td>' + fmtDate(P.date) + '</td><td class="small muted">' + esc(P.file) + '</td></tr>';
-    }).join('');
-    view.innerHTML =
-      '<div class="card card-pad" style="margin-bottom:16px;display:flex;gap:14px;align-items:flex-start;background:linear-gradient(135deg,#f0f6ff,#fff)">' +
-      '<div class="empty" style="padding:0"><div class="ico" style="margin:0;width:48px;height:48px;border-radius:14px">' + ICON.box.replace('<svg', '<svg style="width:24px;height:24px"') + '</div></div>' +
-      '<div><b>Data aman di komputer Anda.</b> File Excel dibaca langsung oleh browser dan disimpan di penyimpanan lokal browser ini (IndexedDB). Tidak ada data yang dikirim ke internet, sehingga website ini aman di-hosting publik (GitHub Pages) tanpa membocorkan data stok &amp; harga kontrak.' +
-      '<div class="small muted" style="margin-top:6px">Upload ulang kapan saja untuk memperbarui. File MB52 terbaru akan menggantikan stok plant yang sama; plant lain tetap.</div></div></div>' +
-      '<div class="dropzone" id="dropzone">' + ICON.upload + '<h3>Tarik &amp; lepas file Excel SAP di sini</h3><div class="muted">atau klik untuk memilih — boleh beberapa file sekaligus (MB52/ZMB52, ME3N, MB51). Jenis file dikenali otomatis.</div></div>' +
+    var owner = isOwner();
+    view.innerHTML = pendingBanner() +
+      (owner
+        ? '<div class="dropzone" id="dropzone">' + ICON.upload + '<h3>Upload / update data SAP</h3><div class="muted">Tarik &amp; lepas file Excel di sini atau klik untuk memilih — boleh beberapa file sekaligus (ZMB52/MB52, ME3N, MB51). Jenis file dikenali otomatis, tanggal dibaca dari nama file (contoh <span class="mono">10.15_ZMB52.xlsx</span> = 15 Okt).</div></div>'
+        : '<div class="card card-pad muted">Hanya <b>Owner</b> yang dapat meng-upload data SAP. Di bawah ini versi data yang sedang dipakai website.</div>') +
       (S.lastLog ? '<div class="log" style="margin-top:14px">' + esc(S.lastLog) + '</div>' : '') +
-      bundleCard() +
-      '<div class="ds-grid" style="margin-top:18px">' +
-      '<div class="card ds-card"><h4><i class="dot ' + (ds.stock ? 'on' : '') + '"></i>Stok — MB52 / ZMB52</h4><div class="muted small">Kolom: Plant, Material, Material Description, Unrestricted, (Value Unrestricted)</div>' +
-      (ds.stock ? '<div class="table-wrap" style="max-height:260px"><table class="grid"><thead><tr><th>Plant</th><th>Field</th><th class="num">Baris</th><th>Tanggal</th><th>File</th></tr></thead><tbody>' + stockList + '</tbody></table></div><div><button class="btn sm danger" data-act="del-ds" data-k="stock">' + ICON.trash + ' Hapus data stok</button></div>' : '<div class="muted">Belum ada</div>') + '</div>' +
-      '<div class="card ds-card"><h4><i class="dot ' + (ds.oa ? 'on' : '') + '"></i>Kontrak — ME3N</h4><div class="muted small">Kolom: Purchasing Document, Item, Material, Short Text, Net price, Validity Period End, Target/Open value</div>' +
-      (ds.oa ? '<div><b>' + nf0.format(ds.oa.rows.length) + '</b> item · <b>' + (S.idx ? S.idx.oaMap.size : 0) + '</b> kontrak</div><div class="small muted">' + esc(ds.oa.file) + ' · ' + fmtDate(ds.oa.date) + '</div><div><button class="btn sm danger" data-act="del-ds" data-k="oa">' + ICON.trash + ' Hapus data kontrak</button></div>' : '<div class="muted">Belum ada</div>') + '</div>' +
-      '<div class="card ds-card"><h4><i class="dot ' + (ds.mb51 ? 'on' : '') + '"></i>Pemakaian — MB51</h4><div class="muted small">Movement GI dihitung: 201/202, 221/222, 261/262, 291/292, 949/950, 963/964</div>' +
-      (ds.mb51 ? '<div>Periode <b>' + fmtDate(ds.mb51.min) + '</b> s/d <b>' + fmtDate(ds.mb51.max) + '</b></div><div><b>' + nf0.format(Object.keys(ds.mb51.agg).length) + '</b> material</div><div class="small muted">' + ds.mb51.files.map(function (f) { return esc(f.name); }).join('<br>') + '</div><div><button class="btn sm danger" data-act="del-ds" data-k="mb51">' + ICON.trash + ' Hapus data pemakaian</button></div>' : '<div class="muted">Belum ada</div>') + '</div>' +
-      '</div>' +
-      '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Cara menyiapkan file dari SAP</h4><ol class="steps">' +
-      '<li><b>Stok</b>: jalankan <span class="mono">ZMB52</span>/<span class="mono">MB52</span> untuk plant Zona 1 (W101, W102, W802, W803, W104, …) → export ke Excel.</li>' +
-      '<li><b>Kontrak</b>: jalankan <span class="mono">ME3N</span> (Purch. Org 2021) → export ke Excel.</li>' +
-      '<li><b>Pemakaian</b>: jalankan <span class="mono">MB51</span> dengan movement type GI → export. File yang berisi pivot juga bisa, sheet data mentah akan dicari otomatis.</li>' +
-      '<li>Tarik semua file ke kotak di atas. Tanggal data dibaca dari nama file (contoh <span class="mono">10.14_ZMB52.xlsx</span> = 14 Oktober).</li></ol></div>';
+      '<div class="ds-grid" style="margin-top:18px">' + Vault.TYPES.map(versionsCard).join('') + '</div>' +
+      '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Aturan penyimpanan versi</h4><ol class="steps">' +
+      '<li>Setiap jenis data (stok, kontrak, pemakaian) disimpan <b>maksimal ' + Vault.KEEP_VERSIONS + ' versi</b>. Contoh: upload 15.10 → upload 16.10 (15.10 tetap disimpan) → upload 17.10 → versi 15.10 dihapus otomatis.</li>' +
+      '<li>Website selalu memakai versi <b>terbaru</b>; versi sebelumnya disimpan sebagai cadangan.</li>' +
+      '<li>Upload ulang dengan <b>tanggal yang sama</b> akan menggantikan versi tanggal itu (tidak menambah versi).</li>' +
+      '<li>File stok Rantau saja (W101) boleh di-upload terpisah dari All Field — plant lain tetap memakai data terakhirnya.</li>' +
+      '<li>Data tersimpan <b>terenkripsi</b> di repo GitHub dan hanya terbuka setelah login.</li></ol>' +
+      (owner ? '<h4 class="section-title" style="margin-top:16px">Cara menyiapkan file dari SAP</h4><ol class="steps">' +
+        '<li><b>Stok</b>: <span class="mono">ZMB52</span>/<span class="mono">MB52</span> plant Zona 1 (W101, W102, W802, W803, W104, …) → export Excel.</li>' +
+        '<li><b>Kontrak</b>: <span class="mono">ME3N</span> (Purch. Org 2021) → export Excel.</li>' +
+        '<li><b>Pemakaian</b>: <span class="mono">MB51</span> movement GI → export (file berisi pivot juga bisa).</li></ol>' : '') +
+      '</div>';
   }
 
   // ================= Halaman: Pengaturan =================
   function renderSettings() {
-    var st = S.settings;
+    var st = S.settings, owner = isOwner();
     var years = [];
     var y0 = S.idx ? S.idx.dataYear : new Date().getFullYear();
     for (var y = y0; y >= y0 - 5; y--) years.push(y);
@@ -808,15 +824,48 @@
         '<td><button class="icon-btn" data-act="del-field" data-i="' + i + '">' + ICON.trash + '</button></td></tr>';
     }).join('');
     var known = S.idx ? S.idx.plantsAll.join(', ') : '-';
+    var userRows = S.users.map(function (u) {
+      var me = u.id === S.user.id;
+      return '<tr><td><b>' + esc(u.name) + '</b>' + (me ? ' <span class="badge ro">Anda</span>' : '') + '</td><td>' + (u.role === 'owner' ? '<span class="badge ok">Owner</span>' : '<span class="badge">Viewer</span>') + '</td>' +
+        '<td class="right">' + (me ? '' : '<button class="btn sm danger" data-act="del-user" data-id="' + esc(u.id) + '">' + ICON.trash + ' Hapus</button>') + '</td></tr>';
+    }).join('');
+    var tok = Store.load('ghToken');
+    var ownerHtml = !owner ? '' :
+      '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Pengguna &amp; Login</h4>' +
+      '<div class="table-wrap"><table class="grid"><thead><tr><th>Username</th><th>Peran</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-top:14px">' +
+      '<div><div style="font-weight:700;margin-bottom:6px">Tambah pengguna</div><div class="toolbar">' +
+      '<input class="input sm" id="nuName" placeholder="Username" autocomplete="off">' +
+      '<input class="input sm" id="nuPw" type="password" placeholder="Password" autocomplete="new-password">' +
+      '<select class="select sm" id="nuRole"><option value="viewer">Viewer (lihat & buat Call Order)</option><option value="owner">Owner (bisa upload data)</option></select>' +
+      '<button class="btn sm primary" data-act="add-user">Tambah</button></div></div>' +
+      '<div><div style="font-weight:700;margin-bottom:6px">Ganti password saya</div><div class="toolbar">' +
+      '<input class="input sm" id="cpPw" type="password" placeholder="Password baru" autocomplete="new-password">' +
+      '<input class="input sm" id="cpPw2" type="password" placeholder="Ulangi password baru" autocomplete="new-password">' +
+      '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
+      '<div class="small muted" style="margin-top:10px">Perubahan pengguna/password ikut dipublikasikan ke website (perlu koneksi GitHub di bawah).</div></div>' +
+      '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub (agar upload langsung tampil untuk semua pengguna)</h4>' +
+      '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
+      '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
+      '<li>Isi <b>Token name</b> bebas (mis. "Material Warehouse"), <b>Expiration</b> sesuai kebutuhan (mis. 1 tahun).</li>' +
+      '<li><b>Repository access</b> → <i>Only select repositories</i> → pilih <b>' + esc(ghRepo().split('/')[1]) + '</b>.</li>' +
+      '<li><b>Permissions › Repository permissions › Contents</b> → <b>Read and write</b>.</li>' +
+      '<li>Klik <b>Generate token</b>, salin token (diawali <span class="mono">github_pat_</span>), tempel di bawah lalu klik <b>Simpan &amp; Tes</b>.</li></ol>' +
+      '<div class="toolbar" style="margin-top:8px"><input class="input sm mono" id="ghRepo" style="width:240px" value="' + esc(ghRepo()) + '" title="owner/nama-repo">' +
+      '<input class="input sm mono" id="ghTok" type="password" style="flex:1;min-width:260px" placeholder="' + (tok ? 'Token tersimpan — isi untuk mengganti' : 'github_pat_…') + '" autocomplete="off">' +
+      '<button class="btn sm primary" data-act="gh-save">Simpan &amp; Tes</button>' + (tok ? '<button class="btn sm danger" data-act="gh-remove">Putuskan</button>' : '') + '</div>' +
+      '<div class="small muted" style="margin-top:8px">Token hanya disimpan di browser ini dan hanya punya akses ke repo tersebut.</div></div>';
     view.innerHTML =
-      '<div class="card card-pad"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
-      '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Field lain tampil sebagai kolom stok dan sumber BAU. Satu field boleh punya beberapa plant, pisahkan dengan koma (contoh Lirik: W803, W104).</p>' +
+      '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + (owner ? '<span class="badge ok">Owner</span>' : '<span class="badge">Viewer</span>') + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
+      ownerHtml +
+      '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
+      '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Field lain tampil sebagai kolom stok dan sumber BAU. Satu field boleh punya beberapa plant, pisahkan dengan koma (contoh Lirik: W803, W104). Pengaturan ini berlaku di browser ini.</p>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th>Home</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div class="toolbar" style="margin-top:10px"><button class="btn sm" data-act="add-field">+ Tambah Field</button><span class="small muted">Plant di data saat ini: <span class="mono">' + esc(known) + '</span></span></div></div>' +
       '<div class="card card-pad" style="margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = rata-rata pemakaian/bulan × cover − stok ' + esc(homeName()) + '</div></label>' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div>' +
-      '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Hapus semua data &amp; Call Order</button></div>';
+      '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Kosongkan Call Order &amp; cache browser</button></div>';
   }
   function readSettingsForm() {
     var st = clone(S.settings);
@@ -852,9 +901,21 @@
       w.postMessage({ buf: buf, name: name, lastModified: lm });
     });
   }
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function () { s.remove(); resolve(); };
+      s.onerror = function () { s.remove(); reject(new Error('Gagal memuat ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  // Owner: upload Excel -> versi baru (terenkripsi) -> publikasi
   async function handleFiles(files) {
     files = Array.prototype.slice.call(files || []);
     if (!files.length) return;
+    if (!isOwner()) { toast('Hanya Owner yang dapat meng-upload data', true); return; }
     var parsed = [], log = [];
     try {
       for (var i = 0; i < files.length; i++) {
@@ -862,96 +923,238 @@
         loading('Membaca ' + f.name + ' (' + (i + 1) + '/' + files.length + ')… file MB51 besar bisa ±10–20 detik');
         try {
           var buf = await f.arrayBuffer();
-          var res = await parseInWorker(buf, f.name, f.lastModified);
-          parsed.push(res);
+          parsed.push(await parseInWorker(buf, f.name, f.lastModified));
         } catch (e) {
           log.push('✗ ' + f.name + ': ' + e.message);
         }
       }
+      if (!parsed.length) { S.lastLog = log.join('\n'); return; }
       parsed.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+      var ds = clone(S.ds), touched = {};
       parsed.forEach(function (p) {
-        var notes = Model.ingest(S.ds, p);
+        var notes = Model.ingest(ds, p);
         log.push('✓ ' + p.name + ' (tanggal data ' + p.date + ')\n   ' + notes.join('\n   '));
+        p.parts.forEach(function (pt) {
+          var t = pt.type === 'me3n' ? 'oa' : pt.type === 'mb52' ? 'stock' : 'mb51';
+          var x = touched[t] || (touched[t] = { date: p.date, files: [] });
+          if (p.date > x.date) x.date = p.date;
+          if (x.files.indexOf(p.name) < 0) x.files.push(p.name);
+        });
       });
-      loading('Menyimpan & menyusun index…');
-      await Store.set('stock', S.ds.stock);
-      await Store.set('oa', S.ds.oa);
-      await Store.set('mb51', S.ds.mb51);
+      loading('Mengenkripsi & menyimpan versi data…');
+      var man = clone(S.man), changes = { files: {}, deletes: [], payloads: {} }, msgs = [];
+      man.updatedAt = new Date().toISOString();
+      for (var t in touched) {
+        if (!ds[t]) continue;
+        var id = t + '-' + touched[t].date + '-' + Date.now().toString(36);
+        var payload = await Vault.encrypt(S.key, ds[t]);
+        var removed = Vault.addVersion(man, t, {
+          id: id, date: touched[t].date, uploadedAt: new Date().toISOString(), by: S.user.name,
+          files: touched[t].files, info: Vault.summary(t, ds[t])
+        });
+        changes.files[Vault.snapPath(id)] = Vault.snapFile(id, payload);
+        changes.payloads[id] = payload;
+        removed.forEach(function (rid) {
+          changes.deletes.push(Vault.snapPath(rid));
+          log.push('   ↳ versi lama dihapus: ' + rid);
+        });
+        await Store.set('ds-' + t, { id: id, data: ds[t] });
+        msgs.push(TYPE_SHORT[t] + ' ' + ddmm(touched[t].date));
+      }
+      changes.files['data/manifest.js'] = Vault.manifestFile(man);
+      S.man = man; S.ds = ds;
       rebuild();
+      await queuePending(changes, msgs, man);
       S.lastLog = log.join('\n');
-      toast(parsed.length + ' file berhasil diproses');
+      if (Store.load('ghToken')) await publish();
+      else toast('Data tersimpan di browser ini. Hubungkan GitHub di Pengaturan agar tampil untuk semua pengguna.');
+    } catch (e) {
+      console.error(e);
+      toast('Gagal memproses: ' + e.message, true);
     } finally {
       loading(false);
       render();
     }
   }
 
-  // ================= Data bawaan (terenkripsi) =================
-  async function applyBundle(pw, force) {
-    var b = window.SAP_BUNDLE;
-    var data = await Bundle.decrypt(b.payload, pw);
-    if (force) S.ds = { stock: null, oa: null, mb51: null };
-    Bundle.merge(S.ds, data);
-    await Store.set('stock', S.ds.stock);
-    await Store.set('oa', S.ds.oa);
-    await Store.set('mb51', S.ds.mb51);
-    Store.save('bundleApplied', b.builtAt);
+  async function queuePending(changes, msgs, man, users) {
+    var P = S.pending || { files: {}, deletes: [], payloads: {}, msgs: [] };
+    Object.keys(changes.files).forEach(function (path) {
+      P.files[path] = changes.files[path];
+      P.deletes = P.deletes.filter(function (d) { return d !== path; });
+    });
+    changes.deletes.forEach(function (path) {
+      if (P.files[path]) delete P.files[path];
+      else if (P.deletes.indexOf(path) < 0) P.deletes.push(path);
+    });
+    Object.assign(P.payloads, changes.payloads || {});
+    Object.keys(P.payloads).forEach(function (id) { if (!P.files[Vault.snapPath(id)]) delete P.payloads[id]; });
+    if (man) P.man = man;
+    if (users) P.users = users;
+    msgs.forEach(function (m) { if (P.msgs.indexOf(m) < 0) P.msgs.push(m); });
+    S.pending = P;
+    await Store.set('pending', P);
+  }
+
+  // ---------- GitHub ----------
+  function ghRepo() {
+    var saved = Store.load('ghRepo');
+    if (saved) return saved;
+    var h = location.hostname;
+    if (/\.github\.io$/.test(h)) {
+      var seg = location.pathname.split('/').filter(Boolean)[0];
+      if (seg) return h.split('.')[0] + '/' + seg;
+    }
+    return DEFAULT_REPO;
+  }
+  async function gh(method, path, body, token) {
+    var res = await fetch('https://api.github.com/repos/' + ghRepo() + path, {
+      method: method,
+      headers: { Authorization: 'Bearer ' + (token || Store.load('ghToken')), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    var data = res.status === 204 ? null : await res.json().catch(function () { return null; });
+    if (!res.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
+    return data;
+  }
+  // Satu commit berisi semua file baru/diubah + file yang dihapus
+  async function ghCommit(files, deletes, message) {
+    var ref = await gh('GET', '/git/ref/heads/' + GH_BRANCH);
+    var base = ref.object.sha;
+    var commit = await gh('GET', '/git/commits/' + base);
+    var tree = await gh('GET', '/git/trees/' + commit.tree.sha + '?recursive=1');
+    var exists = {};
+    tree.tree.forEach(function (e) { exists[e.path] = 1; });
+    var entries = [];
+    for (var path in files) {
+      var blob = await gh('POST', '/git/blobs', { content: files[path], encoding: 'utf-8' });
+      entries.push({ path: path, mode: '100644', type: 'blob', sha: blob.sha });
+    }
+    deletes.forEach(function (p) { if (exists[p]) entries.push({ path: p, mode: '100644', type: 'blob', sha: null }); });
+    var nt = await gh('POST', '/git/trees', { base_tree: commit.tree.sha, tree: entries });
+    var nc = await gh('POST', '/git/commits', { message: message, tree: nt.sha, parents: [base] });
+    await gh('PATCH', '/git/refs/heads/' + GH_BRANCH, { sha: nc.sha });
+  }
+  async function publish() {
+    if (!S.pending) return;
+    if (!Store.load('ghToken')) { toast('Hubungkan GitHub dulu di Pengaturan', true); location.hash = '#/pengaturan'; return; }
+    loading('Mempublikasikan ke website (GitHub)…');
+    try {
+      await ghCommit(S.pending.files, S.pending.deletes, 'Update data: ' + (S.pending.msgs || []).join(', '));
+      S.pending = null;
+      await Store.del('pending');
+      toast('Berhasil dipublikasikan. Website ter-update untuk semua pengguna ±1–2 menit lagi.');
+    } catch (e) {
+      toast('Gagal publikasi: ' + e.message + ' — perubahan tetap tersimpan, coba lagi nanti.', true);
+    } finally {
+      loading(false);
+      render();
+    }
+  }
+
+  // ---------- Pengguna ----------
+  async function saveUsers(users, msg) {
+    S.users = users;
+    await queuePending({ files: { 'data/users.js': Vault.usersFile(users) }, deletes: [] }, [msg], null, users);
+    if (Store.load('ghToken')) await publish();
+    else { toast(msg + ' — tersimpan di browser ini, publikasikan setelah GitHub terhubung'); render(); }
+  }
+
+  // ---------- Login / sesi ----------
+  function sessionGet() {
+    try { var v = sessionStorage.getItem('mw:session') || localStorage.getItem('mw:session'); return v ? JSON.parse(v) : null; }
+    catch (e) { return null; }
+  }
+  function sessionSet(sess, remember) {
+    try { (remember ? localStorage : sessionStorage).setItem('mw:session', JSON.stringify(sess)); } catch (e) { /* abaikan */ }
+  }
+  function sessionClear() {
+    try { sessionStorage.removeItem('mw:session'); localStorage.removeItem('mw:session'); } catch (e) { /* abaikan */ }
+  }
+  async function loadRepoMeta() {
+    var t = Date.now();
+    await loadScript('data/users.js?t=' + t).catch(function () {});
+    await loadScript('data/manifest.js?t=' + t).catch(function () {});
+    S.pending = (await Store.get('pending')) || null;
+    S.users = (S.pending && S.pending.users) || window.MW_USERS || [];
+    S.man = (S.pending && S.pending.man) || window.MW_MANIFEST || Vault.emptyManifest();
+  }
+  async function loadData() {
+    var ds = { stock: null, oa: null, mb51: null };
+    for (var i = 0; i < Vault.TYPES.length; i++) {
+      var type = Vault.TYPES[i], v = (S.man.versions[type] || [])[0];
+      if (!v) continue;
+      try {
+        var cached = await Store.get('ds-' + type);
+        if (cached && cached.id === v.id) { ds[type] = cached.data; continue; }
+        loading('Memuat data ' + TYPE_SHORT[type] + ' ' + fmtDate(v.date) + '…');
+        var payload = S.pending && S.pending.payloads[v.id];
+        if (!payload) {
+          await loadScript(Vault.snapPath(v.id) + '?v=' + encodeURIComponent(v.id));
+          payload = window.MW_SNAP && window.MW_SNAP[v.id];
+        }
+        if (!payload) throw new Error('file data tidak ditemukan');
+        ds[type] = await Vault.decrypt(S.key, payload);
+        if (window.MW_SNAP) delete window.MW_SNAP[v.id];
+        await Store.set('ds-' + type, { id: v.id, data: ds[type] });
+      } catch (e) {
+        console.error(e);
+        toast('Gagal memuat data ' + TYPE_SHORT[type] + ': ' + e.message, true);
+      }
+    }
+    S.ds = ds;
     rebuild();
   }
-  function bundleInfoHtml(info) {
-    if (!info) return '';
-    return '<div class="lock-info">' +
-      '<div><i class="dot on"></i>Stok SAP <b>' + fmtDate(info.stockDate) + '</b> · ' + info.stockPlants + ' plant</div>' +
-      '<div><i class="dot on"></i>Kontrak ME3N <b>' + fmtDate(info.oaDate) + '</b></div>' +
-      '<div><i class="dot on"></i>Pemakaian MB51 <b>' + fmtDate(info.mb51Min) + ' – ' + fmtDate(info.mb51Max) + '</b></div></div>';
-  }
-  function showLock() {
-    var b = window.SAP_BUNDLE, el = $('#lock');
-    el.innerHTML = '<div class="lock-card">' +
-      '<div class="brand-mark" style="margin:0 auto 14px;width:52px;height:52px">' + ICON.box.replace('<svg', '<svg width="26" height="26"') + '</div>' +
-      '<h2>Data SAP Material Warehouse</h2>' +
-      '<p class="muted">Data stok, kontrak & pemakaian sudah tersedia di website ini dalam bentuk <b>terenkripsi</b>. Masukkan password untuk membukanya — cukup sekali di browser ini.</p>' +
-      bundleInfoHtml(b.info) +
-      '<input type="password" class="input" id="lockPw" placeholder="Password data" autocomplete="current-password" style="width:100%;height:46px;font-size:15px">' +
-      '<label class="small" style="display:flex;gap:8px;align-items:center;margin:10px 0 14px"><input type="checkbox" id="lockRemember" checked> Ingat password di browser ini</label>' +
-      '<div class="lock-err" id="lockErr"></div>' +
-      '<button class="btn primary" style="width:100%;height:44px" data-act="unlock">Buka Data</button>' +
-      '<button class="btn ghost sm" style="margin-top:10px" data-act="skip-lock">Lewati — saya upload file Excel sendiri</button></div>';
+  function showLogin(err) {
+    var el = $('#login');
+    el.innerHTML =
+      '<div class="login-hero"><div class="brand"><div class="brand-mark">' + ICON.box.replace('<svg', '<svg width="22" height="22"') + '</div>' +
+      '<div><div class="brand-title">Material Warehouse</div><div class="brand-sub">Call Order Field Rantau · Zona 1</div></div></div>' +
+      '<h1>Cari material, cek stok Zona 1, dan buat Call Order ke MIM — di satu tempat.</h1>' +
+      '<ul class="login-feats"><li>' + ICON.search + '<span><b>Pencarian pintar</b> — KIMAP atau deskripsi, <i>flange 3" 150</i> = <i>FLG 3IN 150LB</i></span></li>' +
+      '<li>' + ICON.box + '<span><b>Stok SAP per Field</b> — Rantau, Lirik, Jambi, Pangsu &amp; plant lain</span></li>' +
+      '<li>' + ICON.doc + '<span><b>Kontrak OA/RO</b> — harga, sisa kontrak, tarik banyak item sekaligus</span></li>' +
+      '<li>' + ICON.excel + '<span><b>Export template MIM</b> — RO &amp; BAU siap kirim</span></li></ul></div>' +
+      '<div class="login-side"><form class="login-card" id="loginForm" autocomplete="on">' +
+      '<h2>Masuk</h2><p class="muted">Gunakan akun yang diberikan Owner.</p>' +
+      '<label class="lbl">Username</label><input class="input" id="lgUser" name="username" autocomplete="username" required>' +
+      '<label class="lbl">Password</label><input class="input" id="lgPw" name="password" type="password" autocomplete="current-password" required>' +
+      '<label class="small remember"><input type="checkbox" id="lgRemember" checked> Ingat saya di perangkat ini</label>' +
+      '<div class="lock-err" id="lgErr">' + esc(err || '') + '</div>' +
+      '<button class="btn primary" type="submit" style="width:100%;height:46px;font-size:15px">Masuk</button>' +
+      (S.users.length ? '' : '<div class="small" style="color:var(--bad);margin-top:10px">Data pengguna belum tersedia (data/users.js).</div>') +
+      '</form></div>';
     el.classList.remove('hidden');
-    setTimeout(function () { var i = $('#lockPw'); if (i) i.focus(); }, 50);
+    setTimeout(function () { var i = $('#lgUser'); if (i) i.focus(); }, 50);
   }
-  function unlockBundle() {
-    var pw = $('#lockPw').value;
-    if (!pw) return;
-    $('#lockErr').textContent = '';
-    loading('Membuka data…');
-    applyBundle(pw, !!S.forceBundle).then(function () {
-      Store.save('bundlePw', $('#lockRemember').checked ? pw : null);
-      S.needPw = false; S.forceBundle = false;
-      $('#lock').classList.add('hidden');
-      toast('Data SAP berhasil dibuka');
-      render();
-    }).catch(function (err) {
-      $('#lockErr').textContent = err.message === 'Password salah' ? 'Password salah, coba lagi.' : err.message;
-    }).then(function () { loading(false); });
+  async function doLogin() {
+    var u = $('#lgUser').value, p = $('#lgPw').value;
+    $('#lgErr').textContent = '';
+    loading('Memeriksa akun…');
+    try {
+      var r = await Vault.login(S.users, u, p);
+      S.user = r.user; S.key = r.key;
+      sessionSet({ user: r.user, key: Vault.toB64(r.key) }, $('#lgRemember').checked);
+      $('#login').classList.add('hidden');
+      $('#login').innerHTML = '';
+      await startApp();
+      toast('Selamat datang, ' + r.user.name);
+    } catch (e) {
+      loading(false);
+      $('#lgErr').textContent = e.message;
+    }
   }
-  function makeBundle() {
-    var p1 = $('#mbPw').value, p2 = $('#mbPw2').value;
-    if (!S.ds.stock && !S.ds.oa && !S.ds.mb51) { toast('Belum ada data untuk dijadikan data bawaan', true); return; }
-    if (p1.length < 8) { toast('Password minimal 8 karakter', true); return; }
-    if (p1 !== p2) { toast('Konfirmasi password tidak sama', true); return; }
-    loading('Mengenkripsi data…');
-    Bundle.fileContent(S.ds, p1).then(function (txt) {
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([txt], { type: 'text/javascript' }));
-      a.download = 'sap-data.js';
-      document.body.appendChild(a); a.click();
-      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
-      Store.save('bundlePw', p1);
-      $('#mbDone').classList.remove('hidden');
-      toast('sap-data.js dibuat — upload ke GitHub folder data/');
-    }).catch(function (err) { toast('Gagal: ' + err.message, true); })
-      .then(function () { loading(false); });
+  async function logout() {
+    sessionClear();
+    for (var i = 0; i < Vault.TYPES.length; i++) await Store.del('ds-' + Vault.TYPES[i]);
+    S.user = null; S.key = null; S.ds = { stock: null, oa: null, mb51: null }; S.idx = null;
+    closeDrawer();
+    showLogin();
+  }
+  async function startApp() {
+    await loadData();
+    loading(false);
+    render();
   }
 
   // ================= Event handlers =================
@@ -1095,11 +1298,6 @@
           .catch(function (err) { console.error(err); toast('Gagal export: ' + err.message, true); })
           .then(function () { loading(false); });
       }
-      else if (act === 'del-ds') {
-        var key = a.getAttribute('data-k');
-        if (!confirm('Hapus data ini dari browser?')) return;
-        S.ds[key] = null; Store.del(key); rebuild(); render();
-      }
       else if (act === 'add-field') { S.settings = readSettingsForm(); S.settings.fields.push({ name: 'Field baru', plants: [] }); renderSettings(); }
       else if (act === 'del-field') { S.settings = readSettingsForm(); S.settings.fields.splice(+a.getAttribute('data-i'), 1); renderSettings(); }
       else if (act === 'save-settings') {
@@ -1108,22 +1306,59 @@
         S.settings = st; Store.save('settings', st); rebuild(); toast('Pengaturan disimpan'); render();
       }
       else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
-      else if (act === 'unlock') { unlockBundle(); }
-      else if (act === 'skip-lock') { S.needPw = false; $('#lock').classList.add('hidden'); render(); }
-      else if (act === 'reload-bundle') {
-        var pw0 = Store.load('bundlePw');
-        if (!pw0) { S.needPw = true; S.forceBundle = true; showLock(); return; }
-        loading('Memuat ulang data bawaan…');
-        applyBundle(pw0, true).then(function () { toast('Data bawaan dimuat ulang'); })
-          .catch(function (err) { toast(err.message, true); })
+      else if (act === 'logout') { logout(); }
+      else if (act === 'publish') { publish(); }
+      else if (act === 'gh-save') {
+        var repo = $('#ghRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
+        var tokIn = $('#ghTok').value.trim() || Store.load('ghToken');
+        if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { toast('Format repo harus owner/nama-repo', true); return; }
+        if (!tokIn) { toast('Tempel token GitHub dulu', true); return; }
+        Store.save('ghRepo', repo);
+        loading('Mengecek koneksi GitHub…');
+        gh('GET', '', null, tokIn).then(function (info) {
+          if (!info.permissions || !info.permissions.push) throw new Error('Token tidak punya izin menulis (Contents: Read and write)');
+          Store.save('ghToken', tokIn);
+          toast('GitHub terhubung: ' + info.full_name);
+          if (S.pending) return publish();
+        }).catch(function (err) { toast('Koneksi gagal: ' + err.message, true); })
           .then(function () { loading(false); render(); });
       }
-      else if (act === 'make-bundle') { makeBundle(); }
+      else if (act === 'gh-remove') { Store.save('ghToken', null); toast('Koneksi GitHub diputus di browser ini'); render(); }
+      else if (act === 'add-user') {
+        var nu = $('#nuName').value.trim(), np = $('#nuPw').value, nr = $('#nuRole').value;
+        if (nu.length < 3 || np.length < 6) { toast('Username min. 3 karakter, password min. 6 karakter', true); return; }
+        loading('Menambah pengguna…');
+        Vault.hashUser(nu).then(function (h) {
+          if (S.users.some(function (x) { return x.id === h; })) throw new Error('Username sudah ada');
+          return Vault.makeUser(nu, np, nr, S.key);
+        }).then(function (entry) {
+          loading(false);
+          return saveUsers(S.users.concat([entry]), 'pengguna ' + entry.name + ' ditambahkan');
+        }).catch(function (err) { loading(false); toast(err.message, true); });
+      }
+      else if (act === 'del-user') {
+        var did = a.getAttribute('data-id');
+        var du = S.users.filter(function (x) { return x.id === did; })[0];
+        if (!du || !confirm('Hapus pengguna ' + du.name + '?')) return;
+        saveUsers(S.users.filter(function (x) { return x.id !== did; }), 'pengguna ' + du.name + ' dihapus');
+      }
+      else if (act === 'change-pw') {
+        var c1 = $('#cpPw').value, c2 = $('#cpPw2').value;
+        if (c1.length < 6) { toast('Password minimal 6 karakter', true); return; }
+        if (c1 !== c2) { toast('Konfirmasi password tidak sama', true); return; }
+        var me = S.users.filter(function (x) { return x.id === S.user.id; })[0];
+        loading('Menyimpan password…');
+        Vault.makeUser(me.name, c1, me.role, S.key).then(function (entry) {
+          loading(false);
+          return saveUsers(S.users.map(function (x) { return x.id === me.id ? entry : x; }), 'password ' + me.name + ' diganti');
+        }).catch(function (err) { loading(false); toast(err.message, true); });
+      }
       else if (act === 'wipe') {
-        if (!confirm('Hapus SEMUA data SAP dan Call Order dari browser ini?')) return;
-        ['stock', 'oa', 'mb51'].forEach(function (k3) { S.ds[k3] = null; Store.del(k3); });
-        Store.save('bundleApplied', null);
-        S.cart = { items: {}, meta: {}, groupTitles: {} }; saveCart(); rebuild(); render();
+        if (!confirm('Kosongkan Call Order dan muat ulang data dari website?')) return;
+        S.cart = { items: {}, meta: {}, groupTitles: {} }; saveCart();
+        Promise.all(Vault.TYPES.map(function (k3) { return Store.del('ds-' + k3); })).then(function () {
+          loading('Memuat ulang data…'); return startApp();
+        });
       }
       return;
     }
@@ -1143,8 +1378,12 @@
     var dz = $('#dropzone');
     if (dz && !e.relatedTarget) dz.classList.remove('drag');
   });
+  document.addEventListener('submit', function (e) {
+    if (e.target.id === 'loginForm') { e.preventDefault(); doLogin(); }
+  });
   document.addEventListener('drop', function (e) {
     e.preventDefault();
+    if (!isOwner()) return;
     var dz = $('#dropzone'); if (dz) dz.classList.remove('drag');
     if (e.dataTransfer && e.dataTransfer.files.length) {
       if (currentRoute().name !== 'data') location.hash = '#/data';
@@ -1153,7 +1392,6 @@
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && e.target.id === 'lockPw') { unlockBundle(); return; }
     if (e.key === 'Escape') closeDrawer();
     if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
       e.preventDefault();
@@ -1166,23 +1404,16 @@
 
   // ================= Start =================
   (async function init() {
-    loading('Memuat data tersimpan…');
-    try {
-      var r = await Promise.all([Store.get('stock'), Store.get('oa'), Store.get('mb51')]);
-      S.ds.stock = r[0] || null; S.ds.oa = r[1] || null; S.ds.mb51 = r[2] || null;
-    } catch (e) { console.warn(e); }
-    var b = window.SAP_BUNDLE;
-    if (b && b.payload && Store.load('bundleApplied') !== b.builtAt) {
-      var pw = Store.load('bundlePw');
-      if (pw) {
-        loading('Memuat data SAP bawaan…');
-        try { await applyBundle(pw, false); toast('Data SAP diperbarui (' + fmtDate(b.info.stockDate) + ')'); }
-        catch (e) { Store.save('bundlePw', null); S.needPw = true; }
-      } else S.needPw = true;
+    loading('Memuat…');
+    ['stock', 'oa', 'mb51'].forEach(function (k) { Store.del(k); }); // sisa versi lama
+    await loadRepoMeta();
+    var sess = sessionGet();
+    if (sess && sess.user) {
+      var u = S.users.filter(function (x) { return x.id === sess.user.id; })[0];
+      if (u) { S.user = { id: u.id, name: u.name, role: u.role }; S.key = Vault.fromB64(sess.key); }
+      else sessionClear();
     }
-    rebuild();
-    loading(false);
-    render();
-    if (S.needPw) showLock();
+    if (!S.user) { loading(false); showLogin(); return; }
+    await startApp();
   })();
 })();
