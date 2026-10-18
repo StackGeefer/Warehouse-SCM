@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261018b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261018d'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1529,24 +1529,14 @@
     var icUser = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
     var icLock = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
     var icEye = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-    var feats = [
-      [ICON.search, 'Pencarian pintar', 'KIMAP, deskripsi & sinonim — <i>kcl</i> = <i>potassium chloride</i>'],
-      [ICON.box, 'Stok SAP per Field', 'Rantau, Lirik, Jambi, Pangsu &amp; field lain'],
-      [ICON.doc, 'Kontrak OA / RO', 'Harga, sisa kontrak, tarik banyak item sekaligus'],
-      [ICON.excel, 'Call Order ke MIM', 'RO &amp; BAU langsung jadi template Excel']
-    ];
     el.innerHTML =
       '<div class="login-hero">' +
-      '<div class="lg-bg" aria-hidden="true"><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="lg-grid"></span>' +
-      '<span class="slash s1"></span><span class="slash s2"></span><span class="slash s3"></span></div>' +
+      '<div class="lg-bg" aria-hidden="true"><span class="sun"></span><span class="cloud c1"></span><span class="cloud c2"></span><span class="cloud c3"></span><span class="cloud c4"></span></div>' +
       '<div class="lg-hero-inner">' +
-      '<div class="lg-logo">' + Brand.full('anim', '#ffffff') + '</div>' +
+      '<div class="lg-logo">' + Brand.full('anim', '#111111') + '</div>' +
       '<div class="lg-copy"><div class="lg-eyebrow">Supply Chain Management · Warehouse &amp; Distribution</div>' +
-      '<h1>Material <span class="lg-grad">Warehouse</span></h1>' +
-      '<p>Cari material, cek stok Zona 1, dan buat Call Order ke MIM — di satu tempat.</p></div>' +
-      '<ul class="login-feats">' + feats.map(function (f, i) {
-        return '<li style="animation-delay:' + (1.1 + i * 0.12).toFixed(2) + 's"><span class="fi">' + f[0] + '</span><span><b>' + f[1] + '</b><small>' + f[2] + '</small></span></li>';
-      }).join('') + '</ul></div></div>' +
+      '<h1>Material <span class="lg-grad">Warehouse</span></h1></div>' +
+      '<div class="lg-scene-wrap">' + Scene.html() + '</div></div></div>' +
       '<div class="login-side"><form class="login-card" id="loginForm" autocomplete="on">' +
       '<div class="lc-logo">' + Brand.mark() + '</div>' +
       '<h2>Selamat datang</h2><p class="muted">Masuk dengan akun yang diberikan Owner.</p>' +
