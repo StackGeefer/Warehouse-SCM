@@ -55,6 +55,7 @@ Token hanya tersimpan di browser Owner dan hanya punya akses ke repo ini.
 ## Fitur
 
 - **Cari Material** — KIMAP atau deskripsi; `flange 3" 150` = `FLG 3IN 150LB` = `CL.150 3 IN`. Kolom utama: Rantau (W101), Lirik (W803), Jambi (W802), Pangkalan Susu (W102). Field lain (Zona 4, 7, 9, 10, 11, 13, 14) dicek lewat tombol **Cek field lain** — tombol berwarna oranye bila stok Zona 1 kosong.
+- **Sinonim pencarian** — mencari `KCL` juga menemukan *POTASSIUM CHLORIDE*, `majun` juga *COTTON WASTE / WIPING RAG / RAG*, `soda api` → *CAUSTIC SODA*, `baut` → *BOLT*, dst. Sumbernya: ±100 kelompok bawaan (Indonesia ↔ Inggris ↔ rumus kimia), sinonim yang dipelajari otomatis dari deskripsi SAP (mis. "POTASSIUM CHLORIDE,KCL"), dan sinonim tambahan yang diisi Owner di **Pengaturan → Sinonim pencarian**. Ejaan huruf ganda disamakan (POTASIUM = POTASSIUM).
 - **Label aging** (Pedoman Pengelolaan Logistik SHU A7-009/PHE52000/2023-S9, dari riwayat MB51 Rantau): **Fast Moving** (dipakai ≥1 kali dalam 1 tahun), **Moderate Moving** (maks. 1 kali dalam 2 tahun), **Slow Moving** (maks. 1 kali dalam 5 tahun), **Dead Stock** (>5 tahun tanpa pemakaian). Bisa difilter di Cari Material.
 - **Kontrak (OA/RO)** — klik nomor OA → semua material di kontrak itu, centang banyak item sekaligus.
 - **Call Order** — centang RO/BAU per material, saran qty (rata-rata pemakaian × 3 bulan − stok), export Excel: sheet `Call <Bulan>` (format template MIM) + sheet `BAU <Bulan>`.
@@ -88,7 +89,8 @@ css/style.css         Tampilan
 js/app.js             Halaman, login, upload & publikasi
 js/vault.js           Enkripsi, pengguna, aturan versi
 js/parser.js          Membaca Excel SAP (deteksi otomatis MB52/ME3N/MB51)
-js/search.js          Logika pencarian
+js/search.js          Logika pencarian + sinonim
+js/synonyms.js        Kamus sinonim bawaan
 js/model.js           Menggabungkan stok + kontrak + pemakaian
 js/export.js          Export Excel template MIM
 data/users.js         Daftar pengguna (hash + kunci terenkripsi, tanpa password)
@@ -97,6 +99,7 @@ data/<jenis>-<tgl>-*.js  Data SAP terenkripsi (maks. 3 versi per jenis)
 data/orders.js        Riwayat order (terenkripsi)
 data/docs.js          Daftar dokumen TKO (terenkripsi)
 data/docs/*.js        File PDF (terenkripsi)
+data/synonyms.js      Sinonim tambahan dari Owner
 tools/init-data.js    (opsional) membuat ulang data awal via Node
 vendor/               SheetJS, ExcelJS, PDF.js
 ```

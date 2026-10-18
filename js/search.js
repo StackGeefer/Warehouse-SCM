@@ -43,7 +43,10 @@
 
   function canon(t) {
     if (/^\d+(\.\d+)?$/.test(t)) return String(parseFloat(t));
-    return SYN[t] || t;
+    t = SYN[t] || t;
+    // ejaan huruf ganda disamakan: POTASSIUM = POTASIUM, COTTON = COTON
+    if (t.length >= 4 && /^[A-Z]+$/.test(t)) t = t.replace(/([A-Z])\1+/g, '$1');
+    return t;
   }
 
   function tokens(s) {
@@ -118,5 +121,90 @@
     return { s: s, missed: missed };
   }
 
-  root.Search = { prepare: prepare, parseQuery: parseQuery, score: score, tokens: tokens };
+  // ---------- Sinonim ----------
+  var synGroups = [];
+  // groups: [['KCL','POTASSIUM CHLORIDE',...], ...]
+  function setSynonyms(groups) {
+    synGroups = (groups || []).map(function (g) {
+      var seen = {}, out = [];
+      g.forEach(function (ph) {
+        var tk = tokens(ph);
+        var key = tk.join(' ');
+        if (tk.length && !seen[key]) { seen[key] = 1; out.push({ text: String(ph).toUpperCase().trim(), tk: tk }); }
+      });
+      return out;
+    }).filter(function (g) { return g.length > 1; });
+  }
+  function findSeq(hay, needle) {
+    for (var i = 0; i + needle.length <= hay.length; i++) {
+      var ok = true;
+      for (var j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) { ok = false; break; }
+      if (ok) return i;
+    }
+    return -1;
+  }
+  // Kembalikan query alternatif berdasarkan sinonim, mis. "kcl" -> ["POTASSIUM CHLORIDE", ...]
+  function expand(q) {
+    var base = tokens(q), alts = [], labels = [], seen = {};
+    seen[base.join(' ')] = 1;
+    if (!base.length) return { alts: alts, labels: labels };
+    synGroups.forEach(function (g) {
+      g.forEach(function (ph) {
+        var at = findSeq(base, ph.tk);
+        if (at < 0) return;
+        g.forEach(function (other) {
+          if (other === ph) return;
+          var nt = base.slice(0, at).concat(other.tk, base.slice(at + ph.tk.length));
+          var key = nt.join(' ');
+          if (seen[key] || alts.length >= 12) return;
+          seen[key] = 1;
+          alts.push(key);
+          if (labels.indexOf(other.text) < 0) labels.push(other.text);
+        });
+      });
+    });
+    return { alts: alts, labels: labels };
+  }
+
+  // Pelajari sinonim dari deskripsi SAP: "POTASSIUM CHLORIDE,KCL" / "HYDRO CHLORIC ACID (HCL)"
+  var ELEM = { H: 1, B: 1, C: 1, N: 1, O: 1, F: 1, P: 1, S: 1, K: 1, I: 1, NA: 1, MG: 1, AL: 1, SI: 1, CL: 1, CA: 1, MN: 1, FE: 1, NI: 1, CU: 1, ZN: 1, BR: 1, BA: 1, PB: 1, SN: 1, LI: 1, CR: 1 };
+  function isFormula(t) {
+    if (!/^[A-Z][A-Z0-9]{2,7}$/.test(t)) return false;
+    var parts = t.match(/[A-Z]+|\d+/g), syms = 0;
+    for (var i = 0; i < parts.length; i++) {
+      if (/^\d+$/.test(parts[i])) continue;
+      var s = parts[i], ok = false;
+      // pecah huruf menjadi simbol unsur (1-2 huruf)
+      (function walk(k) {
+        if (ok) return;
+        if (k === s.length) { ok = true; return; }
+        if (ELEM[s.substr(k, 2)] && s.length - k >= 2) { syms++; walk(k + 2); }
+        if (!ok && ELEM[s[k]]) { syms++; walk(k + 1); }
+      })(0);
+      if (!ok) return false;
+    }
+    return syms >= 2;
+  }
+  function learn(descs) {
+    var pairs = {};
+    function add(code, phrase) {
+      phrase = phrase.replace(/\s+/g, ' ').trim();
+      if (!isFormula(code) || !/^[A-Z][A-Z ]+[A-Z]$/.test(phrase) || phrase.split(' ').length < 2) return;
+      (pairs[code] = pairs[code] || {})[phrase] = 1;
+    }
+    descs.forEach(function (d) {
+      d = String(d || '').toUpperCase();
+      var segs = d.split(',').map(function (x) { return x.trim(); });
+      for (var i = 1; i < segs.length; i++) add(segs[i], segs[i - 1]);
+      segs.forEach(function (sg) {
+        var m = sg.match(/^([A-Z][A-Z ]+[A-Z])\s+([A-Z][A-Z0-9]{2,7})$/);
+        if (m) add(m[2], m[1]);
+      });
+      var re = /([A-Z][A-Z ]{4,}?)\s*\(([A-Z][A-Z0-9]{2,7})\)/g, m2;
+      while ((m2 = re.exec(d))) add(m2[2], m2[1].replace(/^(CHEMICAL|ACID)\s+/, ''));
+    });
+    return Object.keys(pairs).map(function (k) { return [k].concat(Object.keys(pairs[k])); });
+  }
+
+  root.Search = { prepare: prepare, parseQuery: parseQuery, score: score, tokens: tokens, setSynonyms: setSynonyms, expand: expand, learn: learn };
 })(typeof self !== 'undefined' ? self : this);

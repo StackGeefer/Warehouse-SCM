@@ -328,12 +328,19 @@
       return true;
     }
     var list = S.idx.list;
+    // perluasan sinonim: kcl -> potassium chloride, majun -> cotton waste, ...
+    var ex = hasQ && !pq.codeLike ? Search.expand(S.q) : { alts: [], labels: [] };
+    var apqs = ex.alts.map(Search.parseQuery), viaSyn = 0;
     for (var i = 0; i < list.length; i++) {
       var o = list[i];
       if (!pass(o)) continue;
       if (!hasQ) { res.push({ o: o, s: 0 }); continue; }
-      var r = Search.score(pq, o.ix);
-      if (r.missed === 0 && r.s > 0) res.push({ o: o, s: r.s });
+      var r = Search.score(pq, o.ix), best = r.missed === 0 && r.s > 0 ? r.s : 0, syn = false;
+      for (var a = 0; a < apqs.length; a++) {
+        var ra = Search.score(apqs[a], o.ix);
+        if (ra.missed === 0 && ra.s > 0 && ra.s * 0.95 > best) { best = ra.s * 0.95; syn = !(r.missed === 0 && r.s > 0); }
+      }
+      if (best > 0) { res.push({ o: o, s: best, syn: syn }); if (syn) viaSyn++; }
     }
     if (hasQ && !res.length && pq.hard.length > 1) {
       fuzzy = true;
@@ -352,7 +359,7 @@
     } else {
       res.sort(function (a, b) { return (b.o.hist + b.o.ytd) - (a.o.hist + a.o.ytd) || b.o.homeStock - a.o.homeStock; });
     }
-    return { res: res, fuzzy: fuzzy, pq: pq, hasQ: hasQ };
+    return { res: res, fuzzy: fuzzy, pq: pq, hasQ: hasQ, syn: ex.labels, viaSyn: viaSyn };
   }
 
   function renderResults() {
@@ -367,7 +374,8 @@
         '<div><b>' + esc(h.po) + '</b> adalah nomor kontrak (OA) — ' + esc(h.vendor) + '</div><span class="spacer"></span><a class="btn primary sm" href="#/kontrak/' + esc(h.po) + '">Buka kontrak ' + ICON.arrow + '</a></div>';
     }
     if (meta) {
-      meta.innerHTML = R.hasQ ? '<b>' + nf0.format(R.res.length) + '</b> material' + (R.fuzzy ? ' (hasil mirip — 1 kata kunci tidak cocok)' : '')
+      meta.innerHTML = R.hasQ ? '<b>' + nf0.format(R.res.length) + '</b> material' + (R.fuzzy ? ' (hasil mirip — 1 kata kunci tidak cocok)' : '') +
+        (R.syn.length ? '<div class="syn-line">Termasuk sinonim: ' + R.syn.slice(0, 6).map(function (x) { return '<span class="syn-chip">' + esc(x) + '</span>'; }).join('') + (R.viaSyn ? ' <span class="muted">(' + R.viaSyn + ' hasil dari sinonim)</span>' : '') + '</div>' : '')
         : '<b>' + nf0.format(R.res.length) + '</b> material · tanpa kata kunci: urut berdasarkan pemakaian ' + esc(homeName()) + ' terbanyak';
     }
     if (!R.res.length) {
@@ -379,16 +387,16 @@
     var head = '<tr><th>Material</th><th>Harga &amp; Kontrak OA</th>' +
       F.map(function (x) { var f = x.f; return '<th class="num th-field">' + esc(f.name) + '<small>' + esc(f.plants.join('/')) + (f.home ? ' · ' + ddmm(idx.homeDate) : '') + '</small></th>'; }).join('') +
       '<th class="c th-field">Field lain<small>di luar kolom</small></th><th>Pemakaian ' + esc(homeName()) + '</th><th class="c pick-col">Pilih</th></tr>';
-    var rows = shown.map(function (x) { return resultRow(x.o); }).join('');
+    var rows = shown.map(function (x) { return resultRow(x.o, x.syn); }).join('');
     var more = R.res.length > shown.length ? '<tr class="more-row"><td colspan="' + (F.length + 5) + '"><button class="btn" data-act="more">Tampilkan ' + Math.min(60, R.res.length - shown.length) + ' lagi (' + nf0.format(R.res.length - shown.length) + ' tersisa)</button></td></tr>' : '';
     box.innerHTML = banner + '<div class="table-wrap tall"><table class="grid" id="resTable"><thead>' + head + '</thead><tbody>' + rows + more + '</tbody></table></div>';
   }
 
-  function resultRow(o) {
+  function resultRow(o, viaSyn) {
     var it = item(o.m), F = mainFields();
     var canBau = o.zoneStock > 0 || o.other > 0;
     return '<tr class="clickable' + (active(it) ? ' in-cart' : '') + '" data-m="' + esc(o.m) + '">' +
-      '<td class="mat-cell"><div class="mat-desc">' + esc(o.d) + (o.u ? '<span class="uom">' + esc(o.u) + '</span>' : '') + '</div><div class="mat-code">' + esc(o.m) + ' ' + agingBadge(o) + '</div></td>' +
+      '<td class="mat-cell"><div class="mat-desc">' + esc(o.d) + (o.u ? '<span class="uom">' + esc(o.u) + '</span>' : '') + '</div><div class="mat-code">' + esc(o.m) + ' ' + agingBadge(o) + (viaSyn ? ' <span class="badge syn" title="Ditemukan lewat sinonim">sinonim</span>' : '') + '</div></td>' +
       '<td>' + priceCell(o) + '</td>' +
       F.map(function (x) { return '<td class="num">' + qtyPill(o.fs[x.i], x.f.home, fieldTitle(o, x.f)) + '</td>'; }).join('') +
       '<td class="c">' + otherBtn(o) + '</td>' +
@@ -1197,7 +1205,7 @@
       '<div class="small muted" style="margin-top:8px">Token hanya disimpan di browser ini dan hanya punya akses ke repo tersebut.</div></div>';
     view.innerHTML =
       '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + (owner ? '<span class="badge ok">Owner</span>' : '<span class="badge">Viewer</span>') + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
-      ownerHtml +
+      ownerHtml + synCard() +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
       '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Centang "Kolom utama" agar field tampil sebagai kolom di Cari Material (default: Lirik, Jambi, Pangkalan Susu). Field lain dicek lewat tombol <b>Cek field lain</b>. Satu field boleh punya beberapa plant, pisahkan dengan koma. Pengaturan ini berlaku di browser ini.</p>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th class="c">Home</th><th class="c">Kolom utama</th><th>Zona</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
@@ -1206,6 +1214,21 @@
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = rata-rata pemakaian/bulan × cover − stok ' + esc(homeName()) + '</div></label>' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div>' +
       '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Kosongkan Call Order &amp; cache browser</button></div>';
+  }
+  function synCard() {
+    var custom = customSynonyms(), learned = S.learnedSyn || [], builtin = window.MW_SYNONYMS_BUILTIN || [];
+    var txt = custom.map(function (g) { return g.join(' = '); }).join('\n');
+    return '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Sinonim pencarian</h4>' +
+      '<p class="muted small" style="margin-top:0">Saat mencari, istilah dalam satu kelompok dianggap sama — contoh mencari <b>KCL</b> juga menampilkan <b>POTASSIUM CHLORIDE</b>, mencari <b>majun</b> juga menampilkan <b>COTTON WASTE</b> &amp; <b>WIPING RAG</b>. ' +
+      'Sudah ada <b>' + builtin.length + '</b> kelompok bawaan (Indonesia ↔ Inggris ↔ rumus kimia) dan <b>' + learned.length + '</b> kelompok yang dipelajari otomatis dari deskripsi SAP' +
+      (learned.length ? ' (mis. ' + esc(learned.slice(0, 3).map(function (g) { return g[0] + ' = ' + g[1]; }).join('; ')) + ')' : '') + '.</p>' +
+      (isOwner()
+        ? '<div style="font-weight:700;margin-bottom:6px">Sinonim tambahan (berlaku untuk semua pengguna)</div>' +
+          '<textarea class="input mono" id="synText" rows="6" style="width:100%;font-size:13px" placeholder="Satu kelompok per baris, pisahkan dengan =&#10;contoh:&#10;MAJUN = KAIN LAP = COTTON WASTE&#10;KCL = POTASSIUM CHLORIDE">' + esc(txt) + '</textarea>' +
+          '<div class="toolbar" style="margin-top:8px"><button class="btn sm primary" data-act="save-syn">Simpan sinonim</button><span class="small muted">Satu baris = satu kelompok. Pisahkan istilah dengan tanda <span class="mono">=</span></span></div>'
+        : (custom.length ? '<div class="small"><b>Sinonim tambahan dari Owner:</b><br>' + custom.map(function (g) { return esc(g.join(' = ')); }).join('<br>') + '</div>' : '')) +
+      '<details style="margin-top:10px"><summary class="small" style="cursor:pointer;font-weight:700;color:var(--brand)">Lihat daftar sinonim bawaan &amp; otomatis</summary><div class="small mono" style="margin-top:8px;line-height:1.7;max-height:260px;overflow:auto">' +
+      builtin.concat(learned).map(function (g) { return esc(g.join(' = ')); }).join('<br>') + '</div></details></div>';
   }
   function readSettingsForm() {
     var st = clone(S.settings);
@@ -1226,6 +1249,22 @@
   // ================= Data: load, upload, rebuild =================
   function rebuild() {
     S.idx = Model.build(S.ds, S.settings);
+    S.learnedSyn = Search.learn(S.idx.list.map(function (o) { return o.d; }));
+    Search.setSynonyms((window.MW_SYNONYMS_BUILTIN || []).concat(customSynonyms(), S.learnedSyn));
+  }
+  function customSynonyms() { return localVal('synonyms') || window.MW_SYNONYMS || []; }
+  function parseSynText(txt) {
+    return String(txt || '').split('\n').map(function (line) {
+      return line.split(/[=;|]/).map(function (x) { return x.trim().toUpperCase(); }).filter(Boolean);
+    }).filter(function (g) { return g.length > 1; });
+  }
+  async function saveSynonyms(groups) {
+    window.MW_SYNONYMS = groups;
+    var file = '/* Sinonim pencarian tambahan (diisi Owner). Satu kelompok = istilah yang dianggap sama. */\nwindow.MW_SYNONYMS = ' + JSON.stringify(groups, null, 1) + ';\n';
+    await queuePending({ files: { 'data/synonyms.js': file }, deletes: [] }, ['sinonim pencarian'], null, null, { synonyms: groups });
+    rebuild();
+    if (Store.load('ghToken')) await publish();
+    else { toast('Sinonim disimpan di browser ini — publikasikan setelah GitHub terhubung'); render(); }
   }
   function parseInWorker(buf, name, lm) {
     function main() {
@@ -1332,7 +1371,7 @@
   async function rememberPublished(P) {
     var R = (await Store.get('recent')) || null;
     var merged = { at: Date.now(), payloads: Object.assign({}, R && Date.now() - R.at < RECENT_MS ? R.payloads : {}, P.payloads) };
-    ['man', 'users', 'orders', 'docs'].forEach(function (k) {
+    ['man', 'users', 'orders', 'docs', 'synonyms'].forEach(function (k) {
       if (P[k]) merged[k] = P[k];
       else if (R && Date.now() - R.at < RECENT_MS && R[k]) merged[k] = R[k];
     });
@@ -1439,6 +1478,7 @@
     var t = Date.now();
     await loadScript('data/users.js?t=' + t).catch(function () {});
     await loadScript('data/manifest.js?t=' + t).catch(function () {});
+    await loadScript('data/synonyms.js?t=' + t).catch(function () {});
     S.pending = (await Store.get('pending')) || null;
     var R = (await Store.get('recent')) || null;
     S.recent = R && Date.now() - R.at < RECENT_MS ? R : null;
@@ -1706,6 +1746,12 @@
       }
       else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
       else if (act === 'logout') { logout(); }
+      else if (act === 'save-syn') {
+        var groups = parseSynText($('#synText').value);
+        loading('Menyimpan sinonim…');
+        saveSynonyms(groups).then(function () { toast(groups.length + ' kelompok sinonim tersimpan'); })
+          .catch(function (err) { toast(err.message, true); }).then(function () { loading(false); });
+      }
       else if (act === 'other') { e.stopPropagation(); showOther(a, a.getAttribute('data-m')); }
       else if (act === 'close-pop') closePop();
       else if (act === 'ord-toggle') { S.ordOpen = S.ordOpen === a.getAttribute('data-id') ? null : a.getAttribute('data-id'); renderOrders(); }

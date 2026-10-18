@@ -386,6 +386,9 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 .popover { position: fixed; z-index: 55; width: 380px; max-width: calc(100vw - 24px); max-height: 70vh; overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 14px; }
 .popover .grid td, .popover .grid th { padding: 6px 8px; }
 .order-card { margin-bottom: 12px; }
+.syn-line { margin-top: 4px; font-size: 12px; }
+.syn-chip { display: inline-block; background: #eef2ff; color: #4338ca; border-radius: 6px; padding: 1px 7px; margin: 0 3px 2px 0; font-weight: 700; font-size: 11.5px; }
+.badge.syn { background: #eef2ff; color: #4338ca; font-size: 10.5px; padding: 1px 7px; }
 .badge.aging { font-size: 10.5px; padding: 1px 7px; margin-left: 4px; vertical-align: 1px; }
 .doc-points { margin: 4px 0 6px; font-size: 12.5px; }
 .doc-points summary { cursor: pointer; font-weight: 700; color: var(--brand); }
