@@ -457,6 +457,7 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 .lg-photo.on { opacity: 1; animation: kenburns 14s ease-out forwards; }
 @keyframes kenburns { from { transform: scale(1.12) translate(1.5%, 1%); } to { transform: scale(1) translate(0, 0); } }
 .lg-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,18,38,.72) 0%, rgba(7,18,38,.25) 38%, rgba(7,18,38,.05) 60%, rgba(7,18,38,.55) 100%), linear-gradient(90deg, rgba(7,18,38,.45), rgba(7,18,38,0) 60%); }
+.login.photo { grid-template-columns: 1.6fr 1fr; }
 .login.photo .login-hero { background: #0b1730; }
 .login.photo .lg-logo { filter: drop-shadow(0 6px 24px rgba(0,0,0,.45)); }
 .login.photo .lg-eyebrow { color: #cfe3ff; }
@@ -469,7 +470,7 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 .hero-thumb { width: 180px; height: 110px; border-radius: 10px; background-size: cover; background-position: center; position: relative; border: 1px solid var(--line); }
 .hero-thumb .icon-btn { position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,.92); color: var(--bad); }
 .hero-back { position: fixed; top: 14px; right: 14px; z-index: 80; }
-@media (max-width: 960px) { .login.photo .login-hero { min-height: 340px; } }
+@media (max-width: 960px) { .login.photo { grid-template-columns: 1fr; } .login.photo .login-hero { min-height: 340px; } }
 
 /* ---------- Field lain, riwayat, dokumen ---------- */
 .other-btn { border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 8px; padding: 4px 9px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }

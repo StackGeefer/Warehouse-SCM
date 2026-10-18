@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261018e'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261018f'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1221,7 +1221,7 @@
     return '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Foto halaman login</h4>' +
       '<p class="muted small" style="margin-top:0">Foto tampil sebagai slideshow (berganti tiap 7 detik, efek zoom pelan) di halaman login. Maks. 6 foto, otomatis diperkecil ke lebar 1920px. Disarankan foto landscape resolusi tinggi. Tanpa foto, halaman login memakai ilustrasi.</p>' +
       (list.length ? '<div class="hero-thumbs">' + list.map(function (p) {
-        return '<div class="hero-thumb" style="background-image:url(\'' + heroSrc(p) + '\')"><button class="icon-btn" data-act="hero-del" data-path="' + esc(p) + '" title="Hapus foto">' + ICON.trash + '</button></div>';
+        return '<div class="hero-thumb" style="background-image:url(\'' + heroSrc(p) + '\')"><button class="icon-btn" data-act="hero-del" data-path="' + esc(heroPath(p)) + '" title="Hapus foto">' + ICON.trash + '</button></div>';
       }).join('') + '</div>' : '') +
       '<div class="toolbar" style="margin-top:10px"><input type="file" id="heroFile" accept="image/*" multiple class="input sm"><button class="btn sm primary" data-act="hero-upload">' + ICON.upload + ' Upload foto</button>' +
       (list.length ? '<button class="btn sm" data-act="hero-preview">Lihat halaman login</button>' : '') + '</div></div>';
@@ -1538,7 +1538,7 @@
   }
   function showLogin(err) {
     var el = $('#login');
-    var photos = heroList().map(heroSrc);
+    var items = heroList(), photos = items.map(heroSrc);
     el.classList.toggle('photo', photos.length > 0);
     var icUser = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
     var icLock = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
@@ -1547,7 +1547,7 @@
       '<div class="login-hero">' +
       (photos.length
         ? '<div class="lg-photos" aria-hidden="true">' + photos.map(function (src, i) {
-            return '<div class="lg-photo' + (i === 0 ? ' on' : '') + '" style="background-image:url(\'' + src + '\')"></div>';
+            return '<div class="lg-photo' + (i === 0 ? ' on' : '') + '" style="background-image:url(\'' + src + '\');background-position:' + esc(heroPos(items[i])) + '"></div>';
           }).join('') + '<div class="lg-shade"></div></div>'
         : '<div class="lg-bg" aria-hidden="true"><span class="sun"></span><span class="cloud c1"></span><span class="cloud c2"></span><span class="cloud c3"></span><span class="cloud c4"></span></div>') +
       '<div class="lg-hero-inner">' +
@@ -1588,9 +1588,12 @@
   }
 
   // ---------- Foto halaman login ----------
+  // Item foto: 'path' atau { path, pos } (pos = titik fokus CSS, mis. '70% center')
   function heroList() { return localVal('hero') || window.MW_HERO || []; }
-  function heroSrc(path) {
-    var d = localVal('heroData');
+  function heroPath(it) { return typeof it === 'string' ? it : it.path; }
+  function heroPos(it) { return (typeof it === 'object' && it.pos) || 'center'; }
+  function heroSrc(it) {
+    var path = heroPath(it), d = localVal('heroData');
     return (d && d[path]) || (path + '?v=' + encodeURIComponent(path.split('-').pop()));
   }
   function resizeImage(file, maxW) {
@@ -1627,7 +1630,7 @@
         var path = 'assets/hero/hero-' + Date.now().toString(36) + i + '.jpg';
         changes.files[path] = { content: durl.split(',')[1], encoding: 'base64' };
         data[path] = durl;
-        list.push(path);
+        list.push({ path: path, pos: 'center' });
       }
       await saveHero(list, changes, data, files.length + ' foto halaman login');
       toast(files.length + ' foto ditambahkan ke halaman login');
@@ -1844,7 +1847,7 @@
         if (!confirm('Hapus foto ini dari halaman login?')) return;
         var hd = Object.assign({}, localVal('heroData') || {}); delete hd[hp];
         loading('Menghapus foto…');
-        saveHero(heroList().filter(function (x) { return x !== hp; }), { files: {}, deletes: [hp] }, hd, 'hapus foto login')
+        saveHero(heroList().filter(function (x) { return heroPath(x) !== hp; }), { files: {}, deletes: [hp] }, hd, 'hapus foto login')
           .catch(function (err) { toast(err.message, true); }).then(function () { loading(false); render(); });
       }
       else if (act === 'hero-preview') {
