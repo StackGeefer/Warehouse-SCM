@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261018d'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261018e'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1206,7 +1206,7 @@
       '<div class="small muted" style="margin-top:8px">Token hanya disimpan di browser ini dan hanya punya akses ke repo tersebut.</div></div>';
     view.innerHTML =
       '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + (owner ? '<span class="badge ok">Owner</span>' : '<span class="badge">Viewer</span>') + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
-      ownerHtml + synCard() +
+      ownerHtml + (isOwner() ? heroCard() : '') + synCard() +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
       '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Centang "Kolom utama" agar field tampil sebagai kolom di Cari Material (default: Lirik, Jambi, Pangkalan Susu). Field lain dicek lewat tombol <b>Cek field lain</b>. Satu field boleh punya beberapa plant, pisahkan dengan koma. Pengaturan ini berlaku di browser ini.</p>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th class="c">Home</th><th class="c">Kolom utama</th><th>Zona</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
@@ -1215,6 +1215,16 @@
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = rata-rata pemakaian/bulan × cover − stok ' + esc(homeName()) + '</div></label>' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div>' +
       '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Kosongkan Call Order &amp; cache browser</button></div>';
+  }
+  function heroCard() {
+    var list = heroList();
+    return '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Foto halaman login</h4>' +
+      '<p class="muted small" style="margin-top:0">Foto tampil sebagai slideshow (berganti tiap 7 detik, efek zoom pelan) di halaman login. Maks. 6 foto, otomatis diperkecil ke lebar 1920px. Disarankan foto landscape resolusi tinggi. Tanpa foto, halaman login memakai ilustrasi.</p>' +
+      (list.length ? '<div class="hero-thumbs">' + list.map(function (p) {
+        return '<div class="hero-thumb" style="background-image:url(\'' + heroSrc(p) + '\')"><button class="icon-btn" data-act="hero-del" data-path="' + esc(p) + '" title="Hapus foto">' + ICON.trash + '</button></div>';
+      }).join('') + '</div>' : '') +
+      '<div class="toolbar" style="margin-top:10px"><input type="file" id="heroFile" accept="image/*" multiple class="input sm"><button class="btn sm primary" data-act="hero-upload">' + ICON.upload + ' Upload foto</button>' +
+      (list.length ? '<button class="btn sm" data-act="hero-preview">Lihat halaman login</button>' : '') + '</div></div>';
   }
   function synCard() {
     var custom = customSynonyms(), learned = S.learnedSyn || [], builtin = window.MW_SYNONYMS_BUILTIN || [];
@@ -1372,7 +1382,7 @@
   async function rememberPublished(P) {
     var R = (await Store.get('recent')) || null;
     var merged = { at: Date.now(), payloads: Object.assign({}, R && Date.now() - R.at < RECENT_MS ? R.payloads : {}, P.payloads) };
-    ['man', 'users', 'orders', 'docs', 'synonyms'].forEach(function (k) {
+    ['man', 'users', 'orders', 'docs', 'synonyms', 'hero', 'heroData'].forEach(function (k) {
       if (P[k]) merged[k] = P[k];
       else if (R && Date.now() - R.at < RECENT_MS && R[k]) merged[k] = R[k];
     });
@@ -1430,7 +1440,8 @@
     tree.tree.forEach(function (e) { exists[e.path] = 1; });
     var entries = [];
     for (var path in files) {
-      var blob = await gh('POST', '/git/blobs', { content: files[path], encoding: 'utf-8' });
+      var f = files[path];
+      var blob = await gh('POST', '/git/blobs', typeof f === 'string' ? { content: f, encoding: 'utf-8' } : { content: f.content, encoding: f.encoding || 'base64' });
       entries.push({ path: path, mode: '100644', type: 'blob', sha: blob.sha });
     }
     deletes.forEach(function (p) { if (exists[p]) entries.push({ path: p, mode: '100644', type: 'blob', sha: null }); });
@@ -1480,6 +1491,7 @@
     await loadScript('data/users.js?t=' + t).catch(function () {});
     await loadScript('data/manifest.js?t=' + t).catch(function () {});
     await loadScript('data/synonyms.js?t=' + t).catch(function () {});
+    await loadScript('data/hero.js?t=' + t).catch(function () {});
     S.pending = (await Store.get('pending')) || null;
     var R = (await Store.get('recent')) || null;
     S.recent = R && Date.now() - R.at < RECENT_MS ? R : null;
@@ -1526,17 +1538,25 @@
   }
   function showLogin(err) {
     var el = $('#login');
+    var photos = heroList().map(heroSrc);
+    el.classList.toggle('photo', photos.length > 0);
     var icUser = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
     var icLock = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
     var icEye = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
     el.innerHTML =
       '<div class="login-hero">' +
-      '<div class="lg-bg" aria-hidden="true"><span class="sun"></span><span class="cloud c1"></span><span class="cloud c2"></span><span class="cloud c3"></span><span class="cloud c4"></span></div>' +
+      (photos.length
+        ? '<div class="lg-photos" aria-hidden="true">' + photos.map(function (src, i) {
+            return '<div class="lg-photo' + (i === 0 ? ' on' : '') + '" style="background-image:url(\'' + src + '\')"></div>';
+          }).join('') + '<div class="lg-shade"></div></div>'
+        : '<div class="lg-bg" aria-hidden="true"><span class="sun"></span><span class="cloud c1"></span><span class="cloud c2"></span><span class="cloud c3"></span><span class="cloud c4"></span></div>') +
       '<div class="lg-hero-inner">' +
-      '<div class="lg-logo">' + Brand.full('anim', '#111111') + '</div>' +
+      '<div class="lg-logo">' + Brand.full('anim', photos.length ? '#ffffff' : '#111111') + '</div>' +
       '<div class="lg-copy"><div class="lg-eyebrow">Supply Chain Management · Warehouse &amp; Distribution</div>' +
       '<h1>Material <span class="lg-grad">Warehouse</span></h1></div>' +
-      '<div class="lg-scene-wrap">' + Scene.html() + '</div></div></div>' +
+      (photos.length
+        ? (photos.length > 1 ? '<div class="lg-dots">' + photos.map(function (x, i) { return '<i class="' + (i === 0 ? 'on' : '') + '"></i>'; }).join('') + '</div>' : '')
+        : '<div class="lg-scene-wrap">' + Scene.html() + '</div>') + '</div></div>' +
       '<div class="login-side"><form class="login-card" id="loginForm" autocomplete="on">' +
       '<div class="lc-logo">' + Brand.mark() + '</div>' +
       '<h2>Selamat datang</h2><p class="muted">Masuk dengan akun yang diberikan Owner.</p>' +
@@ -1553,7 +1573,68 @@
       '</form></div>';
     el.classList.remove('hidden');
     setTimeout(function () { var i = $('#lgUser'); if (i) i.focus(); }, 50);
+    // slideshow foto
+    clearInterval(S.heroTimer);
+    if (photos.length > 1) {
+      var k = 0;
+      S.heroTimer = setInterval(function () {
+        var ps = $$('#login .lg-photo'), ds = $$('#login .lg-dots i');
+        if (!ps.length) { clearInterval(S.heroTimer); return; }
+        k = (k + 1) % ps.length;
+        ps.forEach(function (p, i) { p.classList.toggle('on', i === k); });
+        ds.forEach(function (d, i) { d.classList.toggle('on', i === k); });
+      }, 7000);
+    }
   }
+
+  // ---------- Foto halaman login ----------
+  function heroList() { return localVal('hero') || window.MW_HERO || []; }
+  function heroSrc(path) {
+    var d = localVal('heroData');
+    return (d && d[path]) || (path + '?v=' + encodeURIComponent(path.split('-').pop()));
+  }
+  function resizeImage(file, maxW) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var sc = Math.min(1, maxW / img.width), c = document.createElement('canvas');
+        c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.86));
+      };
+      img.onerror = function () { reject(new Error('Gambar tidak bisa dibaca: ' + file.name)); };
+      img.src = url;
+    });
+  }
+  async function saveHero(list, changes, heroData, msg) {
+    var file = '/* Foto halaman login (diatur Owner di Pengaturan) */\nwindow.MW_HERO = ' + JSON.stringify(list) + ';\n';
+    changes.files['data/hero.js'] = file;
+    window.MW_HERO = list;
+    await queuePending(changes, [msg], null, null, { hero: list, heroData: heroData });
+    if (Store.load('ghToken')) await publish();
+    else { toast('Foto tersimpan di browser ini — publikasikan setelah GitHub terhubung'); render(); }
+  }
+  async function uploadHero(files) {
+    files = Array.prototype.slice.call(files || []).filter(function (f) { return /^image\//.test(f.type); });
+    if (!files.length) { toast('Pilih file gambar (JPG/PNG/WebP)', true); return; }
+    var list = heroList().slice(), data = Object.assign({}, localVal('heroData') || {}), changes = { files: {}, deletes: [] };
+    if (list.length + files.length > 6) { toast('Maksimal 6 foto', true); return; }
+    loading('Memproses foto…');
+    try {
+      for (var i = 0; i < files.length; i++) {
+        var durl = await resizeImage(files[i], 1920);
+        var path = 'assets/hero/hero-' + Date.now().toString(36) + i + '.jpg';
+        changes.files[path] = { content: durl.split(',')[1], encoding: 'base64' };
+        data[path] = durl;
+        list.push(path);
+      }
+      await saveHero(list, changes, data, files.length + ' foto halaman login');
+      toast(files.length + ' foto ditambahkan ke halaman login');
+    } catch (e) { toast(e.message, true); }
+    finally { loading(false); render(); }
+  }
+
   async function doLogin() {
     var u = $('#lgUser').value, p = $('#lgPw').value;
     $('#lgErr').textContent = '';
@@ -1757,6 +1838,22 @@
       }
       else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
       else if (act === 'logout') { logout(); }
+      else if (act === 'hero-upload') { uploadHero($('#heroFile').files); }
+      else if (act === 'hero-del') {
+        var hp = a.getAttribute('data-path');
+        if (!confirm('Hapus foto ini dari halaman login?')) return;
+        var hd = Object.assign({}, localVal('heroData') || {}); delete hd[hp];
+        loading('Menghapus foto…');
+        saveHero(heroList().filter(function (x) { return x !== hp; }), { files: {}, deletes: [hp] }, hd, 'hapus foto login')
+          .catch(function (err) { toast(err.message, true); }).then(function () { loading(false); render(); });
+      }
+      else if (act === 'hero-preview') {
+        showLogin();
+        var bk = document.createElement('button');
+        bk.className = 'btn sm hero-back'; bk.textContent = '← Kembali ke Pengaturan';
+        bk.onclick = function () { clearInterval(S.heroTimer); $('#login').classList.add('hidden'); bk.remove(); };
+        $('#login').appendChild(bk);
+      }
       else if (act === 'toggle-pw') { var pw = $('#lgPw'); pw.type = pw.type === 'password' ? 'text' : 'password'; a.classList.toggle('on', pw.type === 'text'); }
       else if (act === 'save-syn') {
         var groups = parseSynText($('#synText').value);
