@@ -167,17 +167,19 @@
     var last12 = [];
     if (mb51Max) for (var i = 11; i >= 0; i--) last12.push(addMonths(mb51Max, -i));
 
-    // Klasifikasi aging (Pedoman Pergudangan A-006 bab 2.7) berdasarkan pemakaian field home
+    // Klasifikasi aging — Pedoman Pengelolaan Logistik SHU A7-009/PHE52000/2023-S9:
+    // Fast = dipakai >=1x dalam 1 tahun; Moderate = maks. 1x dalam 2 tahun;
+    // Slow = maks. 1x dalam 5 tahun; Deadstock = >5 tahun tanpa pemakaian.
+    function monthsBetween(a, b) { return (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5, 7) - +a.slice(5, 7)); }
+    var mb51Span = mb51Max && ds.mb51.min ? monthsBetween(ds.mb51.min.slice(0, 7), mb51Max) : 0;
     function agingOf(hu) {
       if (!mb51Max) return null;
-      var n12 = last12.filter(function (ym) { return hu[ym] > 0; }).length;
-      if (n12 >= 2) return 'FM';
-      if (n12 === 1) return 'SM';
       var last = Object.keys(hu).filter(function (ym) { return hu[ym] > 0; }).sort().pop();
-      if (!last) return 'DS';
-      var age = (+mb51Max.slice(0, 4) - +last.slice(0, 4)) * 12 + (+mb51Max.slice(5, 7) - +last.slice(5, 7));
-      if (age < 24) return 'SM';
-      if (age <= 60) return 'SU';
+      if (!last) return mb51Span >= 60 ? 'DS' : null;
+      var age = monthsBetween(last, mb51Max);
+      if (age < 12) return 'FM';
+      if (age < 24) return 'MM';
+      if (age < 60) return 'SM';
       return 'DS';
     }
     var fieldPlantIdx = {};
@@ -211,6 +213,7 @@
       o.avg12 = o.spark.reduce(function (a, b) { return a + b; }, 0) / 12;
       o.hist = o.useY[histYear] || 0;
       o.aging = agingOf(hu);
+      o.lastUse = Object.keys(hu).filter(function (ym) { return hu[ym] > 0; }).sort().pop() || null;
       o.ytd = o.useY[dataYear] || 0;
       // kontrak: aktif dulu, lalu harga termurah
       o.oa.sort(function (a, b) {

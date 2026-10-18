@@ -200,16 +200,18 @@
     return '<label class="pick ' + kind + '" title="' + esc(title || '') + '"><input type="checkbox" data-pick="' + kind + '" data-m="' + esc(m) + '"' +
       (extra || '') + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' + kind.toUpperCase() + '</span></label>';
   }
+  // Pedoman Pengelolaan Logistik SHU A7-009/PHE52000/2023-S9
   var AGING = {
-    FM: ['Fast Moving', 'ok', 'Dipakai ≥2 kali dalam 12 bulan terakhir pada bulan berbeda'],
-    SM: ['Slow Moving', 'ro', 'Pemakaian maksimal 1 kali dalam setahun'],
-    SU: ['Surplus', 'warn', '2–5 tahun tidak ada pemakaian'],
+    FM: ['Fast Moving', 'ok', 'Dipakai minimal 1 kali dalam 1 tahun terakhir'],
+    MM: ['Moderate Moving', 'ro', 'Tidak dipakai 1 tahun terakhir; maks. 1 kali dalam 2 tahun'],
+    SM: ['Slow Moving', 'warn', 'Tidak dipakai 2 tahun terakhir; maks. 1 kali dalam 5 tahun'],
     DS: ['Dead Stock', 'bad', 'Lebih dari 5 tahun tidak ada pemakaian']
   };
   function agingBadge(o) {
     if (!o.aging || !(o.homeStock > 0 || o.hist > 0 || o.ytd > 0)) return '';
     var a = AGING[o.aging];
-    return '<span class="badge ' + a[1] + ' aging" title="' + esc(a[2] + ' (' + homeName() + ') — Pedoman Pergudangan A-006 bab 2.7') + '">' + a[0] + '</span>';
+    var last = o.lastUse ? 'Terakhir dipakai ' + BLN[+o.lastUse.slice(5, 7) - 1] + ' ' + o.lastUse.slice(0, 4) : 'Tidak ada pemakaian sejak ' + fmtDate(S.ds.mb51 && S.ds.mb51.min);
+    return '<span class="badge ' + a[1] + ' aging" title="' + esc(a[0] + ': ' + a[2] + '. ' + last + ' (' + homeName() + '). Acuan: Pedoman Pengelolaan Logistik SHU A7-009/PHE52000/2023-S9') + '">' + a[0] + '</span>';
   }
   function priceCell(o) {
     var chips = o.oa.length ? '<div style="margin-top:4px">' + oaChips(o) + '</div>' : '';
@@ -302,7 +304,7 @@
       '<div class="search-hero">' +
       '<div class="searchbox">' + ICON.search + '<input id="q" autocomplete="off" spellcheck="false" placeholder="Cari KIMAP atau deskripsi — contoh: flange 3&quot; 150" value="' + esc(S.q) + '"><span class="kbd">/</span></div>' +
       '<div class="chips">' + chip('home', 'Ada stok ' + homeName()) + chip('zone', 'Ada stok Field lain (BAU)') + chip('oa', 'Ada kontrak aktif') + chip('used', 'Pernah dipakai ' + homeName()) +
-      '<select class="select sm" id="agingSel" title="Klasifikasi Pedoman Pergudangan A-006"><option value="">Semua aging</option>' +
+      '<select class="select sm" id="agingSel" title="Klasifikasi aging — Pedoman Pengelolaan Logistik SHU A7-009"><option value="">Semua aging</option>' +
       Object.keys(AGING).map(function (k) { return '<option value="' + k + '"' + (S.aging === k ? ' selected' : '') + '>' + AGING[k][0] + '</option>'; }).join('') + '</select>' +
       '<span class="examples">Contoh: <a href="#" data-ex="flange 3&quot; 150">flange 3" 150</a><a href="#" data-ex="gate valve 2&quot; 600">gate valve 2" 600</a><a href="#" data-ex="stud bolt 5/8">stud bolt 5/8</a></span>' +
       '<span class="spacer"></span><span class="result-meta" id="resMeta"></span></div></div>' +
@@ -964,8 +966,8 @@
     var q = (S.docQ || '').trim().toUpperCase(), cat = S.docCat || '';
     var docs = (S.docs || []).filter(function (d) {
       if (cat && d.cat !== cat) return false;
-      return !q || [d.title, d.no, d.cat, d.desc, d.fileName].join(' ').toUpperCase().indexOf(q) >= 0;
-    });
+      return !q || [d.title, d.no, d.cat, d.desc, d.fileName, (d.points || []).join(' ')].join(' ').toUpperCase().indexOf(q) >= 0;
+    }).sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); });
     var counts = {};
     (S.docs || []).forEach(function (d) { counts[d.cat] = (counts[d.cat] || 0) + 1; });
     var form = !isOwner() ? '' :
