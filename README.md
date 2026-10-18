@@ -55,6 +55,7 @@ Token hanya tersimpan di browser Owner dan hanya punya akses ke repo ini.
 ## Fitur
 
 - **Cari Material** — KIMAP atau deskripsi; `flange 3" 150` = `FLG 3IN 150LB` = `CL.150 3 IN`. Kolom utama: Rantau (W101), Lirik (W803), Jambi (W802), Pangkalan Susu (W102). Field lain (Zona 4, 7, 9, 10, 11, 13, 14) dicek lewat tombol **Cek field lain** — tombol berwarna oranye bila stok Zona 1 kosong.
+- **Label aging** (Pedoman Pergudangan A-006 bab 2.7, dari riwayat MB51 Rantau): **Fast Moving** (dipakai ≥2 kali/12 bulan pada bulan berbeda), **Slow Moving** (maks. 1 kali/tahun), **Surplus** (2–5 tahun tanpa pemakaian), **Dead Stock** (>5 tahun). Bisa difilter di Cari Material.
 - **Kontrak (OA/RO)** — klik nomor OA → semua material di kontrak itu, centang banyak item sekaligus.
 - **Call Order** — centang RO/BAU per material, saran qty (rata-rata pemakaian × 3 bulan − stok), export Excel: sheet `Call <Bulan>` (format template MIM) + sheet `BAU <Bulan>`.
 - **Riwayat Order** — setiap export otomatis tercatat (nomor order, tanggal, pembuat, item RO/BAU, nilai). Status: Dikirim ke MIM → Diproses MIM → Selesai / Dibatalkan. Bisa download Excel lagi atau salin kembali ke Call Order. Riwayat juga tampil di detail tiap material.

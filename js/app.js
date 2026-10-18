@@ -200,6 +200,17 @@
     return '<label class="pick ' + kind + '" title="' + esc(title || '') + '"><input type="checkbox" data-pick="' + kind + '" data-m="' + esc(m) + '"' +
       (extra || '') + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' + kind.toUpperCase() + '</span></label>';
   }
+  var AGING = {
+    FM: ['Fast Moving', 'ok', 'Dipakai ≥2 kali dalam 12 bulan terakhir pada bulan berbeda'],
+    SM: ['Slow Moving', 'ro', 'Pemakaian maksimal 1 kali dalam setahun'],
+    SU: ['Surplus', 'warn', '2–5 tahun tidak ada pemakaian'],
+    DS: ['Dead Stock', 'bad', 'Lebih dari 5 tahun tidak ada pemakaian']
+  };
+  function agingBadge(o) {
+    if (!o.aging || !(o.homeStock > 0 || o.hist > 0 || o.ytd > 0)) return '';
+    var a = AGING[o.aging];
+    return '<span class="badge ' + a[1] + ' aging" title="' + esc(a[2] + ' (' + homeName() + ') — Pedoman Pergudangan A-006 bab 2.7') + '">' + a[0] + '</span>';
+  }
   function priceCell(o) {
     var chips = o.oa.length ? '<div style="margin-top:4px">' + oaChips(o) + '</div>' : '';
     if (o.bestOA) return '<div class="price">' + fmtMoney(o.bestOA.price, o.bestOA.cur) + '</div>' + chips;
@@ -291,6 +302,8 @@
       '<div class="search-hero">' +
       '<div class="searchbox">' + ICON.search + '<input id="q" autocomplete="off" spellcheck="false" placeholder="Cari KIMAP atau deskripsi — contoh: flange 3&quot; 150" value="' + esc(S.q) + '"><span class="kbd">/</span></div>' +
       '<div class="chips">' + chip('home', 'Ada stok ' + homeName()) + chip('zone', 'Ada stok Field lain (BAU)') + chip('oa', 'Ada kontrak aktif') + chip('used', 'Pernah dipakai ' + homeName()) +
+      '<select class="select sm" id="agingSel" title="Klasifikasi Pedoman Pergudangan A-006"><option value="">Semua aging</option>' +
+      Object.keys(AGING).map(function (k) { return '<option value="' + k + '"' + (S.aging === k ? ' selected' : '') + '>' + AGING[k][0] + '</option>'; }).join('') + '</select>' +
       '<span class="examples">Contoh: <a href="#" data-ex="flange 3&quot; 150">flange 3" 150</a><a href="#" data-ex="gate valve 2&quot; 600">gate valve 2" 600</a><a href="#" data-ex="stud bolt 5/8">stud bolt 5/8</a></span>' +
       '<span class="spacer"></span><span class="result-meta" id="resMeta"></span></div></div>' +
       '<div id="results"></div>';
@@ -309,6 +322,7 @@
       if (f.zone && !(o.zoneStock > 0)) return false;
       if (f.oa && !o.bestOA) return false;
       if (f.used && !(o.hist > 0 || o.ytd > 0)) return false;
+      if (S.aging && (o.aging !== S.aging || !(o.homeStock > 0 || o.hist > 0 || o.ytd > 0))) return false;
       return true;
     }
     var list = S.idx.list;
@@ -352,7 +366,7 @@
     }
     if (meta) {
       meta.innerHTML = R.hasQ ? '<b>' + nf0.format(R.res.length) + '</b> material' + (R.fuzzy ? ' (hasil mirip — 1 kata kunci tidak cocok)' : '')
-        : 'Tanpa kata kunci: urut berdasarkan pemakaian ' + esc(homeName()) + ' terbanyak';
+        : '<b>' + nf0.format(R.res.length) + '</b> material · tanpa kata kunci: urut berdasarkan pemakaian ' + esc(homeName()) + ' terbanyak';
     }
     if (!R.res.length) {
       box.innerHTML = banner + '<div class="card empty"><div class="ico">' + ICON.search + '</div><h3>Material tidak ditemukan</h3><p>Coba kata kunci lain, misalnya hanya jenis material + ukuran (contoh: <b>valve 2</b>), atau cari dengan KIMAP.</p></div>';
@@ -372,7 +386,7 @@
     var it = item(o.m), F = mainFields();
     var canBau = o.zoneStock > 0 || o.other > 0;
     return '<tr class="clickable' + (active(it) ? ' in-cart' : '') + '" data-m="' + esc(o.m) + '">' +
-      '<td class="mat-cell"><div class="mat-desc">' + esc(o.d) + (o.u ? '<span class="uom">' + esc(o.u) + '</span>' : '') + '</div><div class="mat-code">' + esc(o.m) + '</div></td>' +
+      '<td class="mat-cell"><div class="mat-desc">' + esc(o.d) + (o.u ? '<span class="uom">' + esc(o.u) + '</span>' : '') + '</div><div class="mat-code">' + esc(o.m) + ' ' + agingBadge(o) + '</div></td>' +
       '<td>' + priceCell(o) + '</td>' +
       F.map(function (x) { return '<td class="num">' + qtyPill(o.fs[x.i], x.f.home, fieldTitle(o, x.f)) + '</td>'; }).join('') +
       '<td class="c">' + otherBtn(o) + '</td>' +
@@ -457,7 +471,7 @@
     }).join('');
 
     d.innerHTML =
-      '<div class="drawer-head"><div style="flex:1;min-width:0"><div class="mat-code">' + esc(o.m) + (o.u ? ' · ' + esc(o.u) : '') + '</div><h2>' + esc(o.d) + '</h2>' +
+      '<div class="drawer-head"><div style="flex:1;min-width:0"><div class="mat-code">' + esc(o.m) + (o.u ? ' · ' + esc(o.u) : '') + ' ' + agingBadge(o) + '</div><h2>' + esc(o.d) + '</h2>' +
       '<div class="picks" style="margin-top:12px">' + pick('ro', o.m, it && it.ro.on, !o.oa.length) + pick('bau', o.m, it && it.bau.on, false) +
       '<button class="btn sm ghost" data-act="copy" data-text="' + esc(o.m) + '">Salin KIMAP</button></div></div>' +
       '<button class="icon-btn" data-act="close-drawer" aria-label="Tutup">' + ICON.close + '</button></div>' +
@@ -969,6 +983,7 @@
         '<div class="toolbar" style="gap:6px"><span class="badge ro">' + esc(d.cat) + '</span>' + (d.no ? '<span class="mono small muted">' + esc(d.no) + '</span>' : '') + '</div>' +
         '<div class="doc-title">' + esc(d.title) + '</div>' +
         (d.desc ? '<div class="small muted" style="margin-bottom:4px">' + esc(d.desc) + '</div>' : '') +
+        (d.points && d.points.length ? '<details class="doc-points"><summary>Poin penting (' + d.points.length + ')</summary><ul>' + d.points.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' : '') +
         '<div class="small muted">' + (d.date ? 'Berlaku ' + fmtDate(d.date) + ' · ' : '') + fmtSize(d.size) + ' · upload ' + fmtDateTime(d.uploadedAt) + '</div>' +
         '<div class="toolbar" style="margin-top:10px"><button class="btn sm primary" data-act="doc-view" data-id="' + esc(d.id) + '">Preview</button>' +
         '<button class="btn sm" data-act="doc-dl" data-id="' + esc(d.id) + '">Download</button>' +
@@ -1606,7 +1621,8 @@
       S.cart.meta.month = +t.value;
       if (S.cart.meta.title && /ZONA 1 - [A-Z]+$/.test(S.cart.meta.title)) S.cart.meta.title = null;
       saveCart(); renderCO();
-    } else if (t.id === 'ordStatus') { S.ordStatus = t.value; renderOrders(); }
+    } else if (t.id === 'agingSel') { S.aging = t.value; S.limit = 60; renderResults(); }
+    else if (t.id === 'ordStatus') { S.ordStatus = t.value; renderOrders(); }
     else if (t.hasAttribute('data-ordstatus')) {
       var oid = t.getAttribute('data-ordstatus');
       var nl = (S.orders || []).map(function (r) { return r.id === oid ? Object.assign({}, r, { status: t.value }) : r; });

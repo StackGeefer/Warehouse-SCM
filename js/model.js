@@ -167,6 +167,19 @@
     var last12 = [];
     if (mb51Max) for (var i = 11; i >= 0; i--) last12.push(addMonths(mb51Max, -i));
 
+    // Klasifikasi aging (Pedoman Pergudangan A-006 bab 2.7) berdasarkan pemakaian field home
+    function agingOf(hu) {
+      if (!mb51Max) return null;
+      var n12 = last12.filter(function (ym) { return hu[ym] > 0; }).length;
+      if (n12 >= 2) return 'FM';
+      if (n12 === 1) return 'SM';
+      var last = Object.keys(hu).filter(function (ym) { return hu[ym] > 0; }).sort().pop();
+      if (!last) return 'DS';
+      var age = (+mb51Max.slice(0, 4) - +last.slice(0, 4)) * 12 + (+mb51Max.slice(5, 7) - +last.slice(5, 7));
+      if (age < 24) return 'SM';
+      if (age <= 60) return 'SU';
+      return 'DS';
+    }
     var fieldPlantIdx = {};
     settings.fields.forEach(function (f, i) { f.plants.forEach(function (p) { fieldPlantIdx[p] = i; }); });
 
@@ -197,6 +210,7 @@
       o.spark = last12.map(function (ym) { return hu[ym] || 0; });
       o.avg12 = o.spark.reduce(function (a, b) { return a + b; }, 0) / 12;
       o.hist = o.useY[histYear] || 0;
+      o.aging = agingOf(hu);
       o.ytd = o.useY[dataYear] || 0;
       // kontrak: aktif dulu, lalu harga termurah
       o.oa.sort(function (a, b) {

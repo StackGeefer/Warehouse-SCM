@@ -386,11 +386,15 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 .popover { position: fixed; z-index: 55; width: 380px; max-width: calc(100vw - 24px); max-height: 70vh; overflow: auto; background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 14px; }
 .popover .grid td, .popover .grid th { padding: 6px 8px; }
 .order-card { margin-bottom: 12px; }
+.badge.aging { font-size: 10.5px; padding: 1px 7px; margin-left: 4px; vertical-align: 1px; }
+.doc-points { margin: 4px 0 6px; font-size: 12.5px; }
+.doc-points summary { cursor: pointer; font-weight: 700; color: var(--brand); }
+.doc-points ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.55; color: var(--ink-2); }
 .doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
 .doc-card { display: flex; gap: 14px; padding: 16px 18px; }
 .doc-ico { width: 46px; height: 56px; border-radius: 8px; background: linear-gradient(160deg, #e2232f, #b3121c); color: #fff; font-weight: 800; font-size: 12px; display: grid; place-items: center; flex: none; box-shadow: 0 4px 10px rgba(226,35,47,.25); }
 .doc-title { font-weight: 700; font-size: 15px; line-height: 1.35; margin: 6px 0 4px; }
-.viewer { position: fixed; inset: 0; z-index: 70; background: rgba(11, 23, 48, .92); display: flex; flex-direction: column; }
+.viewer { position: fixed; inset: 0; z-index: 70; background: rgba(11, 23, 48, .97); display: flex; flex-direction: column; }
 .viewer-bar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; color: #fff; }
 .viewer iframe { flex: 1; width: 100%; height: 100%; border: 0; background: #fff; border-radius: 10px; }
 .pdf-pages { flex: 1; overflow: auto; margin: 0 18px 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 12px; }
