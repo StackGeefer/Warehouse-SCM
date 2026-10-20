@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261019a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261020a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -66,7 +66,7 @@
     })(),
     cart: Store.load('cart', { items: {}, meta: {}, groupTitles: {} }),
     q: '', filters: { home: false, zone: false, oa: false, used: false }, limit: 60,
-    oaF: { q: '', active: true, pg: '', sort: 'rel' },
+    oaF: { q: '', active: true, pg: '', sort: 'rel' }, roOther: {},
     oaD: { q: '', used: false, zero: false },
     drawerAll: false,
     lastLog: '',
@@ -118,12 +118,20 @@
     for (var i = 0; i < o.oa.length; i++) if (o.oa[i].key === key) return o.oa[i];
     return null;
   }
+  // OA bawaan: kontrak aktif PG utama (X07 lalu X02), baru PG lain
+  function defaultOA(o) { return o ? (o.bestOA || o.otherOA || o.oa[0] || null) : null; }
+  function pgMain(pg) { return Model.PG_MAIN.indexOf(pg) >= 0; }
+  function otherPGs() {
+    var pgs = {};
+    if (S.idx) S.idx.oaMap.forEach(function (h) { if (!h.main && h.pg) pgs[h.pg] = 1; });
+    return Object.keys(pgs).sort();
+  }
   function setRO(m, on, key) {
     var it = item(m, true), o = S.idx.mats.get(m);
     it.ro.on = on;
     if (on) {
       if (key) it.ro.oa = key;
-      if (!lineOf(o, it.ro.oa)) it.ro.oa = o && (o.bestOA || o.oa[0]) ? (o.bestOA || o.oa[0]).key : null;
+      if (!lineOf(o, it.ro.oa)) { var dl0 = defaultOA(o); it.ro.oa = dl0 ? dl0.key : null; }
     }
     saveCart();
   }
@@ -215,17 +223,18 @@
     return '<span class="badge ' + a[1] + ' aging" title="' + esc(a[0] + ': ' + a[2] + '. ' + last + ' (' + homeName() + '). Acuan: Pedoman Pengelolaan Logistik SHU A7-009/PHE52000/2023-S9') + '">' + a[0] + '</span>';
   }
   function priceCell(o) {
-    var chips = o.oa.length ? '<div style="margin-top:4px">' + oaChips(o) + '</div>' : '';
-    if (o.bestOA) return '<div class="price">' + fmtMoney(o.bestOA.price, o.bestOA.cur) + '</div>' + chips;
-    if (o.oa.length) return '<div class="price muted">' + fmtMoney(o.oa[0].price, o.oa[0].cur) + '</div><div class="price-sub">OA sudah berakhir</div>' + chips;
-    if (o.map) return '<div class="price">' + fmtMoney(o.map) + '</div><div class="price-sub">Harga rata-rata stok · tanpa OA</div>';
-    return '<span class="muted">—</span><div class="price-sub">Tanpa OA</div>';
+    var chips = o.oaMain.length ? '<div style="margin-top:4px">' + oaChips(o) + '</div>' : '';
+    var other = !o.bestOA && o.otherOA ? '<div class="price-sub" title="' + esc('Kontrak PG lain: ' + o.otherOA.po + ' (' + o.otherOA.pg + ') · ' + fmtMoney(o.otherOA.price, o.otherOA.cur) + '. Bisa dipilih lewat "Other" di Call Order.') + '">Ada OA PG lain (' + esc(o.otherOA.pg) + ')</div>' : '';
+    if (o.bestOA) return '<div class="price">' + fmtMoney(o.bestOA.price, o.bestOA.cur) + ' <span class="pg-tag">' + esc(o.bestOA.pg) + '</span></div>' + chips;
+    if (o.oaMain.length) return '<div class="price muted">' + fmtMoney(o.oaMain[0].price, o.oaMain[0].cur) + '</div><div class="price-sub">OA sudah berakhir</div>' + chips + other;
+    if (o.map) return '<div class="price">' + fmtMoney(o.map) + '</div><div class="price-sub">Harga rata-rata stok · tanpa OA ' + Model.PG_MAIN.join('/') + '</div>' + other;
+    return '<span class="muted">—</span><div class="price-sub">Tanpa OA ' + Model.PG_MAIN.join('/') + '</div>' + other;
   }
   function oaChips(o, max) {
     max = max || 1;
-    if (!o.oa.length) return '<span class="muted small">Tidak ada</span>';
+    if (!o.oaMain.length) return '<span class="muted small">Tidak ada</span>';
     var seen = {}, out = [];
-    o.oa.forEach(function (l) {
+    o.oaMain.forEach(function (l) {
       if (seen[l.po]) return; seen[l.po] = 1;
       out.push('<a class="oa-chip' + (l.active ? '' : ' exp') + '" href="#/kontrak/' + esc(l.po) + '" title="' +
         esc(l.vendor + ' · ' + fmtMoney(l.price, l.cur) + ' · berlaku s/d ' + fmtDate(l.ve) + (l.active ? '' : ' (berakhir)')) + '">' + esc(l.po) + '</a>');
@@ -378,7 +387,7 @@
       '<td class="c">' + otherBtn(o) + '</td>' +
       '<td>' + useCell(o) + '</td>' +
       '<td class="c pick-col"><div class="picks">' +
-      pick('ro', o.m, it && it.ro.on, !o.oa.length, o.oa.length ? 'Tarik lewat RO (kontrak)' : 'Tidak ada kontrak OA untuk material ini') +
+      pick('ro', o.m, it && it.ro.on, !o.oa.length, o.bestOA ? 'Tarik lewat RO (kontrak ' + o.bestOA.pg + ')' : o.oa.length ? 'Tidak ada OA aktif ' + Model.PG_MAIN.join('/') + ' — pilih kontrak PG lain lewat "Other"' : 'Tidak ada kontrak OA untuk material ini') +
       pick('bau', o.m, it && it.bau.on, !canBau && !(it && it.bau.on), canBau ? 'Bantuan Antar Unit dari Field lain' : 'Tidak ada stok di Field lain') +
       '</div></td></tr>';
   }
@@ -444,7 +453,7 @@
     var oaRows = o.oa.map(function (l) {
       var dl = daysLeft(l.ve);
       var sel = it && it.ro.on && it.ro.oa === l.key;
-      return '<tr><td><a class="mono" href="#/kontrak/' + esc(l.po) + '">' + esc(l.po) + '</a><div class="small muted">item ' + esc(l.item) + '</div></td>' +
+      return '<tr' + (l.main ? '' : ' class="oa-other"') + '><td><a class="mono" href="#/kontrak/' + esc(l.po) + '">' + esc(l.po) + '</a><div class="small muted">item ' + esc(l.item) + ' · <span class="pg-tag' + (l.main ? '' : ' other') + '">' + esc(l.pg) + '</span>' + (l.main ? '' : ' Other') + '</div></td>' +
         '<td class="small">' + esc(l.vendor) + '</td><td class="num price">' + fmtMoney(l.price, l.cur) + '</td>' +
         '<td class="num small">' + (l.tgtQty > 0 ? fmtQ(l.openQty) + ' / ' + fmtQ(l.tgtQty) : '<span class="muted">nilai</span>') + '</td>' +
         '<td class="small nowrap">' + fmtDate(l.ve) + '<br>' + (l.active ? '<span class="badge ok">Aktif · ' + dl + ' hr</span>' : '<span class="badge bad">Berakhir</span>') + '</td>' +
@@ -522,13 +531,20 @@
 
   function renderOAList() {
     if (!S.idx || !S.idx.oaMap.size) { view.innerHTML = S.idx && hasData() ? '<div class="card empty"><div class="ico">' + ICON.doc + '</div><h3>Data ME3N belum ada</h3><p>Upload export ME3N untuk melihat kontrak.</p><a class="btn primary" href="#/data">Upload</a></div>' : emptyData(); return; }
-    var pgs = {};
-    S.idx.oaMap.forEach(function (h) { pgs[h.pg] = 1; });
-    var F = S.oaF;
+    var cnt = {};
+    S.idx.oaMap.forEach(function (h) { cnt[h.pg] = (cnt[h.pg] || 0) + 1; });
+    var F = S.oaF, oth = otherPGs();
+    function opt(v, label) { return '<option value="' + esc(v) + '"' + (F.pg === v ? ' selected' : '') + '>' + esc(label) + '</option>'; }
+    var pgSel = '<select class="select" id="oapg">' +
+      opt('', 'PG utama: ' + Model.PG_MAIN.join(' & ')) +
+      Model.PG_MAIN.map(function (p) { return opt(p, p + ' saja (' + (cnt[p] || 0) + ')'); }).join('') +
+      (oth.length ? '<optgroup label="Other (PG lain)">' + opt('*other', 'Other: ' + oth.join(' & ')) +
+        oth.map(function (p) { return opt(p, p + ' (' + cnt[p] + ')'); }).join('') + '</optgroup>' : '') +
+      opt('*all', 'Semua Purch. Group') + '</select>';
     view.innerHTML =
       '<div class="card card-pad toolbar" style="margin-bottom:14px">' +
       '<div class="searchbox" style="flex:1;min-width:240px">' + ICON.search.replace('<svg', '<svg style="left:12px;width:18px;height:18px"') + '<input id="oaq" class="input" style="height:40px;padding-left:38px;font-size:14px;border-radius:10px;box-shadow:none" placeholder="Cari nomor OA, vendor, atau jenis material…" value="' + esc(F.q) + '"></div>' +
-      '<select class="select" id="oapg"><option value="">Semua Purch. Group</option>' + Object.keys(pgs).sort().map(function (p) { return '<option' + (F.pg === p ? ' selected' : '') + '>' + esc(p) + '</option>'; }).join('') + '</select>' +
+      pgSel +
       '<select class="select" id="oasort"><option value="rel"' + (F.sort === 'rel' ? ' selected' : '') + '>Urut: relevan untuk ' + esc(homeName()) + '</option><option value="end"' + (F.sort === 'end' ? ' selected' : '') + '>Urut: berakhir paling cepat</option><option value="val"' + (F.sort === 'val' ? ' selected' : '') + '>Urut: sisa nilai terbesar</option><option value="po"' + (F.sort === 'po' ? ' selected' : '') + '>Urut: nomor OA</option></select>' +
       '<span class="chip-toggle' + (F.active ? ' on' : '') + '" data-oafilter="active">Hanya kontrak aktif</span></div>' +
       '<div id="oaList"></div>';
@@ -539,7 +555,7 @@
     var q = F.q.trim().toUpperCase();
     S.idx.oaMap.forEach(function (h) {
       if (F.active && !h.active) return;
-      if (F.pg && h.pg !== F.pg) return;
+      if (!F.pg ? !h.main : F.pg === '*other' ? h.main : F.pg !== '*all' && h.pg !== F.pg) return;
       var st = oaStats(h);
       if (q) {
         var hay = (h.po + ' ' + h.vendor + ' ' + st.cat).toUpperCase();
@@ -567,7 +583,19 @@
         '</a>';
     }).join('');
     $('#oaList').innerHTML = list.length ? '<div class="result-meta" style="margin-bottom:10px"><b>' + list.length + '</b> kontrak</div><div class="oa-grid">' + html + '</div>'
-      : '<div class="card empty"><h3>Tidak ada kontrak yang cocok</h3><p>Ubah kata kunci atau matikan filter "Hanya kontrak aktif".</p></div>';
+      : '<div class="card empty"><h3>Tidak ada kontrak yang cocok</h3><p>Ubah kata kunci, matikan filter "Hanya kontrak aktif", atau pilih Purch. Group "Other".</p></div>';
+    var hint = $('#oaPgHint');
+    if (hint) hint.remove();
+    if (!F.pg && q) {
+      // kata kunci tidak ketemu di PG utama tapi ada di PG lain
+      var nOther = 0;
+      S.idx.oaMap.forEach(function (h) {
+        if (h.main || (F.active && !h.active)) return;
+        var hay = (h.po + ' ' + h.vendor + ' ' + oaStats(h).cat).toUpperCase();
+        if (hay.indexOf(q) >= 0 || h.lines.some(function (l) { return (l.d || '').toUpperCase().indexOf(q) >= 0 || l.m.toUpperCase() === q; })) nOther++;
+      });
+      if (nOther) $('#oaList').insertAdjacentHTML('beforeend', '<div id="oaPgHint" class="card card-pad small" style="margin-top:12px">Ada <b>' + nOther + '</b> kontrak PG lain (' + esc(otherPGs().join(' & ')) + ') yang cocok. <a href="#" data-act="oa-show-other">Tampilkan Other</a></div>');
+    }
   }
 
   // ================= Halaman: Detail Kontrak =================
@@ -743,9 +771,20 @@
     var roHtml = co.roGroups.map(function (g) {
       var rows = g.items.map(function (x) {
         no++;
-        var opts = x.o.oa.map(function (l) {
-          return '<option value="' + esc(l.key) + '"' + (x.l && x.l.key === l.key ? ' selected' : '') + '>' + esc(l.po) + ' · ' + fmtMoney(l.price, l.cur) + (l.active ? '' : ' · BERAKHIR') + '</option>';
+        // OA: X07 dulu, lalu X02; PG lain disembunyikan di "Other"
+        var optOf = function (l) {
+          return '<option value="' + esc(l.key) + '"' + (x.l && x.l.key === l.key ? ' selected' : '') + '>' + esc(l.po) + ' · ' + esc(l.pg) + ' · ' + fmtMoney(l.price, l.cur) + (l.active ? '' : ' · BERAKHIR') + '</option>';
+        };
+        var showOth = S.roOther[x.m] || (x.l && !x.l.main) || !x.o.oaMain.length;
+        var opts = Model.PG_MAIN.map(function (pg) {
+          var ls = x.o.oaMain.filter(function (l) { return l.pg === pg; });
+          return ls.length ? '<optgroup label="' + esc(pg) + '">' + ls.map(optOf).join('') + '</optgroup>' : '';
         }).join('');
+        if (!x.o.oaMain.length) opts += '<option value="" disabled>Tidak ada OA ' + esc(Model.PG_MAIN.join('/')) + '</option>';
+        if (x.o.oaOther.length) {
+          opts += showOth ? '<optgroup label="Other (PG lain)">' + x.o.oaOther.map(optOf).join('') + '</optgroup>'
+            : '<option value="__other">Other… (' + esc(x.o.oaOther.map(function (l) { return l.pg; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(', ')) + ' · ' + x.o.oaOther.length + ' kontrak)</option>';
+        }
         var total = x.qty > 0 && x.price != null ? fmtMoney(x.qty * x.price, x.cur) : '—';
         return '<tr data-m="' + esc(x.m) + '">' +
           '<td class="c muted">' + no + '</td>' +
@@ -758,7 +797,8 @@
           (x.sug > 0 ? '<button class="hint-btn" data-act="sug" data-v="' + x.sug + '" title="Rata-rata pakai ' + S.settings.coverMonths + ' bulan dikurangi stok">saran ' + fmtQ(x.sug) + '</button>' : '') + '</td>' +
           '<td class="num price">' + fmtMoney(x.price, x.cur) + '</td>' +
           '<td class="num price" data-total>' + total + '</td>' +
-          '<td><select class="select sm" data-f="oa" style="max-width:150px">' + opts + '</select></td>' +
+          '<td><div class="oa-pick"><select class="select sm" data-f="oa">' + opts + '</select>' +
+          (x.l ? '<span class="pg-tag' + (x.l.main ? '' : ' other') + '" title="Purchasing Group kontrak">' + esc(x.l.pg) + '</span>' : '') + '</div></td>' +
           '<td class="pick-col"><div class="picks mode">' + pick('ro', x.m, true, false) + pick('bau', x.m, x.it.bau.on, false) +
           '<button class="icon-btn" data-act="remove" data-m="' + esc(x.m) + '" title="Hapus dari Call Order">' + ICON.trash + '</button></div></td></tr>';
       }).join('');
@@ -929,7 +969,7 @@
         var o = S.idx.mats.get(x.m); if (!o) return;
         var l = o.oa.filter(function (y) { return y.po === x.oa; })[0];
         var it = item(x.m, true);
-        it.ro.on = true; it.ro.oa = l ? l.key : (o.bestOA ? o.bestOA.key : null); it.ro.qty = x.qty; it.ro.note = x.note || ''; n++;
+        it.ro.on = true; it.ro.oa = l ? l.key : (defaultOA(o) ? defaultOA(o).key : null); it.ro.qty = x.qty; it.ro.note = x.note || ''; n++;
       });
     });
     rec.bauGroups.forEach(function (g) {
@@ -1728,6 +1768,14 @@
       if (t.checked) toast((kind === 'ro' ? 'RO' : 'BAU') + ' ditambahkan: ' + (S.idx.mats.get(m).d || m));
     } else if (t.getAttribute('data-f') === 'oa') {
       var tr = t.closest('tr'), it = item(tr.getAttribute('data-m'));
+      if (t.value === '__other') {
+        // buka pilihan kontrak PG lain, pilihan saat ini tetap
+        S.roOther[it.m] = true; renderCO();
+        var sel = $('#view tr[data-m="' + CSS.escape(it.m) + '"] select[data-f="oa"]');
+        if (sel) { sel.focus(); if (sel.showPicker) try { sel.showPicker(); } catch (er) { /* abaikan */ } }
+        toast('Kontrak PG lain ditampilkan di pilihan OA');
+        return;
+      }
       it.ro.oa = t.value; saveCart(); renderCO();
     } else if (t.id === 'coMonth') {
       S.cart.meta.month = +t.value;
@@ -1767,6 +1815,7 @@
     if (a) {
       var act = a.getAttribute('data-act');
       if (act === 'more') { S.limit += 60; renderResults(); }
+      else if (act === 'oa-show-other') { e.preventDefault(); S.oaF.pg = '*other'; var ps = $('#oapg'); if (ps) ps.value = '*other'; renderOACards(); }
       else if (act === 'close-drawer') closeDrawer();
       else if (act === 'detail') { e.preventDefault(); openDrawer(a.getAttribute('data-m')); }
       else if (act === 'copy') { navigator.clipboard && navigator.clipboard.writeText(a.getAttribute('data-text')).then(function () { toast('KIMAP disalin'); }); }

@@ -37,6 +37,11 @@
     historyYear: null
   };
 
+  // Purchasing Group kontrak utama, urut prioritas (X07 = SCM PROC ZONA 1, X02 = REG1 PROC ZN 1&4).
+  // PG lain (X03, X10, ...) hanya muncul sebagai pilihan "Other".
+  var PG_MAIN = ['X07', 'X02'];
+  function pgRank(pg) { var i = PG_MAIN.indexOf(String(pg || '').toUpperCase()); return i < 0 ? 99 : i; }
+
   function todayStr() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -140,11 +145,12 @@
         var o = mat(l.m);
         if (!o.d) { o.d = l.d; o.u = l.u; }
         var line = Object.assign({ key: l.po + '/' + l.item, active: !l.ve || l.ve >= today }, l);
+        line.pgRank = pgRank(l.pg); line.main = line.pgRank < 99;
         o.oa.push(line);
         var h = oaMap.get(l.po);
         if (!h) {
           h = { po: l.po, vendor: l.vendor, vendorCode: l.vendorCode, pg: l.pg, vs: l.vs, ve: l.ve, cur: l.cur,
-            tgtHdr: l.tgtHdr, totalOpen: l.totalOpen, docDate: l.docDate, lines: [], active: line.active };
+            tgtHdr: l.tgtHdr, totalOpen: l.totalOpen, docDate: l.docDate, lines: [], active: line.active, main: line.main };
           oaMap.set(l.po, h);
         }
         if (l.ve && (!h.ve || l.ve > h.ve)) { h.ve = l.ve; h.active = h.ve >= today; }
@@ -216,13 +222,18 @@
       o.aging = agingOf(hu);
       o.lastUse = Object.keys(hu).filter(function (ym) { return hu[ym] > 0; }).sort().pop() || null;
       o.ytd = o.useY[dataYear] || 0;
-      // kontrak: aktif dulu, lalu harga termurah
+      // kontrak: aktif dulu, lalu PG prioritas (X07 > X02 > lainnya), lalu harga termurah
       o.oa.sort(function (a, b) {
         if (a.active !== b.active) return a.active ? -1 : 1;
+        if (a.pgRank !== b.pgRank) return a.pgRank - b.pgRank;
         if (a.cur !== b.cur) return a.cur === 'IDR' ? -1 : 1;
         return a.price - b.price;
       });
-      o.bestOA = o.oa.filter(function (l) { return l.active; })[0] || null;
+      o.oaMain = o.oa.filter(function (l) { return l.main; });
+      o.oaOther = o.oa.filter(function (l) { return !l.main; });
+      // harga & kontrak yang ditampilkan hanya dari PG utama
+      o.bestOA = o.oaMain.filter(function (l) { return l.active; })[0] || null;
+      o.otherOA = o.oaOther.filter(function (l) { return l.active; })[0] || null;
       // harga rata-rata stok (MAP) dari nilai MB52
       var mq = 0, mv = 0;
       Object.keys(o.stv).forEach(function (p) { if (o.st[p] > 0) { mq += o.st[p]; mv += o.stv[p]; } });
@@ -240,5 +251,5 @@
     };
   }
 
-  root.Model = { DEFAULT_SETTINGS: DEFAULT_SETTINGS, ingest: ingest, build: build, addMonths: addMonths };
+  root.Model = { PG_MAIN: PG_MAIN, DEFAULT_SETTINGS: DEFAULT_SETTINGS, ingest: ingest, build: build, addMonths: addMonths };
 })(this);

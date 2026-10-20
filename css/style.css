@@ -507,3 +507,11 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
   .topbar, .view { padding-left: 16px; padding-right: 16px; }
   .cartbar { left: 50%; transform: translateX(-50%); }
 }
+
+/* Purchasing Group kontrak (X07/X02 utama, PG lain = Other) */
+.pg-tag{display:inline-block;font:700 10.5px/1 var(--mono, ui-monospace, monospace);padding:3px 6px;border-radius:6px;background:#e8f1fb;color:#0b5cad;vertical-align:middle;letter-spacing:.02em}
+.pg-tag.other{background:#f1f2f4;color:#6b7280}
+.price .pg-tag{margin-left:4px}
+.oa-pick{display:flex;align-items:center;gap:6px}
+.oa-pick .select{max-width:230px}
+tr.oa-other td{opacity:.72}
