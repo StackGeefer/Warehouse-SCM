@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261020d'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261020e'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1240,8 +1240,11 @@
         img: 'assets/tutorial/sap-zmb52.png',
         steps: ['Masukkan T-Code <b class="mono">ZMB52</b>.', 'Plant: <b class="mono">W*</b> (semua plant).', 'Centang <b>Display Batch Stocks</b>. <i>No zero stock lines</i> tidak perlu dicentang.', 'Layout: <b class="mono">/BRANJANGAN</b>.', 'Execute → export ke Excel.'] }) +
       card({ rem: R.mb51, tc: 'ZMB51', title: 'Pemakaian ' + esc(home), freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ZMB51',
-        img: 'assets/tutorial/sap-zmb51.png',
-        steps: ['Masukkan T-Code <b class="mono">ZMB51</b>.', 'Plant: <b class="mono">' + esc(homeP) + '</b>.', 'Posting Date: bulan lalu penuh — contoh <b class="mono">' + lastStart + '</b> s/d <b class="mono">' + lastEnd + '</b>.', 'Layout: <b class="mono">/BRANJANGAN</b>.', 'Execute → export ke Excel.'] }) +
+        img: 'assets/tutorial/sap-zmb51.png?v=2',
+        steps: ['Masukkan T-Code <b class="mono">ZMB51</b>.', 'Plant: <b class="mono">' + esc(homeP) + '</b>.',
+          'Storage Location (Multiple Selection): <b class="mono">ST01</b> dan <b class="mono">SC01</b>.',
+          'Posting Date: bulan lalu penuh — contoh <b class="mono">' + lastStart + '</b> s/d <b class="mono">' + lastEnd + '</b>.',
+          'Display Options: pilih <b>Detail list</b>, Layout <b>dikosongkan</b>.', 'Data Source: <b>Database</b>.', 'Execute → export ke Excel.'] }) +
       card({ rem: R.oa, tc: 'ME3N', title: 'Kontrak OA / RO', freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ME3N',
         img: 'assets/tutorial/sap-me3n.png',
         steps: ['Masukkan T-Code <b class="mono">ME3N</b>.', 'Scope of List: <b class="mono">ALV</b>.', 'Document Type (Multiple Selection): <b class="mono">ZFU</b>, <b class="mono">ZKC2</b>, <b class="mono">ZKC3</b>.', 'Purchasing Organization: <b class="mono">2021</b>.', 'Purchasing Group (Multiple Selection): <b class="mono">' + Model.PG_MAIN.join('</b>, <b class="mono">') + '</b>.', 'Validity Key Date: akhir bulan berjalan — contoh <b class="mono">' + monthEnd + '</b>.', 'Execute → export ke Excel.'] }) +
