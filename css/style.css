@@ -516,3 +516,17 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 .oa-pick .select{max-width:230px}
 tr.oa-other td{opacity:.72}
 .share-box{margin-top:12px;padding:12px;border:1px dashed var(--line, #d7dde6);border-radius:10px;font-size:13px}
+
+/* Panduan tarik data SAP (halaman Data SAP) */
+.guide-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.guide-card{border:1px solid var(--line, #e3e8ef);border-radius:14px;padding:14px 16px;background:#fbfcfe;display:flex;flex-direction:column;gap:8px}
+.guide-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.guide-tc{font-size:18px;font-weight:800;color:var(--brand, #0b5cad)}
+.guide-title{font-weight:700}
+.guide-card .steps{margin:0;padding-left:20px}
+.guide-card .steps li{margin:3px 0}
+.guide-name{font-size:13px;background:#eef4fb;border-radius:8px;padding:6px 10px}
+.guide-shot summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--brand, #0b5cad)}
+.guide-shot img{display:block;width:100%;margin-top:8px;border:1px solid var(--line, #e3e8ef);border-radius:8px}
+.guide-web{font-size:12.5px;color:var(--muted, #5b6675);border-top:1px dashed var(--line, #e3e8ef);padding-top:8px;margin-top:auto}
+.guide-web ul{margin:4px 0 0;padding-left:18px}

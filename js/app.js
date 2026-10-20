@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261020b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261020c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1179,18 +1179,55 @@
         : '<div class="card card-pad muted">Hanya <b>Owner</b> yang dapat meng-upload data SAP. Di bawah ini versi data yang sedang dipakai website.</div>') +
       (S.lastLog ? '<div class="log" style="margin-top:14px">' + esc(S.lastLog) + '</div>' : '') +
       '<div class="ds-grid" style="margin-top:18px">' + Vault.TYPES.map(versionsCard).join('') + '</div>' +
-      '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Aturan penyimpanan versi</h4><ol class="steps">' +
-      '<li>Setiap jenis data (stok, kontrak, pemakaian) disimpan <b>maksimal ' + Vault.KEEP_VERSIONS + ' versi</b>. Contoh: upload 15.10 → 16.10 → 17.10 (ketiganya disimpan) → upload 18.10 → versi 15.10 dihapus otomatis.</li>' +
-      '<li>Website memakai versi <b>terbaru</b>; versi sebelumnya disimpan sebagai cadangan. Jika file terbaru ternyata salah, Owner/Co-Owner bisa klik <b>Gunakan versi ini</b> pada versi lain — berlaku untuk semua pengguna. Upload berikutnya otomatis menjadi versi yang dipakai.</li>' +
-      '<li>Upload ulang dengan <b>tanggal yang sama</b> akan menggantikan versi tanggal itu (tidak menambah versi).</li>' +
-      '<li><b>Stok</b>: cukup upload <b>ZMB52 All Field</b> → stok semua plant langsung terbaru. <b>ME3N</b>: upload file terbaru → kontrak diganti seluruhnya.</li>' +
-      '<li><b>MB51</b>: cukup tarik periode terbaru saja (mis. 01.09 – 15.10). Data di periode itu diganti, data sebelumnya tetap → riwayat pemakaian otomatis tersambung.</li>' +
-      '<li>Data tersimpan <b>terenkripsi</b> di repo GitHub dan hanya terbuka setelah login.</li></ol>' +
-      (owner ? '<h4 class="section-title" style="margin-top:16px">Cara menyiapkan file dari SAP</h4><ol class="steps">' +
-        '<li><b>Stok</b>: <span class="mono">ZMB52</span>/<span class="mono">MB52</span> plant Zona 1 (W101, W102, W802, W803, W104, …) → export Excel.</li>' +
-        '<li><b>Kontrak</b>: <span class="mono">ME3N</span> (Purch. Org 2021) → export Excel.</li>' +
-        '<li><b>Pemakaian</b>: <span class="mono">MB51</span> movement GI → export (file berisi pivot juga bisa).</li></ol>' : '') +
-      '</div>';
+      dataGuide(owner);
+  }
+
+  // Panduan tarik data SAP (dari Tutorial Tarik Data Stock SAP) + aturan upload & versi
+  function dataGuide(owner) {
+    var now = new Date(), pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var tag = pad(now.getMonth() + 1) + '.' + pad(now.getDate());
+    var d = function (y, m, day) { var x = new Date(y, m, day); return pad(x.getDate()) + '.' + pad(x.getMonth() + 1) + '.' + x.getFullYear(); };
+    var y = now.getFullYear(), m = now.getMonth();
+    var lastStart = d(y, m - 1, 1), lastEnd = d(y, m, 0), monthEnd = d(y, m + 1, 0);
+    var home = homeName(), homeP = (fields().filter(function (f) { return f.home; })[0] || { plants: ['W101'] }).plants.join('/');
+    var activeP = [];
+    fields().forEach(function (f) { f.plants.forEach(function (p) { activeP.push(p); }); });
+    function card(o) {
+      return '<div class="guide-card"><div class="guide-head"><span class="guide-tc mono">' + o.tc + '</span><span class="badge ' + o.freqCls + '">' + o.freq + '</span></div>' +
+        '<div class="guide-title">' + o.title + '</div>' +
+        '<ol class="steps small">' + o.steps.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' +
+        '<div class="guide-name">Simpan / rename file: <b class="mono">' + o.file + '</b></div>' +
+        '<details class="guide-shot"><summary>Lihat contoh layar SAP</summary><a href="' + o.img + '" target="_blank" rel="noopener"><img src="' + o.img + '" alt="Layar SAP ' + o.tc + '" loading="lazy"></a></details>' +
+        '<div class="guide-web"><b>Diproses website:</b><ul>' + o.web.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></div></div>';
+    }
+    var guide = !owner ? '' :
+      '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Panduan tarik data SAP</h4>' +
+      '<p class="small muted" style="margin-top:0">Tarik 3 file di bawah, lalu tarik &amp; lepas ke kotak upload di atas (boleh sekaligus). Nama file diawali <b>bulan.tanggal</b> data — contoh hari ini <span class="mono">' + tag + '_ZMB52</span> — karena tanggal versi dibaca dari nama file.</p>' +
+      '<div class="guide-grid">' +
+      card({ tc: 'ZMB52', title: 'Stok semua Field', freq: 'Setiap hari', freqCls: 'ok', file: tag + '_ZMB52',
+        img: 'assets/tutorial/sap-zmb52.png',
+        steps: ['Masukkan T-Code <b class="mono">ZMB52</b>.', 'Plant: <b class="mono">W*</b> (semua plant).', 'Centang <b>Display Batch Stocks</b>. <i>No zero stock lines</i> tidak perlu dicentang.', 'Layout: <b class="mono">/BRANJANGAN</b>.', 'Execute → export ke Excel.'],
+        web: ['Baris dengan <b>DF stor. loc. level = X</b> (sudah dihapus di SAP) dibuang.',
+          'Hanya plant Field aktif yang dipakai (' + activeP.length + ' plant di Pengaturan). Plant proyek/kode lama (mis. W103, W104, W9xx) diabaikan otomatis.',
+          'Stok 0 tetap tampil untuk <b>' + esc(home) + ' (' + esc(homeP) + ')</b>; stok 0 di plant lain diabaikan.',
+          'Semua plant di file langsung menggantikan stok sebelumnya.'] }) +
+      card({ tc: 'ZMB51', title: 'Pemakaian ' + esc(home), freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ZMB51',
+        img: 'assets/tutorial/sap-zmb51.png',
+        steps: ['Masukkan T-Code <b class="mono">ZMB51</b>.', 'Plant: <b class="mono">' + esc(homeP) + '</b>.', 'Posting Date: bulan lalu penuh — contoh <b class="mono">' + lastStart + '</b> s/d <b class="mono">' + lastEnd + '</b>.', 'Layout: <b class="mono">/BRANJANGAN</b>.', 'Execute → export ke Excel.'],
+        web: ['Dihitung pemakaian dari movement GI (201/202, 221/222, 261/262, 291/292, 949/950, 963/964).',
+          'Cukup periode terbaru: data di rentang tanggal file diganti, bulan-bulan sebelumnya tetap → riwayat & aging otomatis tersambung.'] }) +
+      card({ tc: 'ME3N', title: 'Kontrak OA / RO', freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ME3N',
+        img: 'assets/tutorial/sap-me3n.png',
+        steps: ['Masukkan T-Code <b class="mono">ME3N</b>.', 'Scope of List: <b class="mono">ALV</b>.', 'Document Type (Multiple Selection): <b class="mono">ZFU</b>, <b class="mono">ZKC2</b>, <b class="mono">ZKC3</b>.', 'Purchasing Organization: <b class="mono">2021</b>.', 'Purchasing Group (Multiple Selection): <b class="mono">' + Model.PG_MAIN.join('</b>, <b class="mono">') + '</b>.', 'Validity Key Date: akhir bulan berjalan — contoh <b class="mono">' + monthEnd + '</b>.', 'Execute → export ke Excel.'],
+        web: ['Kontrak lama diganti seluruhnya oleh file baru.',
+          'Prioritas OA: <b>' + Model.PG_MAIN.join(' lalu ') + '</b>; PG lain (X03, X10) hanya muncul sebagai pilihan <b>Other</b>.'] }) +
+      '</div></div>';
+    return guide +
+      '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Aturan versi data</h4><ol class="steps">' +
+      '<li>Tiap jenis data (stok, kontrak, pemakaian) disimpan <b>maksimal ' + Vault.KEEP_VERSIONS + ' versi</b>, diurutkan menurut tanggal data. Upload ke-4 menghapus versi paling lama otomatis.</li>' +
+      '<li>Website memakai versi <b>terbaru</b>. Jika file terbaru salah, Owner/Co-Owner klik <b>Gunakan versi ini</b> pada versi lain — berlaku untuk semua pengguna. Upload berikutnya otomatis menjadi versi yang dipakai.</li>' +
+      '<li>Upload ulang dengan <b>tanggal yang sama</b> menggantikan versi tanggal itu. File yang tidak mengubah apa pun tidak membuat versi baru.</li>' +
+      '<li>Semua data tersimpan <b>terenkripsi</b> di GitHub dan hanya terbuka setelah login.</li></ol></div>';
   }
 
   // ================= Halaman: Pengaturan =================

@@ -54,6 +54,12 @@
   }
 
   // ---------- Ingest hasil parser ke dataset tersimpan ----------
+  // Plant yang terdaftar sebagai Field; plant lain (proyek selesai, kode lama) diabaikan
+  function activePlantsOf(settings) {
+    var act = {};
+    (settings || DEFAULT_SETTINGS).fields.forEach(function (f) { f.plants.forEach(function (pl) { act[pl] = 1; }); });
+    return act;
+  }
   function homePlantsOf(settings) {
     var h = (settings || DEFAULT_SETTINGS).fields.filter(function (f) { return f.home; })[0];
     return h ? h.plants : [];
@@ -63,24 +69,32 @@
   function keepStockRow(r, homePlants) { return r[5] !== 0 || homePlants.indexOf(r[0]) >= 0; }
 
   function ingest(ds, parsed, settings) {
-    var notes = [], homePlants = homePlantsOf(settings);
+    var notes = [], homePlants = homePlantsOf(settings), activePlants = activePlantsOf(settings);
     parsed.parts.forEach(function (p) {
       if (p.type === 'mb52') {
         ds.stock = ds.stock || { plants: {} };
-        var byPlant = {}, zero = 0;
+        var byPlant = {}, zero = 0, inactive = {};
         p.rows.forEach(function (r) {
+          if (!activePlants[r[0]]) { inactive[r[0]] = (inactive[r[0]] || 0) + 1; return; }
           if (!keepStockRow(r, homePlants)) { zero++; return; }
           (byPlant[r[0]] = byPlant[r[0]] || []).push(r);
         });
         var replaced = [], skipped = [];
+        // bersihkan plant yang bukan Field aktif dari data lama
+        Object.keys(ds.stock.plants).forEach(function (pl) { if (!activePlants[pl]) delete ds.stock.plants[pl]; });
         p.plants.forEach(function (pl) {
+          if (!activePlants[pl]) return;
           var cur = ds.stock.plants[pl];
           if (cur && cur.date > parsed.date) { skipped.push(pl + ' (sudah ada data ' + cur.date + ')'); return; }
           ds.stock.plants[pl] = { date: parsed.date, file: parsed.name, hasValue: p.hasValue, rows: byPlant[pl] || [] };
           replaced.push(pl);
         });
         p.changed = replaced.length > 0;
-        notes.push('Stok MB52: ' + (p.rows.length - zero).toLocaleString('id-ID') + ' baris' +
+        var inact = Object.keys(inactive).sort();
+        if (p.deleted) notes.push(p.deleted.toLocaleString('id-ID') + ' baris bertanda hapus (DF stor. loc. level = X) diabaikan');
+        if (inact.length) notes.push('Plant bukan Field aktif diabaikan: ' + inact.join(', '));
+        var nIn = p.rows.length - inact.reduce(function (a, k) { return a + inactive[k]; }, 0);
+        notes.push('Stok MB52: ' + (nIn - zero).toLocaleString('id-ID') + ' baris' +
           (zero ? ' (' + zero.toLocaleString('id-ID') + ' baris stok 0 di plant selain ' + homePlants.join('/') + ' diabaikan)' : '') + ', plant ' + (replaced.join(', ') || '-') +
           (skipped.length ? '. Dilewati (data lebih baru sudah ada): ' + skipped.join(', ') : ''));
       } else if (p.type === 'me3n') {
@@ -138,7 +152,9 @@
     var homePlants = home ? home.plants : [];
 
     if (ds.stock) {
+      var activePl = activePlantsOf(settings);
       Object.keys(ds.stock.plants).forEach(function (pl) {
+        if (!activePl[pl]) return;
         var P = ds.stock.plants[pl];
         plantsAll[pl] = 1; plantDates[pl] = P.date;
         P.rows.forEach(function (r) {

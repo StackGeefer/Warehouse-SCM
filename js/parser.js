@@ -34,7 +34,8 @@
       cols: {
         plant: ['plant'], material: ['material'], desc: ['material description'], qty: ['unrestricted'],
         uom: ['base unit of measure'], sloc: ['storage location'], batch: ['batch'],
-        value: ['value unrestricted'], cur: ['currency'], transit: ['stock in transit'], blocked: ['blocked']
+        value: ['value unrestricted'], cur: ['currency'], transit: ['stock in transit', 'transit and transfer'], blocked: ['blocked'],
+        df: ['df stor. loc. level', 'df at storage location level', 'deletion flag', 'df stor.loc.level']
       }
     }
   };
@@ -134,12 +135,14 @@
   }
 
   function extractMB52(rows, hr, c) {
-    var out = [], plants = {};
+    var out = [], plants = {}, deleted = 0;
     for (var i = hr + 1; i < rows.length; i++) {
       var r = rows[i];
       if (!r) continue;
       var plant = str(r[c.plant]), mat = str(r[c.material]);
       if (!plant || !mat) continue;
+      // DF stor. loc. level = X -> material sudah ditandai hapus di SAP, tidak dipakai
+      if (c.df != null && str(r[c.df])) { deleted++; continue; }
       plants[plant] = 1;
       out.push([
         plant, mat, str(r[c.desc]), str(r[c.sloc]), str(r[c.batch]),
@@ -149,7 +152,7 @@
         c.transit != null ? num(r[c.transit]) : 0
       ]);
     }
-    return { type: 'mb52', plants: Object.keys(plants).sort(), rows: out, hasValue: c.value != null };
+    return { type: 'mb52', plants: Object.keys(plants).sort(), rows: out, hasValue: c.value != null, deleted: deleted };
   }
 
   function extractME3N(rows, hr, c) {
