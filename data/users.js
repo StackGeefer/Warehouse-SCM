@@ -22,8 +22,10 @@ window.MW_USERS = [
   "id": "70d8af702770439c5e6afac27ec7b67754068acd2154314c8612c0999bc20eb0",
   "name": "Seto.agustian",
   "role": "coowner",
-  "salt": "3YVIfQe0IBXumgyKKfxBuQ==",
-  "iv": "bWTawTWwhLLtZSJs",
-  "wk": "pxXA19ApGEXie6xl5luBeSeK6cLLvpxzx/zNYc2Pekrr+MRoZ9mFC9m7eqsfGWE/"
+  "salt": "RUm90k5KQHAp0MzE6OVxwA==",
+  "iv": "Ekma6sBRWyDgbnFJ",
+  "wk": "XeNFuvqVWQTXnztD7U0HFoNq9ASgiZlfOTo1T3FGz8EHSkz7l890tc2IEeZdDrYy",
+  "aiv": "56jCZ5k0lgHf+2Hs",
+  "ak": "2+Bn9GBnpr0RXziyttfwsaGjvpr0AQNH8jR2Pa1UGKb3S/23Ls2l4D9FF6I3ByHk"
  }
 ];
