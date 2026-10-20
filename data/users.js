@@ -9,14 +9,6 @@ window.MW_USERS = [
   "wk": "QnU8Xn44o7xyu69Oj7VaOiGM/zKsK0UF21WT+CzX8IxvrQqwWGKQIdW24meVQWEC"
  },
  {
-  "id": "70d8af702770439c5e6afac27ec7b67754068acd2154314c8612c0999bc20eb0",
-  "name": "seto.agustian",
-  "role": "viewer",
-  "salt": "BTBTupWKjQyTFDcI8lOgbA==",
-  "iv": "uDxPTNEUvmraAa3P",
-  "wk": "K5azVFeu588eVa0U8laIM0X4Dx7/X7Ajf6PpJCeTjt5PxM1Lr9UMrm3+5VZlhj8l"
- },
- {
   "id": "70960129af204a5878b66ae72f1fa1a62c62b9d1d2bff23104577da91b01ad76",
   "name": "Warehouse",
   "role": "viewer",
