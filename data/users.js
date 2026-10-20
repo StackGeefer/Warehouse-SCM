@@ -4,9 +4,11 @@ window.MW_USERS = [
   "id": "abf93bb4a03eb4208bd864911cc6f3e23b06bf35b70e7100a15045ec0623b744",
   "name": "Gerald.samosir",
   "role": "owner",
-  "salt": "t0Jy27G90OzEYlnFBCa6jQ==",
-  "iv": "c5nY3np1jFnwDQAb",
-  "wk": "QnU8Xn44o7xyu69Oj7VaOiGM/zKsK0UF21WT+CzX8IxvrQqwWGKQIdW24meVQWEC"
+  "salt": "BuqwgP0vuAKiCWNxyTYhdw==",
+  "iv": "Hy/3PBrU4en0FdUS",
+  "wk": "yWJOydig4G9EpAwx3qFOBNgrmz0/P5+8gNYIRyyc4i+h3jcH8lFFdYJPqQ1RrkC+",
+  "aiv": "jbPAdh/WGU7+O0Qe",
+  "ak": "mRyy42gZwtgmsASR0+olTNok0OpjXXIuo+FOqPXGy0PmAjtoq8RSwXINyhLSZyqW"
  },
  {
   "id": "70960129af204a5878b66ae72f1fa1a62c62b9d1d2bff23104577da91b01ad76",
