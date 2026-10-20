@@ -15,5 +15,13 @@ window.MW_USERS = [
   "salt": "BTBTupWKjQyTFDcI8lOgbA==",
   "iv": "uDxPTNEUvmraAa3P",
   "wk": "K5azVFeu588eVa0U8laIM0X4Dx7/X7Ajf6PpJCeTjt5PxM1Lr9UMrm3+5VZlhj8l"
+ },
+ {
+  "id": "70960129af204a5878b66ae72f1fa1a62c62b9d1d2bff23104577da91b01ad76",
+  "name": "Warehouse",
+  "role": "viewer",
+  "salt": "3rj9SuvAWbICaqvxTaMhiQ==",
+  "iv": "8Cs8s91mAdBdehU1",
+  "wk": "nyhKbjFv8q7PMgGTpoMTro7q2kGqz8GqlmJ7ZQd3toR3jmUPt1GXV+hR8OdwJ9f/"
  }
 ];
