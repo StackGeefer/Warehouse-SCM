@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261020a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261020b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -300,7 +300,7 @@
     out.push('<div class="row"><span><i class="dot ' + (ds.mb51 ? 'on' : '') + '"></i>Pemakaian MB51</span><b>' + (ds.mb51 ? 's/d ' + BLN[+ds.mb51.max.slice(5, 7) - 1] + ' ' + ds.mb51.max.slice(2, 4) : '—') + '</b></div>');
     if (hp.length) out.push('<div class="small">Home: Field ' + esc(homeName()) + ' (' + esc(hp.join('/')) + ')</div>');
     if (S.pending && isOwner()) out.push('<a class="side-warn" href="#/data">● ' + pendingCount() + ' perubahan belum dipublikasikan</a>');
-    if (S.user) out.push('<div class="side-user"><div class="avatar">' + esc(S.user.name.charAt(0).toUpperCase()) + '</div><div style="min-width:0"><b>' + esc(S.user.name) + '</b><div class="small">' + (isOwner() ? 'Owner' : 'Viewer') + '</div></div>' +
+    if (S.user) out.push('<div class="side-user"><div class="avatar">' + esc(S.user.name.charAt(0).toUpperCase()) + '</div><div style="min-width:0"><b>' + esc(S.user.name) + '</b><div class="small">' + roleLabel(S.user.role) + '</div></div>' +
       '<button class="icon-btn" data-act="logout" title="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></div>');
     $('#sideData').innerHTML = out.join('');
   }
@@ -893,7 +893,7 @@
     S.orders = orders;
     var payload = await Vault.encrypt(S.key, orders);
     await queuePending({ files: { 'data/orders.js': Vault.listFile('MW_ORDERS', payload, 'Riwayat Call Order') }, deletes: [] }, [msg], null, null, { orders: orders });
-    if (Store.load('ghToken')) await publish();
+    if (ghToken()) await publish();
   }
   function renderOrders() {
     var list = allOrders(), q = (S.ordQ || '').trim().toUpperCase(), stF = S.ordStatus || '';
@@ -1042,7 +1042,7 @@
     var idxPayload = await Vault.encrypt(S.key, docs);
     changes.files['data/docs.js'] = Vault.listFile('MW_DOCS', idxPayload, 'Daftar dokumen TKO & referensi');
     await queuePending(changes, [msg], null, null, { docs: docs });
-    if (Store.load('ghToken')) await publish();
+    if (ghToken()) await publish();
     else render();
   }
   async function uploadDoc() {
@@ -1116,7 +1116,19 @@
   // ================= Halaman: Data =================
   var TYPE_LABEL = { stock: 'Stok — MB52 / ZMB52', oa: 'Kontrak — ME3N', mb51: 'Pemakaian — MB51' };
   var TYPE_SHORT = { stock: 'stok', oa: 'kontrak ME3N', mb51: 'pemakaian MB51' };
-  function isOwner() { return !!(S.user && S.user.role === 'owner'); }
+  // Owner Utama & Co-Owner boleh mengubah data; hanya Owner Utama yang mengatur token & pengguna
+  function isOwner() { return !!(S.user && Vault.isEditor(S.user.role)); }
+  function isMainOwner() { return !!(S.user && S.user.role === 'owner'); }
+  function roleLabel(r) { return r === 'owner' ? 'Owner Utama' : r === 'coowner' ? 'Co-Owner' : 'Viewer'; }
+  function roleBadge(r) { return '<span class="badge ' + (r === 'owner' ? 'ok' : r === 'coowner' ? 'ro' : '') + '">' + roleLabel(r) + '</span>'; }
+  function ghToken() { return (isMainOwner() && Store.load('ghToken')) || S.sharedTok || null; }
+  // Token bersama: dienkripsi kunci admin (hanya Owner/Co-Owner bisa membuka)
+  async function unlockShared() {
+    S.sharedTok = null;
+    var adm = localVal('admin') || window.MW_ADMIN;
+    if (!S.adminKey || !adm || !adm.tok) return;
+    try { S.sharedTok = (await Vault.decrypt(S.adminKey, adm.tok)).t || null; } catch (e) { console.warn('token bersama tidak bisa dibuka', e); }
+  }
   function fmtDateTime(iso) {
     if (!iso) return '—';
     var d = new Date(iso);
@@ -1128,25 +1140,33 @@
   }
   function pendingBanner() {
     if (!isOwner() || !S.pending) return '';
-    var hasTok = !!Store.load('ghToken');
+    var hasTok = !!ghToken();
+    if (S.pending.stale) return '<div class="card card-pad pending-banner"><div><b>Perubahan di browser ini sudah kedaluwarsa</b> (' + esc((S.pending.msgs || []).join(', ')) + ').<div class="small muted">Sudah ada data yang lebih baru dipublikasikan oleh pengguna lain. Buang perubahan ini lalu upload ulang bila masih perlu.</div></div>' +
+      '<button class="btn danger" data-act="drop-pending">Buang perubahan</button></div>';
     return '<div class="card card-pad pending-banner"><div><b>Ada perubahan yang belum dipublikasikan</b> (' + esc((S.pending.msgs || []).join(', ')) + ').<div class="small muted">Saat ini perubahan hanya ada di browser ini. Publikasikan agar semua pengguna melihat data terbaru.</div></div>' +
-      (hasTok ? '<button class="btn primary" data-act="publish">Publikasikan sekarang</button>'
-        : '<a class="btn primary" href="#/pengaturan">Hubungkan GitHub dulu</a>') + '</div>';
+      '<div class="toolbar">' + (hasTok ? '<button class="btn primary" data-act="publish">Publikasikan sekarang</button>'
+        : isMainOwner() ? '<a class="btn primary" href="#/pengaturan">Hubungkan GitHub dulu</a>' : '<span class="small muted">Menunggu akses publikasi dari Owner Utama</span>') +
+      '<button class="btn" data-act="drop-pending">Buang</button></div></div>';
   }
   function versionsCard(type) {
-    var list = S.man.versions[type] || [];
+    var list = S.man.versions[type] || [], act = Vault.activeVersion(S.man, type), owner = isOwner();
+    var pinned = act && list[0] && act.id !== list[0].id;
     var rows = list.map(function (v, i) {
+      var isAct = act && v.id === act.id;
       var info = v.info || {};
       var det = type === 'stock' ? info.plants + ' plant · ' + nf0.format(info.rows || 0) + ' baris'
         : type === 'oa' ? nf0.format(info.rows || 0) + ' item kontrak'
           : nf0.format(info.materials || 0) + ' material · ' + fmtDate(info.min) + ' – ' + fmtDate(info.max);
       var unpub = S.pending && S.pending.files[Vault.snapPath(v.id)];
-      return '<div class="ver' + (i === 0 ? ' active' : '') + '"><div class="toolbar" style="gap:6px"><b>Data ' + fmtDate(v.date) + '</b>' +
-        (i === 0 ? '<span class="badge ok">Aktif dipakai</span>' : '<span class="badge">Versi sebelumnya</span>') +
+      return '<div class="ver' + (isAct ? ' active' : '') + '"><div class="toolbar" style="gap:6px"><b>Data ' + fmtDate(v.date) + '</b>' +
+        (isAct ? '<span class="badge ok">Aktif dipakai' + (pinned ? ' · dipilih Owner' : '') + '</span>'
+          : i === 0 ? '<span class="badge warn">Terbaru · tidak dipakai</span>' : '<span class="badge">Versi sebelumnya</span>') +
         (unpub ? '<span class="badge warn">Belum dipublikasikan</span>' : '') + '</div>' +
         '<div class="small">' + esc(det) + '</div>' +
         '<div class="small muted">Upload ' + fmtDateTime(v.uploadedAt) + (v.by ? ' · ' + esc(v.by) : '') + '</div>' +
-        '<div class="small mono muted" style="word-break:break-all">' + esc((v.files || []).join(', ')) + '</div></div>';
+        '<div class="small mono muted" style="word-break:break-all">' + esc((v.files || []).join(', ')) + '</div>' +
+        (owner && !isAct ? '<button class="btn sm" style="margin-top:8px" data-act="use-version" data-type="' + type + '" data-id="' + esc(v.id) + '">' +
+          (i === 0 ? 'Kembali pakai versi terbaru' : 'Gunakan versi ini') + '</button>' : '') + '</div>';
     }).join('') || '<div class="muted">Belum ada data</div>';
     return '<div class="card ds-card"><h4><i class="dot ' + (list.length ? 'on' : '') + '"></i>' + TYPE_LABEL[type] +
       '<span class="spacer"></span><span class="badge">' + list.length + '/' + Vault.KEEP_VERSIONS + ' versi</span></h4>' + rows + '</div>';
@@ -1161,7 +1181,7 @@
       '<div class="ds-grid" style="margin-top:18px">' + Vault.TYPES.map(versionsCard).join('') + '</div>' +
       '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Aturan penyimpanan versi</h4><ol class="steps">' +
       '<li>Setiap jenis data (stok, kontrak, pemakaian) disimpan <b>maksimal ' + Vault.KEEP_VERSIONS + ' versi</b>. Contoh: upload 15.10 → 16.10 → 17.10 (ketiganya disimpan) → upload 18.10 → versi 15.10 dihapus otomatis.</li>' +
-      '<li>Website selalu memakai versi <b>terbaru</b>; versi sebelumnya disimpan sebagai cadangan.</li>' +
+      '<li>Website memakai versi <b>terbaru</b>; versi sebelumnya disimpan sebagai cadangan. Jika file terbaru ternyata salah, Owner/Co-Owner bisa klik <b>Gunakan versi ini</b> pada versi lain — berlaku untuk semua pengguna. Upload berikutnya otomatis menjadi versi yang dipakai.</li>' +
       '<li>Upload ulang dengan <b>tanggal yang sama</b> akan menggantikan versi tanggal itu (tidak menambah versi).</li>' +
       '<li><b>Stok</b>: cukup upload <b>ZMB52 All Field</b> → stok semua plant langsung terbaru. <b>ME3N</b>: upload file terbaru → kontrak diganti seluruhnya.</li>' +
       '<li><b>MB51</b>: cukup tarik periode terbaru saja (mis. 01.09 – 15.10). Data di periode itu diganti, data sebelumnya tetap → riwayat pemakaian otomatis tersambung.</li>' +
@@ -1190,24 +1210,35 @@
     var known = S.idx ? S.idx.plantsAll.join(', ') : '-';
     var userRows = S.users.map(function (u) {
       var me = u.id === S.user.id;
-      return '<tr><td><b>' + esc(u.name) + '</b>' + (me ? ' <span class="badge ro">Anda</span>' : '') + '</td><td>' + (u.role === 'owner' ? '<span class="badge ok">Owner</span>' : '<span class="badge">Viewer</span>') + '</td>' +
-        '<td class="right">' + (me ? '' : '<button class="btn sm danger" data-act="del-user" data-id="' + esc(u.id) + '">' + ICON.trash + ' Hapus</button>') + '</td></tr>';
+      var warn = u.role === 'coowner' && !u.ak ? ' <span class="badge warn" title="Atur ulang dengan password agar bisa publikasi">belum bisa publikasi</span>' : '';
+      var ctl = me || u.role === 'owner' ? '' :
+        '<select class="select sm" data-role>' + ['viewer', 'coowner'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
+        '<input class="input sm" data-rpw type="password" placeholder="Password (wajib utk Co-Owner)" autocomplete="new-password" style="width:200px">' +
+        '<button class="btn sm" data-act="set-role" data-id="' + esc(u.id) + '">Simpan</button>' +
+        '<button class="btn sm danger" data-act="del-user" data-id="' + esc(u.id) + '">' + ICON.trash + '</button>';
+      return '<tr><td><b>' + esc(u.name) + '</b>' + (me ? ' <span class="badge ro">Anda</span>' : '') + '</td><td>' + roleBadge(u.role) + warn + '</td>' +
+        '<td class="right"><div class="toolbar" style="justify-content:flex-end">' + ctl + '</div></td></tr>';
     }).join('');
-    var tok = Store.load('ghToken');
-    var ownerHtml = !owner ? '' :
+    var tok = Store.load('ghToken'), adm = localVal('admin') || window.MW_ADMIN, shared = !!(adm && adm.tok && S.adminKey);
+    var main = isMainOwner();
+    var coHtml = owner && !main ?
+      '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub</h4><div class="toolbar">' +
+      (S.sharedTok ? '<span class="badge ok">Terhubung lewat token Owner Utama</span><span class="small muted">Upload &amp; perubahan Anda langsung dipublikasikan.</span>'
+        : '<span class="badge warn">Belum bisa publikasi</span><span class="small muted">Minta Owner Utama mengatur akses Co-Owner Anda (Pengaturan → Pengguna) lalu login ulang.</span>') + '</div></div>' : '';
+    var ownerHtml = !main ? coHtml :
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Pengguna &amp; Login</h4>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th>Username</th><th>Peran</th><th></th></tr></thead><tbody>' + userRows + '</tbody></table></div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-top:14px">' +
       '<div><div style="font-weight:700;margin-bottom:6px">Tambah pengguna</div><div class="toolbar">' +
       '<input class="input sm" id="nuName" placeholder="Username" autocomplete="off">' +
       '<input class="input sm" id="nuPw" type="password" placeholder="Password" autocomplete="new-password">' +
-      '<select class="select sm" id="nuRole"><option value="viewer">Viewer (lihat & buat Call Order)</option><option value="owner">Owner (bisa upload data)</option></select>' +
+      '<select class="select sm" id="nuRole"><option value="viewer">Viewer (lihat &amp; buat Call Order)</option><option value="coowner">Co-Owner (upload &amp; ubah data)</option></select>' +
       '<button class="btn sm primary" data-act="add-user">Tambah</button></div></div>' +
       '<div><div style="font-weight:700;margin-bottom:6px">Ganti password saya</div><div class="toolbar">' +
       '<input class="input sm" id="cpPw" type="password" placeholder="Password baru" autocomplete="new-password">' +
       '<input class="input sm" id="cpPw2" type="password" placeholder="Ulangi password baru" autocomplete="new-password">' +
       '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
-      '<div class="small muted" style="margin-top:10px">Perubahan pengguna/password ikut dipublikasikan ke website (perlu koneksi GitHub di bawah).</div></div>' +
+      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Viewer</b>: lihat data &amp; buat Call Order. Untuk menjadikan Co-Owner, isi password orang tersebut (password lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub (agar upload langsung tampil untuk semua pengguna)</h4>' +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
@@ -1218,9 +1249,13 @@
       '<div class="toolbar" style="margin-top:8px"><input class="input sm mono" id="ghRepo" style="width:240px" value="' + esc(ghRepo()) + '" title="owner/nama-repo">' +
       '<input class="input sm mono masked" id="ghTok" type="text" name="gh-token-' + Date.now() + '" style="flex:1;min-width:260px" placeholder="' + (tok ? 'Token tersimpan — isi untuk mengganti' : 'github_pat_…') + '" autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore>' +
       '<button class="btn sm primary" data-act="gh-save">Simpan &amp; Tes</button>' + (tok ? '<button class="btn sm danger" data-act="gh-remove">Putuskan</button>' : '') + '</div>' +
-      '<div class="small muted" style="margin-top:8px">Token hanya disimpan di browser ini dan hanya punya akses ke repo tersebut.</div></div>';
+      '<div class="small muted" style="margin-top:8px">Hanya <b>Owner Utama</b> yang mengisi token. Token hanya punya akses ke repo tersebut.</div>' +
+      (tok ? '<div class="share-box"><b>Akses Co-Owner</b> — ' + (shared ? '<span class="badge ok">Token sudah dibagikan (terenkripsi)</span> Co-Owner bisa upload &amp; publikasi tanpa melihat token.'
+        : '<span class="badge warn">Belum dibagikan</span> Isi password Anda sekali untuk mengunci token secara terenkripsi agar Co-Owner bisa publikasi.') +
+        (shared ? '' : '<div class="toolbar" style="margin-top:8px"><input class="input sm" id="shPw" type="password" placeholder="Password login Anda" autocomplete="current-password"><button class="btn sm primary" data-act="gh-share">Bagikan ke Co-Owner</button></div>') + '</div>' : '') +
+      '</div>';
     view.innerHTML =
-      '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + (owner ? '<span class="badge ok">Owner</span>' : '<span class="badge">Viewer</span>') + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
+      '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + roleBadge(S.user.role) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
       ownerHtml + (isOwner() ? heroCard() : '') + synCard() +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
       '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Centang "Kolom utama" agar field tampil sebagai kolom di Cari Material (default: Lirik, Jambi, Pangkalan Susu). Field lain dicek lewat tombol <b>Cek field lain</b>. Satu field boleh punya beberapa plant, pisahkan dengan koma. Pengaturan ini berlaku di browser ini.</p>' +
@@ -1289,7 +1324,7 @@
     var file = '/* Sinonim pencarian tambahan (diisi Owner). Satu kelompok = istilah yang dianggap sama. */\nwindow.MW_SYNONYMS = ' + JSON.stringify(groups, null, 1) + ';\n';
     await queuePending({ files: { 'data/synonyms.js': file }, deletes: [] }, ['sinonim pencarian'], null, null, { synonyms: groups });
     rebuild();
-    if (Store.load('ghToken')) await publish();
+    if (ghToken()) await publish();
     else { toast('Sinonim disimpan di browser ini — publikasikan setelah GitHub terhubung'); render(); }
   }
   function parseInWorker(buf, name, lm) {
@@ -1340,9 +1375,10 @@
       parsed.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
       var ds = clone(S.ds), touched = {};
       parsed.forEach(function (p) {
-        var notes = Model.ingest(ds, p);
+        var notes = Model.ingest(ds, p, S.settings);
         log.push('✓ ' + p.name + ' (tanggal data ' + p.date + ')\n   ' + notes.join('\n   '));
         p.parts.forEach(function (pt) {
+          if (pt.changed === false) { log.push('   ↳ tidak ada perubahan stok → tidak dibuat versi baru'); return; }
           var t = pt.type === 'me3n' ? 'oa' : pt.type === 'mb52' ? 'stock' : 'mb51';
           var x = touched[t] || (touched[t] = { date: p.date, files: [] });
           if (p.date > x.date) x.date = p.date;
@@ -1369,12 +1405,13 @@
         await Store.set('ds-' + t, { id: id, data: ds[t] });
         msgs.push(TYPE_SHORT[t] + ' ' + ddmm(touched[t].date));
       }
+      if (!msgs.length) { S.lastLog = log.join('\n'); toast('Tidak ada data baru — versi tidak berubah'); return; }
       changes.files['data/manifest.js'] = Vault.manifestFile(man);
       S.man = man; S.ds = ds;
       rebuild();
       await queuePending(changes, msgs, man);
       S.lastLog = log.join('\n');
-      if (Store.load('ghToken')) await publish();
+      if (ghToken()) await publish();
       else toast('Data tersimpan di browser ini. Hubungkan GitHub di Pengaturan agar tampil untuk semua pengguna.');
     } catch (e) {
       console.error(e);
@@ -1383,6 +1420,24 @@
       loading(false);
       render();
     }
+  }
+
+  // Owner memilih versi data yang dipakai (dari maks. 3 versi)
+  async function useVersion(type, id) {
+    if (!isOwner()) return;
+    var list = S.man.versions[type] || [], v = list.filter(function (x) { return x.id === id; })[0];
+    if (!v) return;
+    if (!confirm('Gunakan data ' + TYPE_SHORT[type] + ' tanggal ' + fmtDate(v.date) + ' untuk semua pengguna?')) return;
+    var man = clone(S.man);
+    man.active = man.active || {};
+    if (list[0].id === id) delete man.active[type]; else man.active[type] = id;
+    man.updatedAt = new Date().toISOString();
+    S.man = man;
+    await queuePending({ files: { 'data/manifest.js': Vault.manifestFile(man) }, deletes: [] }, ['pakai ' + TYPE_SHORT[type] + ' ' + ddmm(v.date)], man);
+    try { await loadData(); } finally { loading(false); }
+    toast('Data ' + TYPE_SHORT[type] + ' ' + fmtDate(v.date) + ' sekarang dipakai');
+    if (ghToken()) await publish();
+    render();
   }
 
   // Perubahan yang belum/baru saja dipublikasikan (GitHub Pages perlu ±1–2 menit untuk tayang)
@@ -1397,7 +1452,7 @@
   async function rememberPublished(P) {
     var R = (await Store.get('recent')) || null;
     var merged = { at: Date.now(), payloads: Object.assign({}, R && Date.now() - R.at < RECENT_MS ? R.payloads : {}, P.payloads) };
-    ['man', 'users', 'orders', 'docs', 'synonyms', 'hero', 'heroData'].forEach(function (k) {
+    ['man', 'users', 'orders', 'docs', 'synonyms', 'hero', 'heroData', 'admin'].forEach(function (k) {
       if (P[k]) merged[k] = P[k];
       else if (R && Date.now() - R.at < RECENT_MS && R[k]) merged[k] = R[k];
     });
@@ -1438,7 +1493,7 @@
   async function gh(method, path, body, token) {
     var res = await fetch('https://api.github.com/repos/' + ghRepo() + path, {
       method: method,
-      headers: { Authorization: 'Bearer ' + (token || Store.load('ghToken')), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+      headers: { Authorization: 'Bearer ' + (token || ghToken()), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
       body: body ? JSON.stringify(body) : undefined
     });
     var data = res.status === 204 ? null : await res.json().catch(function () { return null; });
@@ -1466,7 +1521,8 @@
   }
   async function publish() {
     if (!S.pending) return;
-    if (!Store.load('ghToken')) { toast('Hubungkan GitHub dulu di Pengaturan', true); location.hash = '#/pengaturan'; return; }
+    if (S.pending.stale) { toast('Perubahan lokal sudah kedaluwarsa — buang dulu di halaman Data SAP', true); location.hash = '#/data'; return; }
+    if (!ghToken()) { toast('Hubungkan GitHub dulu di Pengaturan', true); location.hash = '#/pengaturan'; return; }
     loading('Mempublikasikan ke website (GitHub)…');
     try {
       await ghCommit(S.pending.files, S.pending.deletes, 'Update data: ' + (S.pending.msgs || []).join(', '));
@@ -1482,11 +1538,67 @@
     }
   }
 
+  // ---------- Token bersama untuk Co-Owner ----------
+  function adminFile(tokEnc) {
+    return '/* Token GitHub Owner Utama untuk publikasi Co-Owner — TERENKRIPSI (hanya Owner/Co-Owner yang bisa membuka) */\n' +
+      'window.MW_ADMIN = ' + JSON.stringify({ tok: tokEnc || null, by: S.user.name, at: new Date().toISOString() }) + ';\n';
+  }
+  // pw diisi saat pertama kali (membuat kunci admin untuk Owner Utama); null = pakai kunci admin yang sudah ada
+  async function shareToken(pw, token) {
+    if (!isMainOwner() || !token) return;
+    loading('Mengunci token untuk Co-Owner…');
+    try {
+      var users = S.users, msgs = ['token bersama diperbarui'];
+      if (!S.adminKey) {
+        if (!pw) throw new Error('Isi password Anda');
+        await Vault.login(S.users, S.user.name, pw); // cek password
+        var ak = Vault.newDataKey();
+        var me = S.users.filter(function (x) { return x.id === S.user.id; })[0];
+        var entry = await Vault.makeUser(me.name, pw, 'owner', S.key, null, ak);
+        users = S.users.map(function (x) { return x.id === me.id ? entry : x; });
+        S.adminKey = ak;
+        var sess = sessionGet();
+        if (sess) { sess.ak = Vault.toB64(ak); sessionSet(sess, !!localStorage.getItem('mw:session')); }
+        msgs.push('akses Co-Owner diaktifkan');
+      }
+      var tokEnc = await Vault.encrypt(S.adminKey, { t: token });
+      var files = { 'data/admin.js': adminFile(tokEnc) };
+      if (users !== S.users) files['data/users.js'] = Vault.usersFile(users);
+      S.users = users;
+      await queuePending({ files: files, deletes: [] }, msgs, null, users !== window.MW_USERS ? users : null, { admin: { tok: tokEnc } });
+      await unlockShared();
+      loading(false);
+      await publish();
+      toast('Token dibagikan secara terenkripsi. Co-Owner bisa publikasi setelah login ulang.');
+    } catch (e) {
+      loading(false);
+      toast(e.message === 'Username atau password salah' ? 'Password salah' : e.message, true);
+    }
+  }
+  async function setRole(u, role, pw) {
+    if (!isMainOwner() || !u || u.role === 'owner') return;
+    if (role === 'coowner') {
+      if (!S.adminKey) { toast('Bagikan token dulu: Koneksi GitHub → isi password Anda → Bagikan ke Co-Owner', true); return; }
+      if (!pw || pw.length < 6) { toast('Isi password ' + u.name + ' (min. 6 karakter) untuk mengaktifkan akses Co-Owner', true); return; }
+    }
+    var entry;
+    if (pw) {
+      if (pw.length < 6) { toast('Password minimal 6 karakter', true); return; }
+      loading('Menyimpan…');
+      entry = await Vault.makeUser(u.name, pw, role, S.key, null, S.adminKey);
+      loading(false);
+    } else {
+      entry = Object.assign({}, u, { role: role });
+      delete entry.ak; delete entry.aiv;
+    }
+    await saveUsers(S.users.map(function (x) { return x.id === u.id ? entry : x; }), u.name + ' → ' + roleLabel(role) + (pw ? ' (password diatur)' : ''));
+  }
+
   // ---------- Pengguna ----------
   async function saveUsers(users, msg) {
     S.users = users;
     await queuePending({ files: { 'data/users.js': Vault.usersFile(users) }, deletes: [] }, [msg], null, users);
-    if (Store.load('ghToken')) await publish();
+    if (ghToken()) await publish();
     else { toast(msg + ' — tersimpan di browser ini, publikasikan setelah GitHub terhubung'); render(); }
   }
 
@@ -1507,17 +1619,19 @@
     await loadScript('data/manifest.js?t=' + t).catch(function () {});
     await loadScript('data/synonyms.js?t=' + t).catch(function () {});
     await loadScript('data/hero.js?t=' + t).catch(function () {});
+    await loadScript('data/admin.js?t=' + t).catch(function () {});
     S.pending = (await Store.get('pending')) || null;
     var R = (await Store.get('recent')) || null;
     S.recent = R && Date.now() - R.at < RECENT_MS ? R : null;
     var repoMan = window.MW_MANIFEST || null, locMan = localVal('man');
     S.man = locMan && (!repoMan || locMan.updatedAt > repoMan.updatedAt) ? locMan : (repoMan || Vault.emptyManifest());
     S.users = (S.pending && S.pending.users) || (S.recent && S.recent.users) || window.MW_USERS || [];
+    if (S.pending) S.pending.stale = !!(S.pending.man && repoMan && repoMan.updatedAt > S.pending.man.updatedAt);
   }
   async function loadData() {
     var ds = { stock: null, oa: null, mb51: null };
     for (var i = 0; i < Vault.TYPES.length; i++) {
-      var type = Vault.TYPES[i], v = (S.man.versions[type] || [])[0];
+      var type = Vault.TYPES[i], v = Vault.activeVersion(S.man, type);
       if (!v) continue;
       try {
         var cached = await Store.get('ds-' + type);
@@ -1630,7 +1744,7 @@
     changes.files['data/hero.js'] = file;
     window.MW_HERO = list;
     await queuePending(changes, [msg], null, null, { hero: list, heroData: heroData });
-    if (Store.load('ghToken')) await publish();
+    if (ghToken()) await publish();
     else { toast('Foto tersimpan di browser ini — publikasikan setelah GitHub terhubung'); render(); }
   }
   async function uploadHero(files) {
@@ -1659,8 +1773,8 @@
     loading('Memeriksa akun…');
     try {
       var r = await Vault.login(S.users, u, p);
-      S.user = r.user; S.key = r.key;
-      sessionSet({ user: r.user, key: Vault.toB64(r.key) }, $('#lgRemember').checked);
+      S.user = r.user; S.key = r.key; S.adminKey = r.adminKey;
+      sessionSet({ user: r.user, key: Vault.toB64(r.key), ak: r.adminKey ? Vault.toB64(r.adminKey) : null }, $('#lgRemember').checked);
       $('#login').classList.add('hidden');
       $('#login').innerHTML = '';
       await startApp();
@@ -1673,13 +1787,14 @@
   async function logout() {
     sessionClear();
     for (var i = 0; i < Vault.TYPES.length; i++) await Store.del('ds-' + Vault.TYPES[i]);
-    S.user = null; S.key = null; S.ds = { stock: null, oa: null, mb51: null }; S.idx = null;
+    S.user = null; S.key = null; S.adminKey = null; S.sharedTok = null; S.ds = { stock: null, oa: null, mb51: null }; S.idx = null;
     closeDrawer();
     view.innerHTML = '';
     $('#cartbar').classList.add('hidden');
     showLogin();
   }
   async function startApp() {
+    await unlockShared();
     await loadData();
     loading(false);
     render();
@@ -1928,6 +2043,7 @@
       }
       else if (act === 'viewer-close') { $('#viewer').classList.add('hidden'); $('#viewer').innerHTML = ''; }
       else if (act === 'publish') { publish(); }
+      else if (act === 'use-version') useVersion(a.getAttribute('data-type'), a.getAttribute('data-id'));
       else if (act === 'gh-save') {
         var repo = $('#ghRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
         var tokIn = $('#ghTok').value.trim() || Store.load('ghToken');
@@ -1937,26 +2053,52 @@
         loading('Mengecek koneksi GitHub…');
         gh('GET', '', null, tokIn).then(function (info) {
           if (!info.permissions || !info.permissions.push) throw new Error('Token tidak punya izin menulis (Contents: Read and write)');
+          var changed = tokIn !== Store.load('ghToken');
           Store.save('ghToken', tokIn);
           toast('GitHub terhubung: ' + info.full_name);
+          // token baru -> perbarui token bersama untuk Co-Owner
+          if (changed && S.adminKey) return shareToken(null, tokIn);
           if (S.pending) return publish();
         }).catch(function (err) { toast('Koneksi gagal: ' + err.message, true); })
           .then(function () { loading(false); render(); });
       }
-      else if (act === 'gh-remove') { Store.save('ghToken', null); toast('Koneksi GitHub diputus di browser ini'); render(); }
+      else if (act === 'gh-remove') {
+        if (!confirm('Putuskan koneksi GitHub? Co-Owner juga tidak bisa publikasi sampai token diisi lagi.')) return;
+        var adm0 = localVal('admin') || window.MW_ADMIN;
+        (adm0 && adm0.tok ? queuePending({ files: { 'data/admin.js': adminFile(null) }, deletes: [] }, ['token bersama dicabut'], null, null, { admin: { tok: null } }).then(publish) : Promise.resolve())
+          .then(function () { Store.save('ghToken', null); S.sharedTok = null; toast('Koneksi GitHub diputus'); render(); });
+      }
+      else if (act === 'gh-share') {
+        var spw = $('#shPw').value;
+        if (!spw) { toast('Isi password Anda', true); return; }
+        shareToken(spw, Store.load('ghToken'));
+      }
+      else if (act === 'set-role') {
+        var rid = a.getAttribute('data-id'), ru = S.users.filter(function (x) { return x.id === rid; })[0];
+        var row = a.closest('tr'), nrole = row.querySelector('[data-role]').value, rpw = row.querySelector('[data-rpw]').value;
+        setRole(ru, nrole, rpw);
+      }
+      else if (act === 'drop-pending') {
+        if (!confirm('Buang semua perubahan yang belum dipublikasikan di browser ini?')) return;
+        S.pending = null;
+        Store.del('pending').then(function () { location.reload(); });
+      }
       else if (act === 'add-user') {
+        if (!isMainOwner()) return;
         var nu = $('#nuName').value.trim(), np = $('#nuPw').value, nr = $('#nuRole').value;
         if (nu.length < 3 || np.length < 6) { toast('Username min. 3 karakter, password min. 6 karakter', true); return; }
         loading('Menambah pengguna…');
         Vault.hashUser(nu).then(function (h) {
           if (S.users.some(function (x) { return x.id === h; })) throw new Error('Username sudah ada');
-          return Vault.makeUser(nu, np, nr, S.key);
+          if (nr === 'coowner' && !S.adminKey) throw new Error('Bagikan token dulu (Koneksi GitHub → Bagikan ke Co-Owner), lalu tambahkan Co-Owner');
+          return Vault.makeUser(nu, np, nr, S.key, null, S.adminKey);
         }).then(function (entry) {
           loading(false);
           return saveUsers(S.users.concat([entry]), 'pengguna ' + entry.name + ' ditambahkan');
         }).catch(function (err) { loading(false); toast(err.message, true); });
       }
       else if (act === 'del-user') {
+        if (!isMainOwner()) return;
         var did = a.getAttribute('data-id');
         var du = S.users.filter(function (x) { return x.id === did; })[0];
         if (!du || !confirm('Hapus pengguna ' + du.name + '?')) return;
@@ -1968,7 +2110,7 @@
         if (c1 !== c2) { toast('Konfirmasi password tidak sama', true); return; }
         var me = S.users.filter(function (x) { return x.id === S.user.id; })[0];
         loading('Menyimpan password…');
-        Vault.makeUser(me.name, c1, me.role, S.key).then(function (entry) {
+        Vault.makeUser(me.name, c1, me.role, S.key, null, S.adminKey).then(function (entry) {
           loading(false);
           return saveUsers(S.users.map(function (x) { return x.id === me.id ? entry : x; }), 'password ' + me.name + ' diganti');
         }).catch(function (err) { loading(false); toast(err.message, true); });
@@ -2030,7 +2172,7 @@
     var sess = sessionGet();
     if (sess && sess.user) {
       var u = S.users.filter(function (x) { return x.id === sess.user.id; })[0];
-      if (u) { S.user = { id: u.id, name: u.name, role: u.role }; S.key = Vault.fromB64(sess.key); }
+      if (u) { S.user = { id: u.id, name: u.name, role: u.role }; S.key = Vault.fromB64(sess.key); S.adminKey = sess.ak && Vault.isEditor(u.role) ? Vault.fromB64(sess.ak) : null; }
       else sessionClear();
     }
     if (!S.user) { loading(false); showLogin(); return; }

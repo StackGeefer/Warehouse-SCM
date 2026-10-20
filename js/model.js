@@ -54,13 +54,24 @@
   }
 
   // ---------- Ingest hasil parser ke dataset tersimpan ----------
-  function ingest(ds, parsed) {
-    var notes = [];
+  function homePlantsOf(settings) {
+    var h = (settings || DEFAULT_SETTINGS).fields.filter(function (f) { return f.home; })[0];
+    return h ? h.plants : [];
+  }
+  // Baris stok 0 di plant selain home tidak berguna (hanya "terdaftar" di plant itu)
+  // dan bisa membuat jumlah material membengkak (export SAP tanpa "No zero stock lines").
+  function keepStockRow(r, homePlants) { return r[5] !== 0 || homePlants.indexOf(r[0]) >= 0; }
+
+  function ingest(ds, parsed, settings) {
+    var notes = [], homePlants = homePlantsOf(settings);
     parsed.parts.forEach(function (p) {
       if (p.type === 'mb52') {
         ds.stock = ds.stock || { plants: {} };
-        var byPlant = {};
-        p.rows.forEach(function (r) { (byPlant[r[0]] = byPlant[r[0]] || []).push(r); });
+        var byPlant = {}, zero = 0;
+        p.rows.forEach(function (r) {
+          if (!keepStockRow(r, homePlants)) { zero++; return; }
+          (byPlant[r[0]] = byPlant[r[0]] || []).push(r);
+        });
         var replaced = [], skipped = [];
         p.plants.forEach(function (pl) {
           var cur = ds.stock.plants[pl];
@@ -68,7 +79,9 @@
           ds.stock.plants[pl] = { date: parsed.date, file: parsed.name, hasValue: p.hasValue, rows: byPlant[pl] || [] };
           replaced.push(pl);
         });
-        notes.push('Stok MB52: ' + p.rows.length.toLocaleString('id-ID') + ' baris, plant ' + (replaced.join(', ') || '-') +
+        p.changed = replaced.length > 0;
+        notes.push('Stok MB52: ' + (p.rows.length - zero).toLocaleString('id-ID') + ' baris' +
+          (zero ? ' (' + zero.toLocaleString('id-ID') + ' baris stok 0 di plant selain ' + homePlants.join('/') + ' diabaikan)' : '') + ', plant ' + (replaced.join(', ') || '-') +
           (skipped.length ? '. Dilewati (data lebih baru sudah ada): ' + skipped.join(', ') : ''));
       } else if (p.type === 'me3n') {
         ds.oa = { date: parsed.date, file: parsed.name, rows: p.rows };
@@ -129,6 +142,7 @@
         var P = ds.stock.plants[pl];
         plantsAll[pl] = 1; plantDates[pl] = P.date;
         P.rows.forEach(function (r) {
+          if (!keepStockRow(r, homePlants)) return;
           var o = mat(r[1]);
           // deskripsi mengikuti MB52 (utamakan plant home)
           if (!o.d || homePlants.indexOf(pl) >= 0) { o.d = r[2] || o.d; o.u = r[6] || o.u; }

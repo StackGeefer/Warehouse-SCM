@@ -14,7 +14,8 @@ Website dibuka lewat halaman **Login** (username + password).
 
 | Peran | Bisa apa |
 |---|---|
-| **Owner** | Semua fitur + upload/update data SAP, kelola pengguna, ganti password, koneksi GitHub |
+| **Owner Utama** | Semua fitur + kelola pengguna, koneksi GitHub (satu-satunya yang mengisi token) |
+| **Co-Owner** | Upload/update data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama yang tersimpan terenkripsi (Co-Owner tidak pernah melihat token) |
 | **Viewer** | Cari material, lihat stok/kontrak, buat & export Call Order |
 
 Owner menambah/menghapus pengguna dan mengganti password di menu **Pengaturan**.
@@ -51,6 +52,12 @@ Agar upload di website langsung tersimpan untuk semua pengguna, website perlu to
 4. Di website: **Pengaturan → Koneksi GitHub** → tempel token → **Simpan & Tes**
 
 Token hanya tersimpan di browser Owner dan hanya punya akses ke repo ini.
+
+**Akses Co-Owner:** setelah token tersimpan, Owner Utama isi password sendiri sekali di kartu *Akses Co-Owner* → **Bagikan ke Co-Owner**. Token dikunci dengan kunci admin yang hanya terbuka untuk Owner/Co-Owner (`data/admin.js`). Untuk menjadikan seseorang Co-Owner: **Pengaturan → Pengguna** → pilih *Co-Owner* + isi password orang itu → **Simpan**, lalu dia login ulang.
+
+**Pilih versi data:** di **Data SAP**, tiap versi (maks. 3) punya tombol **Gunakan versi ini**. Dipakai bila file terbaru ternyata salah; berlaku untuk semua pengguna. Upload berikutnya otomatis menjadi versi yang dipakai.
+
+**Stok 0:** baris ZMB52 dengan stok 0 di plant selain Rantau (W101) diabaikan agar daftar material tidak membengkak bila export SAP tidak memakai "No zero stock lines".
 
 ## Fitur
 

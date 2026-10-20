@@ -8,6 +8,10 @@
  *   isinya tidak bisa dibaca.
  * - Setiap jenis data (stok, kontrak, pemakaian) disimpan maksimal 3 versi.
  * - Riwayat order & dokumen TKO (PDF) juga disimpan terenkripsi.
+ * - Peran: owner (Owner Utama), coowner (Co-Owner), viewer.
+ *   Token GitHub milik Owner Utama disimpan terenkripsi dengan "kunci admin" yang
+ *   hanya terbungkus untuk Owner & Co-Owner -> Co-Owner bisa publikasi tanpa
+ *   pernah melihat/mengisi token.
  *
  * Dipakai di browser dan Node (tools/init-data.js).
  */
@@ -48,12 +52,20 @@
   }
   function newDataKey() { return C.getRandomValues(new Uint8Array(32)); }
 
-  // Bungkus kunci data dengan password pengguna -> entri users
-  function makeUser(username, password, role, dataKey, displayName) {
-    var salt = C.getRandomValues(new Uint8Array(16)), iv = C.getRandomValues(new Uint8Array(12));
+  function isEditor(role) { return role === 'owner' || role === 'coowner'; }
+
+  // Bungkus kunci data (dan kunci admin untuk Owner/Co-Owner) dengan password pengguna -> entri users
+  function makeUser(username, password, role, dataKey, displayName, adminKey) {
+    var salt = C.getRandomValues(new Uint8Array(16)), iv = C.getRandomValues(new Uint8Array(12)), aiv = C.getRandomValues(new Uint8Array(12));
+    role = role || 'viewer';
     return Promise.all([hashUser(username), kek(password, salt)]).then(function (r) {
-      return C.subtle.encrypt({ name: 'AES-GCM', iv: iv }, r[1], dataKey).then(function (wk) {
-        return { id: r[0], name: displayName || username.trim(), role: role || 'viewer', salt: toB64(salt), iv: toB64(iv), wk: toB64(new Uint8Array(wk)) };
+      return Promise.all([
+        C.subtle.encrypt({ name: 'AES-GCM', iv: iv }, r[1], dataKey),
+        adminKey && isEditor(role) ? C.subtle.encrypt({ name: 'AES-GCM', iv: aiv }, r[1], adminKey) : null
+      ]).then(function (w) {
+        var u = { id: r[0], name: displayName || username.trim(), role: role, salt: toB64(salt), iv: toB64(iv), wk: toB64(new Uint8Array(w[0])) };
+        if (w[1]) { u.aiv = toB64(aiv); u.ak = toB64(new Uint8Array(w[1])); }
+        return u;
       });
     });
   }
@@ -64,9 +76,12 @@
       var u = (users || []).filter(function (x) { return x.id === h; })[0];
       if (!u) throw new Error('Username atau password salah');
       return kek(password, fromB64(u.salt)).then(function (k) {
-        return C.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(u.iv) }, k, fromB64(u.wk));
-      }).then(function (raw) {
-        return { user: { id: u.id, name: u.name, role: u.role }, key: new Uint8Array(raw) };
+        return C.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(u.iv) }, k, fromB64(u.wk)).then(function (raw) {
+          if (!u.ak || !isEditor(u.role)) return [raw, null];
+          return C.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(u.aiv) }, k, fromB64(u.ak)).then(function (ak) { return [raw, ak]; }, function () { return [raw, null]; });
+        });
+      }).then(function (r) {
+        return { user: { id: u.id, name: u.name, role: u.role }, key: new Uint8Array(r[0]), adminKey: r[1] ? new Uint8Array(r[1]) : null };
       }, function () { throw new Error('Username atau password salah'); });
     });
   }
@@ -144,28 +159,38 @@
 
   /*
    * Tambah versi baru ke manifest.
-   * - Tanggal sama dengan versi terbaru => versi terbaru diganti (bukan versi baru)
+   * - Tanggal sama dengan versi yang ada => versi itu diganti (bukan versi baru)
+   * - Urut berdasarkan tanggal data, terbaru di atas
    * - Lebih dari KEEP_VERSIONS => versi paling lama dihapus
    * Hasil: { manifest, removed: [id] }
    */
   function addVersion(man, type, entry) {
-    var list = (man.versions[type] || []).slice();
-    var removed = [];
-    if (list.length && list[0].date === entry.date) removed.push(list.shift().id);
-    list.unshift(entry);
+    var list = (man.versions[type] || []).filter(function (v) { return v.date !== entry.date; });
+    var removed = (man.versions[type] || []).filter(function (v) { return v.date === entry.date; }).map(function (v) { return v.id; });
+    // urut tanggal data terbaru di atas (file bertanggal lama tidak menggeser versi terbaru)
+    list.push(entry);
+    list.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
     while (list.length > KEEP_VERSIONS) removed.push(list.pop().id);
     man.versions[type] = list;
+    // upload baru otomatis menjadi versi yang dipakai
+    if (man.active) delete man.active[type];
     return removed;
+  }
+  // Versi yang dipakai website: pilihan Owner (man.active) atau versi terbaru
+  function activeVersion(man, type) {
+    var list = (man && man.versions[type]) || [], id = man && man.active && man.active[type];
+    for (var i = 0; id && i < list.length; i++) if (list[i].id === id) return list[i];
+    return list[0] || null;
   }
 
   function emptyManifest() { return { v: 2, updatedAt: new Date().toISOString(), versions: { stock: [], oa: [], mb51: [] } }; }
 
   root.Vault = {
     TYPES: TYPES, KEEP_VERSIONS: KEEP_VERSIONS,
-    newDataKey: newDataKey, makeUser: makeUser, login: login, hashUser: hashUser,
+    newDataKey: newDataKey, makeUser: makeUser, isEditor: isEditor, login: login, hashUser: hashUser,
     encrypt: encrypt, decrypt: decrypt, encryptBytes: encryptBytes, decryptBytes: decryptBytes, toB64: toB64, fromB64: fromB64,
     usersFile: usersFile, manifestFile: manifestFile, snapFile: snapFile, snapPath: snapPath,
     listFile: listFile, docPath: docPath, docFile: docFile,
-    summary: summary, addVersion: addVersion, emptyManifest: emptyManifest
+    summary: summary, addVersion: addVersion, activeVersion: activeVersion, emptyManifest: emptyManifest
   };
 })(typeof self !== 'undefined' ? self : (typeof window !== 'undefined' ? window : globalThis));

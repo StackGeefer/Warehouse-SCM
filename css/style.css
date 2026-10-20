@@ -515,3 +515,4 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 .oa-pick{display:flex;align-items:center;gap:6px}
 .oa-pick .select{max-width:230px}
 tr.oa-other td{opacity:.72}
+.share-box{margin-top:12px;padding:12px;border:1px dashed var(--line, #d7dde6);border-radius:10px;font-size:13px}
