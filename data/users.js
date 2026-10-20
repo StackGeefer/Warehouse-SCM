@@ -15,5 +15,13 @@ window.MW_USERS = [
   "salt": "3rj9SuvAWbICaqvxTaMhiQ==",
   "iv": "8Cs8s91mAdBdehU1",
   "wk": "nyhKbjFv8q7PMgGTpoMTro7q2kGqz8GqlmJ7ZQd3toR3jmUPt1GXV+hR8OdwJ9f/"
+ },
+ {
+  "id": "70d8af702770439c5e6afac27ec7b67754068acd2154314c8612c0999bc20eb0",
+  "name": "Seto.agustian",
+  "role": "owner",
+  "salt": "3YVIfQe0IBXumgyKKfxBuQ==",
+  "iv": "bWTawTWwhLLtZSJs",
+  "wk": "pxXA19ApGEXie6xl5luBeSeK6cLLvpxzx/zNYc2Pekrr+MRoZ9mFC9m7eqsfGWE/"
  }
 ];
