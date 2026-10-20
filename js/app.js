@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261020c'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261020d'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -300,6 +300,7 @@
     out.push('<div class="row"><span><i class="dot ' + (ds.mb51 ? 'on' : '') + '"></i>Pemakaian MB51</span><b>' + (ds.mb51 ? 's/d ' + BLN[+ds.mb51.max.slice(5, 7) - 1] + ' ' + ds.mb51.max.slice(2, 4) : '—') + '</b></div>');
     if (hp.length) out.push('<div class="small">Home: Field ' + esc(homeName()) + ' (' + esc(hp.join('/')) + ')</div>');
     if (S.pending && isOwner()) out.push('<a class="side-warn" href="#/data">● ' + pendingCount() + ' perubahan belum dipublikasikan</a>');
+    if (isOwner()) dataReminders().forEach(function (r) { if (!r.ok) out.push('<a class="side-warn" href="#/data">● ' + esc(r.msg.replace(/ \(.*\)$/, '')) + '</a>'); });
     if (S.user) out.push('<div class="side-user"><div class="avatar">' + esc(S.user.name.charAt(0).toUpperCase()) + '</div><div style="min-width:0"><b>' + esc(S.user.name) + '</b><div class="small">' + roleLabel(S.user.role) + '</div></div>' +
       '<button class="icon-btn" data-act="logout" title="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></div>');
     $('#sideData').innerHTML = out.join('');
@@ -1173,13 +1174,42 @@
   }
   function renderData() {
     var owner = isOwner();
-    view.innerHTML = pendingBanner() +
+    view.innerHTML = pendingBanner() + (owner ? remindersCard() : '') +
       (owner
-        ? '<div class="dropzone" id="dropzone">' + ICON.upload + '<h3>Upload / update data SAP</h3><div class="muted">Tarik &amp; lepas file Excel di sini atau klik untuk memilih — boleh beberapa file sekaligus (ZMB52/MB52, ME3N, MB51). Jenis file dikenali otomatis, tanggal dibaca dari nama file (contoh <span class="mono">10.15_ZMB52.xlsx</span> = 15 Okt).</div></div>'
+        ? '<div class="dropzone" id="dropzone">' + ICON.upload + '<h3>Upload / update data SAP</h3><div class="muted">Tarik &amp; lepas file Excel di sini atau klik untuk memilih — boleh beberapa file sekaligus (ZMB52/MB52, ME3N, MB51). Jenis file dikenali otomatis, tanggal dibaca dari nama file (contoh hari ini <span class="mono">' + ('0' + (new Date().getMonth() + 1)).slice(-2) + '.' + ('0' + new Date().getDate()).slice(-2) + '_ZMB52.xlsx</span>).</div></div>'
         : '<div class="card card-pad muted">Hanya <b>Owner</b> yang dapat meng-upload data SAP. Di bawah ini versi data yang sedang dipakai website.</div>') +
       (S.lastLog ? '<div class="log" style="margin-top:14px">' + esc(S.lastLog) + '</div>' : '') +
       '<div class="ds-grid" style="margin-top:18px">' + Vault.TYPES.map(versionsCard).join('') + '</div>' +
       dataGuide(owner);
+  }
+
+  // Pengingat tarik data: ZMB52 tiap hari; ZMB51 & ME3N tiap ganti bulan (mulai tanggal 1)
+  var BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  function isoLocal(dt) { return dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2) + '-' + ('0' + dt.getDate()).slice(-2); }
+  function dataReminders() {
+    if (!S.man) return [];
+    var now = new Date(), today = isoLocal(now);
+    var monthStart = isoLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+    var prevEnd = isoLocal(new Date(now.getFullYear(), now.getMonth(), 0));
+    var prevName = BULAN[new Date(now.getFullYear(), now.getMonth() - 1, 1).getMonth()];
+    function last(t) { return (S.man.versions[t] || [])[0] || null; }
+    var st = last('stock'), mb = last('mb51'), oa = last('oa');
+    var mbMax = mb && mb.info && mb.info.max;
+    return [
+      { type: 'stock', tc: 'ZMB52', ok: !!(st && st.date >= today),
+        msg: st && st.date >= today ? 'Stok hari ini sudah ditarik' : 'Stok hari ini belum ditarik' + (st ? ' (terakhir ' + fmtDate(st.date) + ')' : '') },
+      { type: 'mb51', tc: 'ZMB51', ok: !!(mbMax && mbMax >= prevEnd),
+        msg: mbMax && mbMax >= prevEnd ? 'Pemakaian s/d ' + fmtDate(mbMax) + ' sudah lengkap' : 'Pemakaian bulan ' + prevName + ' belum ditarik' + (mbMax ? ' (data s/d ' + fmtDate(mbMax) + ')' : '') },
+      { type: 'oa', tc: 'ME3N', ok: !!(oa && oa.date >= monthStart),
+        msg: oa && oa.date >= monthStart ? 'Kontrak bulan ' + BULAN[now.getMonth()] + ' sudah ditarik' : 'Kontrak bulan ' + BULAN[now.getMonth()] + ' belum ditarik' + (oa ? ' (terakhir ' + fmtDate(oa.date) + ')' : '') }
+    ];
+  }
+  function remindersCard() {
+    var due = dataReminders().filter(function (r) { return !r.ok; });
+    if (!due.length) return '';
+    return '<div class="card card-pad remind-card"><b>Pengingat tarik data SAP</b><ul>' +
+      due.map(function (r) { return '<li><span class="mono">' + r.tc + '</span> — ' + esc(r.msg) + '</li>'; }).join('') +
+      '</ul><div class="small muted">Panduan langkahnya ada di bagian bawah halaman ini.</div></div>';
   }
 
   // Panduan tarik data SAP (dari Tutorial Tarik Data Stock SAP) + aturan upload & versi
@@ -1192,35 +1222,29 @@
     var home = homeName(), homeP = (fields().filter(function (f) { return f.home; })[0] || { plants: ['W101'] }).plants.join('/');
     var activeP = [];
     fields().forEach(function (f) { f.plants.forEach(function (p) { activeP.push(p); }); });
+    var R = {};
+    dataReminders().forEach(function (r) { R[r.type] = r; });
     function card(o) {
       return '<div class="guide-card"><div class="guide-head"><span class="guide-tc mono">' + o.tc + '</span><span class="badge ' + o.freqCls + '">' + o.freq + '</span></div>' +
         '<div class="guide-title">' + o.title + '</div>' +
         '<ol class="steps small">' + o.steps.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' +
         '<div class="guide-name">Simpan / rename file: <b class="mono">' + o.file + '</b></div>' +
         '<details class="guide-shot"><summary>Lihat contoh layar SAP</summary><a href="' + o.img + '" target="_blank" rel="noopener"><img src="' + o.img + '" alt="Layar SAP ' + o.tc + '" loading="lazy"></a></details>' +
-        '<div class="guide-web"><b>Diproses website:</b><ul>' + o.web.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></div></div>';
+        (o.rem ? '<div class="guide-status ' + (o.rem.ok ? 'ok' : 'due') + '">' + (o.rem.ok ? '✓ ' : '● ') + esc(o.rem.msg) + '</div>' : '') + '</div>';
     }
     var guide = !owner ? '' :
       '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Panduan tarik data SAP</h4>' +
-      '<p class="small muted" style="margin-top:0">Tarik 3 file di bawah, lalu tarik &amp; lepas ke kotak upload di atas (boleh sekaligus). Nama file diawali <b>bulan.tanggal</b> data — contoh hari ini <span class="mono">' + tag + '_ZMB52</span> — karena tanggal versi dibaca dari nama file.</p>' +
+      '<p class="small muted" style="margin-top:0">Tarik 3 file di bawah, lalu tarik &amp; lepas ke kotak upload di atas (boleh sekaligus). Nama file, tanggal contoh, dan pengingat di bawah <b>otomatis mengikuti tanggal hari ini</b>.</p>' +
       '<div class="guide-grid">' +
-      card({ tc: 'ZMB52', title: 'Stok semua Field', freq: 'Setiap hari', freqCls: 'ok', file: tag + '_ZMB52',
+      card({ rem: R.stock, tc: 'ZMB52', title: 'Stok semua Field', freq: 'Setiap hari', freqCls: 'ok', file: tag + '_ZMB52',
         img: 'assets/tutorial/sap-zmb52.png',
-        steps: ['Masukkan T-Code <b class="mono">ZMB52</b>.', 'Plant: <b class="mono">W*</b> (semua plant).', 'Centang <b>Display Batch Stocks</b>. <i>No zero stock lines</i> tidak perlu dicentang.', 'Layout: <b class="mono">/BRANJANGAN</b>.', 'Execute → export ke Excel.'],
-        web: ['Baris dengan <b>DF stor. loc. level = X</b> (sudah dihapus di SAP) dibuang.',
-          'Hanya plant Field aktif yang dipakai (' + activeP.length + ' plant di Pengaturan). Plant proyek/kode lama (mis. W103, W104, W9xx) diabaikan otomatis.',
-          'Stok 0 tetap tampil untuk <b>' + esc(home) + ' (' + esc(homeP) + ')</b>; stok 0 di plant lain diabaikan.',
-          'Semua plant di file langsung menggantikan stok sebelumnya.'] }) +
-      card({ tc: 'ZMB51', title: 'Pemakaian ' + esc(home), freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ZMB51',
+        steps: ['Masukkan T-Code <b class="mono">ZMB52</b>.', 'Plant: <b class="mono">W*</b> (semua plant).', 'Centang <b>Display Batch Stocks</b>. <i>No zero stock lines</i> tidak perlu dicentang.', 'Layout: <b class="mono">/BRANJANGAN</b>.', 'Execute → export ke Excel.'] }) +
+      card({ rem: R.mb51, tc: 'ZMB51', title: 'Pemakaian ' + esc(home), freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ZMB51',
         img: 'assets/tutorial/sap-zmb51.png',
-        steps: ['Masukkan T-Code <b class="mono">ZMB51</b>.', 'Plant: <b class="mono">' + esc(homeP) + '</b>.', 'Posting Date: bulan lalu penuh — contoh <b class="mono">' + lastStart + '</b> s/d <b class="mono">' + lastEnd + '</b>.', 'Layout: <b class="mono">/BRANJANGAN</b>.', 'Execute → export ke Excel.'],
-        web: ['Dihitung pemakaian dari movement GI (201/202, 221/222, 261/262, 291/292, 949/950, 963/964).',
-          'Cukup periode terbaru: data di rentang tanggal file diganti, bulan-bulan sebelumnya tetap → riwayat & aging otomatis tersambung.'] }) +
-      card({ tc: 'ME3N', title: 'Kontrak OA / RO', freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ME3N',
+        steps: ['Masukkan T-Code <b class="mono">ZMB51</b>.', 'Plant: <b class="mono">' + esc(homeP) + '</b>.', 'Posting Date: bulan lalu penuh — contoh <b class="mono">' + lastStart + '</b> s/d <b class="mono">' + lastEnd + '</b>.', 'Layout: <b class="mono">/BRANJANGAN</b>.', 'Execute → export ke Excel.'] }) +
+      card({ rem: R.oa, tc: 'ME3N', title: 'Kontrak OA / RO', freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ME3N',
         img: 'assets/tutorial/sap-me3n.png',
-        steps: ['Masukkan T-Code <b class="mono">ME3N</b>.', 'Scope of List: <b class="mono">ALV</b>.', 'Document Type (Multiple Selection): <b class="mono">ZFU</b>, <b class="mono">ZKC2</b>, <b class="mono">ZKC3</b>.', 'Purchasing Organization: <b class="mono">2021</b>.', 'Purchasing Group (Multiple Selection): <b class="mono">' + Model.PG_MAIN.join('</b>, <b class="mono">') + '</b>.', 'Validity Key Date: akhir bulan berjalan — contoh <b class="mono">' + monthEnd + '</b>.', 'Execute → export ke Excel.'],
-        web: ['Kontrak lama diganti seluruhnya oleh file baru.',
-          'Prioritas OA: <b>' + Model.PG_MAIN.join(' lalu ') + '</b>; PG lain (X03, X10) hanya muncul sebagai pilihan <b>Other</b>.'] }) +
+        steps: ['Masukkan T-Code <b class="mono">ME3N</b>.', 'Scope of List: <b class="mono">ALV</b>.', 'Document Type (Multiple Selection): <b class="mono">ZFU</b>, <b class="mono">ZKC2</b>, <b class="mono">ZKC3</b>.', 'Purchasing Organization: <b class="mono">2021</b>.', 'Purchasing Group (Multiple Selection): <b class="mono">' + Model.PG_MAIN.join('</b>, <b class="mono">') + '</b>.', 'Validity Key Date: akhir bulan berjalan — contoh <b class="mono">' + monthEnd + '</b>.', 'Execute → export ke Excel.'] }) +
       '</div></div>';
     return guide +
       '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Aturan versi data</h4><ol class="steps">' +
