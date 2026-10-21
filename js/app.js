@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -299,25 +299,23 @@
     renderSide();
   }
 
+  // Sidebar dibuat ringkas: hanya peringatan publikasi & akun. Status data ada di halaman Data SAP.
   function renderSide() {
-    var ds = S.ds, out = [];
-    if (!canWarehouse()) {
-      out.push('<div class="lbl">Angkutan Berat</div>' + fleet().sideHtml());
-      sideUser(out);
-      return;
-    }
-    var hp = S.idx ? S.idx.homePlants : [];
-    var homeDate = S.idx && S.idx.homeDate;
-    var nPlants = ds.stock ? Object.keys(ds.stock.plants).length : 0;
-    out.push('<div class="lbl">Status Data</div>');
-    out.push('<div class="row"><span><i class="dot ' + (nPlants ? 'on' : '') + '"></i>Stok MB52</span><b>' + (nPlants ? (homeDate ? ddmm(homeDate) + ' · ' : '') + nPlants + ' plant' : '—') + '</b></div>');
-    out.push('<div class="row"><span><i class="dot ' + (ds.oa ? 'on' : '') + '"></i>Kontrak ME3N</span><b>' + (ds.oa ? ddmm(ds.oa.date) : '—') + '</b></div>');
-    out.push('<div class="row"><span><i class="dot ' + (ds.mb51 ? 'on' : '') + '"></i>Pemakaian MB51</span><b>' + (ds.mb51 ? 's/d ' + BLN[+ds.mb51.max.slice(5, 7) - 1] + ' ' + ds.mb51.max.slice(2, 4) : '—') + '</b></div>');
-    if (hp.length) out.push('<div class="small">Home: Field ' + esc(homeName()) + ' (' + esc(hp.join('/')) + ')</div>');
+    var out = [];
     if (S.pending && isOwner()) out.push('<a class="side-warn" href="#/data">● ' + pendingCount() + ' perubahan belum dipublikasikan</a>');
-    if (isOwner()) dataReminders().forEach(function (r) { if (!r.ok) out.push('<a class="side-warn" href="#/data">● ' + esc(r.msg.replace(/ \(.*\)$/, '')) + '</a>'); });
-    if (canFleet()) out.push(fleet().sideHtml());
     sideUser(out);
+  }
+  function statusCard() {
+    var ds = S.ds, items = [];
+    var hp = S.idx ? S.idx.homePlants : [], homeDate = S.idx && S.idx.homeDate;
+    var nPlants = ds.stock ? Object.keys(ds.stock.plants).length : 0;
+    function k(on, label, val, sub) { items.push('<div class="kpi"><div class="k"><i class="dot ' + (on ? 'on' : '') + '"></i> ' + esc(label) + '</div><div class="v" style="font-size:18px">' + esc(val) + '</div><div class="s">' + esc(sub || '') + '</div></div>'); }
+    k(nPlants, 'Stok MB52', nPlants ? (homeDate ? fmtDate(homeDate) : '—') : '—', nPlants ? nPlants + ' plant' : 'belum ada data');
+    k(ds.oa, 'Kontrak ME3N', ds.oa ? fmtDate(ds.oa.date) : '—', ds.oa ? 'tanggal data' : 'belum ada data');
+    k(ds.mb51, 'Pemakaian MB51', ds.mb51 ? 's/d ' + fmtDate(ds.mb51.max) : '—', hp.length ? 'Home: Field ' + homeName() + ' (' + hp.join('/') + ')' : '');
+    var fs = canFleet() ? fleet().stats() : null;
+    if (fs) k(true, 'Angkutan Berat', fs.total + ' reservasi', fs.month + ' · ' + fs.today + ' terjadwal hari ini');
+    return '<div class="kpis status-kpis" style="margin-bottom:14px">' + items.join('') + '</div>';
   }
   function sideUser(out) {
     if (S.user) out.push('<div class="side-user"><div class="avatar">' + esc(S.user.name.charAt(0).toUpperCase()) + '</div><div style="min-width:0"><b>' + esc(S.user.name) + '</b><div class="small">' + roleLabel(S.user.role) + '</div></div>' +
@@ -1210,7 +1208,7 @@
   }
   function renderData() {
     var owner = isOwner();
-    view.innerHTML = pendingBanner() + (owner ? remindersCard() : '') +
+    view.innerHTML = pendingBanner() + statusCard() + (owner ? remindersCard() : '') +
       (owner
         ? '<div class="dropzone" id="dropzone">' + ICON.upload + '<h3>Upload / update data SAP</h3><div class="muted">Tarik &amp; lepas file Excel di sini atau klik untuk memilih — boleh beberapa file sekaligus (ZMB52/MB52, ME3N, MB51). Jenis file dikenali otomatis, tanggal dibaca dari nama file (contoh hari ini <span class="mono">' + ('0' + (new Date().getMonth() + 1)).slice(-2) + '.' + ('0' + new Date().getDate()).slice(-2) + '_ZMB52.xlsx</span>).</div></div>'
         : '<div class="card card-pad muted">Hanya <b>Owner</b> yang dapat meng-upload data SAP. Di bawah ini versi data yang sedang dipakai website.</div>') +

@@ -546,13 +546,12 @@
       await doCommit({ master: M }, 'Angkutan berat: master diperbarui (' + me() + ')', 'Master angkutan berat disimpan');
     }
 
-    // ---------- Status ringkas untuk sidebar ----------
-    function sideHtml() {
+    // ---------- Ringkasan untuk halaman Data SAP ----------
+    function stats() {
       var m = monthOf(today()), list = F.months[m];
-      if (!list) return '<div class="row"><span><i class="dot"></i>Angkutan Berat</span><b>—</b></div>';
-      var td = today(), nToday = list.filter(function (r) { return r.date === td && r.status === 'Terjadwal'; }).length;
-      return '<div class="row"><span><i class="dot on"></i>Reservasi ' + BULAN[+m.slice(5, 7) - 1].slice(0, 3) + '</span><b>' + list.length + '</b></div>' +
-        '<div class="row"><span><i class="dot ' + (nToday ? 'on' : '') + '"></i>Terjadwal hari ini</span><b>' + nToday + '</b></div>';
+      if (!list) return null;
+      var td = today();
+      return { month: monthName(m), total: list.length, today: list.filter(function (r) { return r.date === td && r.status === 'Terjadwal'; }).length };
     }
 
     // ---------- Event ----------
@@ -613,6 +612,6 @@
     });
 
     function reset() { F.master = null; F.index = null; F.months = {}; F.draft = null; F.sel = null; F.date = today(); }
-    return { reset: reset, renderForm: renderForm, renderHistory: renderHistory, masterCard: masterCard, sideHtml: sideHtml, preload: function () { return loadMonth(monthOf(today())).catch(function () {}); } };
+    return { reset: reset, renderForm: renderForm, renderHistory: renderHistory, masterCard: masterCard, stats: stats, preload: function () { return loadMonth(monthOf(today())).catch(function () {}); } };
   };
 })(this);
