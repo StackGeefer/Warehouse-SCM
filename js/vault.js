@@ -53,6 +53,8 @@
   function newDataKey() { return C.getRandomValues(new Uint8Array(32)); }
 
   function isEditor(role) { return role === 'owner' || role === 'coowner'; }
+  // Peran yang boleh publikasi (memegang kunci admin): Owner, Co-Owner, User & Admin Angkutan
+  function hasAdminKey(role) { return isEditor(role) || role === 'angkutan' || role === 'admin_angkutan'; }
 
   // Bungkus kunci data (dan kunci admin untuk Owner/Co-Owner) dengan password pengguna -> entri users
   function makeUser(username, password, role, dataKey, displayName, adminKey) {
@@ -61,7 +63,7 @@
     return Promise.all([hashUser(username), kek(password, salt)]).then(function (r) {
       return Promise.all([
         C.subtle.encrypt({ name: 'AES-GCM', iv: iv }, r[1], dataKey),
-        adminKey && isEditor(role) ? C.subtle.encrypt({ name: 'AES-GCM', iv: aiv }, r[1], adminKey) : null
+        adminKey && hasAdminKey(role) ? C.subtle.encrypt({ name: 'AES-GCM', iv: aiv }, r[1], adminKey) : null
       ]).then(function (w) {
         var u = { id: r[0], name: displayName || username.trim(), role: role, salt: toB64(salt), iv: toB64(iv), wk: toB64(new Uint8Array(w[0])) };
         if (w[1]) { u.aiv = toB64(aiv); u.ak = toB64(new Uint8Array(w[1])); }
@@ -77,7 +79,7 @@
       if (!u) throw new Error('Username atau password salah');
       return kek(password, fromB64(u.salt)).then(function (k) {
         return C.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(u.iv) }, k, fromB64(u.wk)).then(function (raw) {
-          if (!u.ak || !isEditor(u.role)) return [raw, null];
+          if (!u.ak || !hasAdminKey(u.role)) return [raw, null];
           return C.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(u.aiv) }, k, fromB64(u.ak)).then(function (ak) { return [raw, ak]; }, function () { return [raw, null]; });
         });
       }).then(function (r) {
@@ -187,7 +189,7 @@
 
   root.Vault = {
     TYPES: TYPES, KEEP_VERSIONS: KEEP_VERSIONS,
-    newDataKey: newDataKey, makeUser: makeUser, isEditor: isEditor, login: login, hashUser: hashUser,
+    newDataKey: newDataKey, makeUser: makeUser, isEditor: isEditor, hasAdminKey: hasAdminKey, login: login, hashUser: hashUser,
     encrypt: encrypt, decrypt: decrypt, encryptBytes: encryptBytes, decryptBytes: decryptBytes, toB64: toB64, fromB64: fromB64,
     usersFile: usersFile, manifestFile: manifestFile, snapFile: snapFile, snapPath: snapPath,
     listFile: listFile, docPath: docPath, docFile: docFile,

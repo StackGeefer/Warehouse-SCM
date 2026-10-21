@@ -1,4 +1,4 @@
-# Material Warehouse
+# Material Warehouse & Heavy Transport
 
 **Call Order Field Rantau → MIM** · Warehouse & Distribution Zona 1
 
@@ -112,3 +112,20 @@ data/synonyms.js      Sinonim tambahan dari Owner
 tools/init-data.js    (opsional) membuat ulang data awal via Node
 vendor/               SheetJS, ExcelJS, PDF.js
 ```
+
+
+## Angkutan Berat (Heavy Transport)
+
+Menu **Reservasi Armada** dan **Riwayat Armada** — khusus angkutan berat (Crane, Picker/TMC, Tronton, Trailer, Vacuum Truck), di luar KRP.
+
+- **Reservasi Armada**: tanggal pemakaian, jenis & unit armada, driver, helper, fungsi (WO, WS, PE, RAM, HSSE, SCM, Finance, LR), nama user, estimasi tonase, barang, lokasi muat, tujuan → **Submit untuk Approval**. Unit yang sudah dipakai di tanggal yang sama ditandai.
+- **Riwayat Armada**: filter per bulan/armada/status, approval (Setujui/Tolak/Selesai), edit, utilisasi per unit, dan **Export Excel** per bulan (sheet Reservasi + Utilisasi).
+- Data disimpan terenkripsi per bulan (`data/fleet/YYYY-MM.js`), **maks. 6 bulan**: data bulan ke-7 masuk → bulan paling lama terhapus otomatis. Export tiap bulan sebagai arsip (website mengingatkan bulan yang belum di-export).
+- Master armada/driver/helper (`data/fleet/master.js`, terenkripsi; tanpa KTP/SIM/no. HP) diubah di **Pengaturan → Master Angkutan Berat**.
+
+| Peran | Akses |
+|---|---|
+| Warehouse | Material, kontrak, Call Order, riwayat order, TKO (tanpa Angkutan Berat) |
+| User Angkutan | Hanya Reservasi & Riwayat Armada; bisa membatalkan reservasi sendiri yang masih menunggu |
+| Admin Angkutan | User Angkutan + approval, edit, hapus & master armada |
+| Owner Utama / Co-Owner | Semua menu |

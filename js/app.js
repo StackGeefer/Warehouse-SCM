@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261020e'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -266,13 +266,21 @@
     data: ['Data SAP', 'Versi data yang dipakai website · Owner dapat upload/update langsung di sini'],
     pengaturan: ['Pengaturan', 'Akun, pengguna, koneksi GitHub, Field & kode plant'],
     riwayat: ['Riwayat Order ke MIM', 'Semua Call Order yang sudah di-export, lengkap dengan tanggal & status'],
-    tko: ['TKO & Referensi Warehouse', 'Tata Kerja, Pedoman & SOP — preview langsung atau download PDF']
+    tko: ['TKO & Referensi Warehouse', 'Tata Kerja, Pedoman & SOP — preview langsung atau download PDF'],
+    angber: ['Reservasi Armada', 'Angkutan Berat — ajukan pemakaian Crane, Picker, Tronton, Trailer & Vacuum Truck'],
+    'angber-riwayat': ['Riwayat Armada', 'Riwayat pemakaian angkutan berat per bulan — filter, approval, edit & export Excel']
   };
   function render() {
     if (!S.user) return;
     var r = currentRoute();
-    if (!TITLES[r.name]) r.name = 'cari';
-    $$('#nav a').forEach(function (a) { a.classList.toggle('active', a.getAttribute('data-route') === r.name); });
+    if (!TITLES[r.name]) r.name = canWarehouse() ? 'cari' : 'angber';
+    if (!routeAllowed(r.name)) { location.replace('#/' + (canWarehouse() ? 'cari' : 'angber')); return; }
+    $$('#nav a').forEach(function (a) {
+      var rn = a.getAttribute('data-route');
+      a.classList.toggle('active', rn === r.name);
+      a.classList.toggle('hidden', !routeAllowed(rn));
+    });
+    $$('#nav .nav-group').forEach(function (g) { g.classList.toggle('hidden', g.getAttribute('data-group') === 'fleet' ? !canFleet() : !canWarehouse()); });
     var t = TITLES[r.name];
     $('#pageTitle').textContent = t[0];
     $('#pageSub').textContent = t[1];
@@ -285,12 +293,19 @@
     else if (r.name === 'pengaturan') renderSettings();
     else if (r.name === 'riwayat') renderOrders();
     else if (r.name === 'tko') renderDocs();
+    else if (r.name === 'angber') fleet().renderForm();
+    else if (r.name === 'angber-riwayat') fleet().renderHistory();
     updateCartUI();
     renderSide();
   }
 
   function renderSide() {
     var ds = S.ds, out = [];
+    if (!canWarehouse()) {
+      out.push('<div class="lbl">Angkutan Berat</div>' + fleet().sideHtml());
+      sideUser(out);
+      return;
+    }
     var hp = S.idx ? S.idx.homePlants : [];
     var homeDate = S.idx && S.idx.homeDate;
     var nPlants = ds.stock ? Object.keys(ds.stock.plants).length : 0;
@@ -301,6 +316,10 @@
     if (hp.length) out.push('<div class="small">Home: Field ' + esc(homeName()) + ' (' + esc(hp.join('/')) + ')</div>');
     if (S.pending && isOwner()) out.push('<a class="side-warn" href="#/data">● ' + pendingCount() + ' perubahan belum dipublikasikan</a>');
     if (isOwner()) dataReminders().forEach(function (r) { if (!r.ok) out.push('<a class="side-warn" href="#/data">● ' + esc(r.msg.replace(/ \(.*\)$/, '')) + '</a>'); });
+    if (canFleet()) out.push(fleet().sideHtml());
+    sideUser(out);
+  }
+  function sideUser(out) {
     if (S.user) out.push('<div class="side-user"><div class="avatar">' + esc(S.user.name.charAt(0).toUpperCase()) + '</div><div style="min-width:0"><b>' + esc(S.user.name) + '</b><div class="small">' + roleLabel(S.user.role) + '</div></div>' +
       '<button class="icon-btn" data-act="logout" title="Keluar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H4"/></svg></button></div>');
     $('#sideData').innerHTML = out.join('');
@@ -1120,8 +1139,25 @@
   // Owner Utama & Co-Owner boleh mengubah data; hanya Owner Utama yang mengatur token & pengguna
   function isOwner() { return !!(S.user && Vault.isEditor(S.user.role)); }
   function isMainOwner() { return !!(S.user && S.user.role === 'owner'); }
-  function roleLabel(r) { return r === 'owner' ? 'Owner Utama' : r === 'coowner' ? 'Co-Owner' : 'Viewer'; }
-  function roleBadge(r) { return '<span class="badge ' + (r === 'owner' ? 'ok' : r === 'coowner' ? 'ro' : '') + '">' + roleLabel(r) + '</span>'; }
+  var ROLE_LABEL = { owner: 'Owner Utama', coowner: 'Co-Owner', viewer: 'Warehouse', angkutan: 'User Angkutan', admin_angkutan: 'Admin Angkutan' };
+  function roleLabel(r) { return ROLE_LABEL[r] || 'Warehouse'; }
+  function roleBadge(r) { return '<span class="badge ' + ({ owner: 'ok', coowner: 'ro', admin_angkutan: 'bau', angkutan: 'bau' }[r] || '') + '">' + roleLabel(r) + '</span>'; }
+  // Akses menu: Warehouse = material & order; Angkutan = angkutan berat; Owner/Co-Owner = semua
+  function role() { return S.user ? S.user.role : ''; }
+  function canWarehouse() { return ['owner', 'coowner', 'viewer'].indexOf(role()) >= 0 || !ROLE_LABEL[role()]; }
+  function canFleet() { return ['owner', 'coowner', 'angkutan', 'admin_angkutan'].indexOf(role()) >= 0; }
+  function canAdminFleet() { return ['owner', 'coowner', 'admin_angkutan'].indexOf(role()) >= 0; }
+  var FLEET_ROUTES = { angber: 1, 'angber-riwayat': 1 };
+  function routeAllowed(name) { return name === 'pengaturan' || (FLEET_ROUTES[name] ? canFleet() : canWarehouse()); }
+  var Fleet = null;
+  function fleet() {
+    if (!Fleet) Fleet = window.FleetModule({
+      S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, gh: gh, ghToken: ghToken, branch: GH_BRANCH,
+      route: function () { return currentRoute().name; }, canAdminFleet: canAdminFleet, closeDrawer: closeDrawer,
+      loadExcelJS: Exporter.loadExcelJS, refreshSide: function () { if (S.user) renderSide(); }
+    });
+    return Fleet;
+  }
   function ghToken() { return (isMainOwner() && Store.load('ghToken')) || S.sharedTok || null; }
   // Token bersama: dienkripsi kunci admin (hanya Owner/Co-Owner bisa membuka)
   async function unlockShared() {
@@ -1260,6 +1296,13 @@
   // ================= Halaman: Pengaturan =================
   function renderSettings() {
     var st = S.settings, owner = isOwner();
+    if (!canWarehouse()) {
+      view.innerHTML = '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + roleBadge(S.user.role) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
+        '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi publikasi</h4>' + (S.sharedTok ? '<span class="badge ok">Aktif</span> <span class="small muted">Reservasi &amp; perubahan langsung tersimpan untuk semua pengguna.</span>'
+          : '<span class="badge warn">Belum aktif</span> <span class="small muted">Minta Owner Utama mengatur akses Anda (Pengaturan → Pengguna, isi password Anda) lalu login ulang.</span>') + '</div>' +
+        (canAdminFleet() ? fleet().masterCard() : '');
+      return;
+    }
     var years = [];
     var y0 = S.idx ? S.idx.dataYear : new Date().getFullYear();
     for (var y = y0; y >= y0 - 5; y--) years.push(y);
@@ -1274,9 +1317,9 @@
     var known = S.idx ? S.idx.plantsAll.join(', ') : '-';
     var userRows = S.users.map(function (u) {
       var me = u.id === S.user.id;
-      var warn = u.role === 'coowner' && !u.ak ? ' <span class="badge warn" title="Atur ulang dengan password agar bisa publikasi">belum bisa publikasi</span>' : '';
+      var warn = Vault.hasAdminKey(u.role) && u.role !== 'owner' && !u.ak ? ' <span class="badge warn" title="Atur ulang dengan password agar bisa publikasi">belum bisa publikasi</span>' : '';
       var ctl = me || u.role === 'owner' ? '' :
-        '<select class="select sm" data-role>' + ['viewer', 'coowner'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
+        '<select class="select sm" data-role>' + ['viewer', 'coowner', 'angkutan', 'admin_angkutan'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
         '<input class="input sm" data-rpw type="password" placeholder="Password (wajib utk Co-Owner)" autocomplete="new-password" style="width:200px">' +
         '<button class="btn sm" data-act="set-role" data-id="' + esc(u.id) + '">Simpan</button>' +
         '<button class="btn sm danger" data-act="del-user" data-id="' + esc(u.id) + '">' + ICON.trash + '</button>';
@@ -1296,13 +1339,13 @@
       '<div><div style="font-weight:700;margin-bottom:6px">Tambah pengguna</div><div class="toolbar">' +
       '<input class="input sm" id="nuName" placeholder="Username" autocomplete="off">' +
       '<input class="input sm" id="nuPw" type="password" placeholder="Password" autocomplete="new-password">' +
-      '<select class="select sm" id="nuRole"><option value="viewer">Viewer (lihat &amp; buat Call Order)</option><option value="coowner">Co-Owner (upload &amp; ubah data)</option></select>' +
+      '<select class="select sm" id="nuRole"><option value="viewer">Warehouse (material &amp; Call Order)</option><option value="coowner">Co-Owner (semua menu, upload &amp; ubah data)</option><option value="angkutan">User Angkutan (reservasi armada)</option><option value="admin_angkutan">Admin Angkutan (approval &amp; edit riwayat)</option></select>' +
       '<button class="btn sm primary" data-act="add-user">Tambah</button></div></div>' +
       '<div><div style="font-weight:700;margin-bottom:6px">Ganti password saya</div><div class="toolbar">' +
       '<input class="input sm" id="cpPw" type="password" placeholder="Password baru" autocomplete="new-password">' +
       '<input class="input sm" id="cpPw2" type="password" placeholder="Ulangi password baru" autocomplete="new-password">' +
       '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
-      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Viewer</b>: lihat data &amp; buat Call Order. Untuk menjadikan Co-Owner, isi password orang tersebut (password lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
+      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak &amp; Call Order (tanpa Angkutan Berat). <b>User Angkutan</b>: hanya Reservasi &amp; Riwayat Armada. <b>Admin Angkutan</b>: + approval, edit &amp; master armada. Untuk Co-Owner/User Angkutan/Admin Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub (agar upload langsung tampil untuk semua pengguna)</h4>' +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
@@ -1320,7 +1363,7 @@
       '</div>';
     view.innerHTML =
       '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + roleBadge(S.user.role) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
-      ownerHtml + (isOwner() ? heroCard() : '') + synCard() +
+      ownerHtml + (canAdminFleet() ? fleet().masterCard() : '') + (isOwner() ? heroCard() : '') + synCard() +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
       '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Centang "Kolom utama" agar field tampil sebagai kolom di Cari Material (default: Lirik, Jambi, Pangkalan Susu). Field lain dicek lewat tombol <b>Cek field lain</b>. Satu field boleh punya beberapa plant, pisahkan dengan koma. Pengaturan ini berlaku di browser ini.</p>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th class="c">Home</th><th class="c">Kolom utama</th><th>Zona</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
@@ -1557,6 +1600,7 @@
   async function gh(method, path, body, token) {
     var res = await fetch('https://api.github.com/repos/' + ghRepo() + path, {
       method: method,
+      cache: 'no-store',
       headers: { Authorization: 'Bearer ' + (token || ghToken()), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
       body: body ? JSON.stringify(body) : undefined
     });
@@ -1641,9 +1685,9 @@
   }
   async function setRole(u, role, pw) {
     if (!isMainOwner() || !u || u.role === 'owner') return;
-    if (role === 'coowner') {
+    if (Vault.hasAdminKey(role)) {
       if (!S.adminKey) { toast('Bagikan token dulu: Koneksi GitHub → isi password Anda → Bagikan ke Co-Owner', true); return; }
-      if (!pw || pw.length < 6) { toast('Isi password ' + u.name + ' (min. 6 karakter) untuk mengaktifkan akses Co-Owner', true); return; }
+      if (!pw || pw.length < 6) { toast('Isi password ' + u.name + ' (min. 6 karakter) untuk mengaktifkan akses ' + roleLabel(role), true); return; }
     }
     var entry;
     if (pw) {
@@ -1746,7 +1790,7 @@
       '<div class="lg-hero-inner">' +
       '<div class="lg-logo">' + Brand.full('anim', photos.length ? '#ffffff' : '#111111') + '</div>' +
       '<div class="lg-copy"><div class="lg-eyebrow">Supply Chain Management · Warehouse &amp; Distribution</div>' +
-      '<h1>Material <span class="lg-grad">Warehouse</span></h1></div>' +
+      '<h1>Material Warehouse<br><span class="lg-grad">&amp; Heavy Transport</span></h1></div>' +
       (photos.length
         ? (photos.length > 1 ? '<div class="lg-dots">' + photos.map(function (x, i) { return '<i class="' + (i === 0 ? 'on' : '') + '"></i>'; }).join('') + '</div>' : '')
         : '<div class="lg-scene-wrap">' + Scene.html() + '</div>') + '</div></div>' +
@@ -1852,6 +1896,7 @@
     sessionClear();
     for (var i = 0; i < Vault.TYPES.length; i++) await Store.del('ds-' + Vault.TYPES[i]);
     S.user = null; S.key = null; S.adminKey = null; S.sharedTok = null; S.ds = { stock: null, oa: null, mb51: null }; S.idx = null;
+    if (Fleet) Fleet.reset();
     closeDrawer();
     view.innerHTML = '';
     $('#cartbar').classList.add('hidden');
@@ -1859,9 +1904,11 @@
   }
   async function startApp() {
     await unlockShared();
-    await loadData();
+    if (canWarehouse()) await loadData();
+    else { S.ds = { stock: null, oa: null, mb51: null }; S.idx = null; }
     loading(false);
     render();
+    if (canFleet()) fleet().preload().then(function () { if (S.user) renderSide(); });
   }
 
   // ================= Event handlers =================
@@ -2154,7 +2201,7 @@
         loading('Menambah pengguna…');
         Vault.hashUser(nu).then(function (h) {
           if (S.users.some(function (x) { return x.id === h; })) throw new Error('Username sudah ada');
-          if (nr === 'coowner' && !S.adminKey) throw new Error('Bagikan token dulu (Koneksi GitHub → Bagikan ke Co-Owner), lalu tambahkan Co-Owner');
+          if (Vault.hasAdminKey(nr) && !S.adminKey) throw new Error('Bagikan token dulu (Koneksi GitHub → Bagikan ke Co-Owner), lalu tambahkan ' + roleLabel(nr));
           return Vault.makeUser(nu, np, nr, S.key, null, S.adminKey);
         }).then(function (entry) {
           loading(false);
@@ -2236,7 +2283,7 @@
     var sess = sessionGet();
     if (sess && sess.user) {
       var u = S.users.filter(function (x) { return x.id === sess.user.id; })[0];
-      if (u) { S.user = { id: u.id, name: u.name, role: u.role }; S.key = Vault.fromB64(sess.key); S.adminKey = sess.ak && Vault.isEditor(u.role) ? Vault.fromB64(sess.ak) : null; }
+      if (u) { S.user = { id: u.id, name: u.name, role: u.role }; S.key = Vault.fromB64(sess.key); S.adminKey = sess.ak && Vault.hasAdminKey(u.role) ? Vault.fromB64(sess.ak) : null; }
       else sessionClear();
     }
     if (!S.user) { loading(false); showLogin(); return; }

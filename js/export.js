@@ -192,5 +192,5 @@
     });
   }
 
-  root.Exporter = { exportCallOrder: exportCallOrder };
+  root.Exporter = { exportCallOrder: exportCallOrder, loadExcelJS: loadExcelJS };
 })(this);

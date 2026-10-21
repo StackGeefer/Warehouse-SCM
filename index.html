@@ -4,22 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-cache">
-  <title>Material Warehouse</title>
-  <meta name="description" content="Cari material, cek stok Zona 1, pilih RO/BAU dan buat Call Order ke MIM.">
+  <title>Material Warehouse &amp; Heavy Transport</title>
+  <meta name="description" content="Material Warehouse &amp; Heavy Transport — cari material, Call Order ke MIM, dan reservasi angkutan berat Field Rantau.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%2240%20110%201780%201360%22%3E%3Cpath%20fill%3D%22%23ED1C2E%22%20d%3D%22M973%20132H1400Q1500%20132%201555%20215L1790%20578H1360Q1262%20578%201207%20495Z%22%2F%3E%3Cpath%20fill%3D%22%23ACC42A%22%20d%3D%22M1360%20690H1790L1555%201052Q1500%201135%201400%201135H973L1207%20773Q1262%20690%201360%20690Z%22%2F%3E%3Cpath%20fill%3D%22%23006CB8%22%20d%3D%22M655%20690H1110Q1050%20735%201020%20785L648%201362Q593%201447%20495%201447H64L500%20775Q555%20690%20655%20690Z%22%2F%3E%3C%2Fsvg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20261020e">
+  <link rel="stylesheet" href="css/style.css?v=20261021a">
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark"><svg class="pm-mark " viewBox="40 110 1780 1360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pertamina"><path class="pm-red" fill="#ED1C2E" d="M973 132H1400Q1500 132 1555 215L1790 578H1360Q1262 578 1207 495Z"/><path class="pm-green" fill="#ACC42A" d="M1360 690H1790L1555 1052Q1500 1135 1400 1135H973L1207 773Q1262 690 1360 690Z"/><path class="pm-blue" fill="#006CB8" d="M655 690H1110Q1050 735 1020 785L648 1362Q593 1447 495 1447H64L500 775Q555 690 655 690Z"/></svg></div>
-        <div class="brand-title">Material Warehouse</div>
+        <div class="brand-title">Material Warehouse<small>&amp; Heavy Transport</small></div>
       </div>
       <nav class="nav" id="nav">
+        <div class="nav-group" data-group="wh">Material Warehouse</div>
         <a href="#/cari" data-route="cari">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <span class="lbl">Cari Material</span>
@@ -41,6 +42,16 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5M9 7h7M9 11h5"/></svg>
           <span class="lbl">TKO &amp; Referensi</span>
         </a>
+        <div class="nav-group" data-group="fleet">Angkutan Berat</div>
+        <a href="#/angber" data-route="angber">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16V7a1 1 0 0 1 1-1h11v10"/><path d="M14 9h4l4 4v3h-2"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="17.5" cy="17.5" r="2"/><path d="M8.5 17.5h7M2 16h2.5"/></svg>
+          <span class="lbl">Reservasi Armada</span>
+        </a>
+        <a href="#/angber-riwayat" data-route="angber-riwayat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7 13h4M7 17h7"/></svg>
+          <span class="lbl">Riwayat Armada</span>
+        </a>
+        <div class="nav-group" data-group="wh">Data</div>
         <a href="#/data" data-route="data">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
           <span class="lbl">Data SAP</span>
@@ -76,15 +87,16 @@
   <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm" multiple hidden>
 
   <script src="vendor/xlsx.full.min.js"></script>
-  <script src="js/parser.js?v=20261020e"></script>
-  <script src="js/search.js?v=20261020e"></script>
-  <script src="js/synonyms.js?v=20261020e"></script>
-  <script src="js/brand.js?v=20261020e"></script>
-  <script src="js/scene.js?v=20261020e"></script>
-  <script src="js/store.js?v=20261020e"></script>
-  <script src="js/vault.js?v=20261020e"></script>
-  <script src="js/model.js?v=20261020e"></script>
-  <script src="js/export.js?v=20261020e"></script>
-  <script src="js/app.js?v=20261020e"></script>
+  <script src="js/parser.js?v=20261021a"></script>
+  <script src="js/search.js?v=20261021a"></script>
+  <script src="js/synonyms.js?v=20261021a"></script>
+  <script src="js/brand.js?v=20261021a"></script>
+  <script src="js/scene.js?v=20261021a"></script>
+  <script src="js/store.js?v=20261021a"></script>
+  <script src="js/vault.js?v=20261021a"></script>
+  <script src="js/model.js?v=20261021a"></script>
+  <script src="js/fleet.js?v=20261021a"></script>
+  <script src="js/export.js?v=20261021a"></script>
+  <script src="js/app.js?v=20261021a"></script>
 </body>
 </html>
