@@ -136,6 +136,6 @@ Menu **Reservasi Armada** dan **Riwayat Armada** — khusus angkutan berat (Cran
 
 | Peran | Akses |
 |---|---|
-| Warehouse | Material, kontrak, Call Order, riwayat order, TKO (tanpa Angkutan Berat) |
+| Warehouse | Material, kontrak, Call Order, riwayat order, TKO, Pass Keluar + **Reservasi Armada** (tanpa Riwayat Armada) |
 | Angkutan | Hanya Reservasi & Riwayat Armada — isi, edit, tandai selesai/batal, export & master armada |
 | Owner Utama / Co-Owner | Semua menu |

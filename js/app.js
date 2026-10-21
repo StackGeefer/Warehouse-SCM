@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021g'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021h'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -296,7 +296,7 @@
       a.classList.toggle('active', rn === r.name);
       a.classList.toggle('hidden', !routeAllowed(rn));
     });
-    $$('#nav .nav-group').forEach(function (g) { g.classList.toggle('hidden', g.getAttribute('data-group') === 'fleet' ? !canFleet() : !canWarehouse()); });
+    $$('#nav .nav-group').forEach(function (g) { g.classList.toggle('hidden', g.getAttribute('data-group') === 'fleet' ? !routeAllowed('angber') : !canWarehouse()); });
     var t = TITLES[r.name];
     $('#pageTitle').textContent = t[0];
     $('#pageSub').textContent = t[1];
@@ -1239,7 +1239,12 @@
   function canFleet() { return ['owner', 'coowner', 'angkutan', 'admin_angkutan'].indexOf(role()) >= 0; }
   function canAdminFleet() { return canFleet(); } // satu peran Angkutan: isi, edit & master armada
   var FLEET_ROUTES = { angber: 1, 'angber-riwayat': 1 };
-  function routeAllowed(name) { return name === 'pengaturan' || (FLEET_ROUTES[name] ? canFleet() : canWarehouse()); }
+  // Akun Warehouse juga boleh membuat Reservasi Armada (tanpa Riwayat/edit)
+  function routeAllowed(name) {
+    if (name === 'pengaturan') return true;
+    if (name === 'angber') return canFleet() || role() === 'viewer';
+    return FLEET_ROUTES[name] ? canFleet() : canWarehouse();
+  }
   var Pass = null;
   function passMod() {
     if (!Pass) Pass = window.PassModule({
@@ -1451,7 +1456,7 @@
       '<input class="input sm" id="cpPw" type="password" placeholder="Password baru" autocomplete="new-password">' +
       '<input class="input sm" id="cpPw2" type="password" placeholder="Ulangi password baru" autocomplete="new-password">' +
       '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
-      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak, Call Order &amp; ajukan Pass Keluar (tanpa Angkutan Berat). <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
+      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak, Call Order, ajukan Pass Keluar &amp; Reservasi Armada. <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub (agar upload langsung tampil untuk semua pengguna)</h4>' +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
