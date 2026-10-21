@@ -16,6 +16,8 @@
   --ro-soft: #e7f0fc;
   --bau: #0f8a7a;
   --bau-soft: #e2f5f2;
+  --out: #c2410c;
+  --out-soft: #fdeee4;
   --ok: #15803d;
   --ok-soft: #e6f6ec;
   --warn: #b45309;
@@ -580,3 +582,24 @@ tr.oa-other td{opacity:.72}
   .rig-row { grid-template-columns: 1fr; }
   .rig-row.rig-head { display: none; }
 }
+
+
+/* ---------- OUT (Material Keluar / Pass Keluar Barang) ---------- */
+.badge.out { background: var(--out-soft); color: var(--out); }
+.cartbar .badge.out { background: #ea580c; color: #fff; }
+.pick.out input:checked + span { background: var(--out); border-color: var(--out); color: #fff; }
+.pick.out input:checked + span::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.2 2.2 4.8-5' fill='none' stroke='%23c2410c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+/* pilihan RO / BAU / OUT lebih ringkas di kolom Pilih */
+.pick-col .picks { gap: 3px; }
+.pick-col .pick span { width: 58px; padding: 3px 8px; font-size: 11px; border-radius: 7px; gap: 4px; }
+.pick-col .pick span::before { width: 11px; height: 11px; background-size: 8px; }
+.pass-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 14px; }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; font-size: 13px; }
+.kv span { display: block; color: var(--muted); font-size: 12px; }
+.sign-preview { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; background: #fff; }
+.sign-preview img { max-width: 220px; max-height: 80px; }
+.sign-grid { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
+.pass-table td { vertical-align: top; }
+@media (max-width: 960px) { .pass-grid { grid-template-columns: 1fr 1fr; } .sign-grid { grid-template-columns: 1fr; } }

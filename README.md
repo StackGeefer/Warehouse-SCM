@@ -114,6 +114,16 @@ vendor/               SheetJS, ExcelJS, PDF.js
 ```
 
 
+## Pass Keluar Barang (material keluar)
+
+1. **Cari Material** → centang **OUT** (di bawah RO & BAU).
+2. **Call Order** → bagian **Material Keluar**: isi Dari, Dikirim ke, Referensi, Tanggal, Kendaraan (No. Polisi), Driver, Pemohon, Penerima + **Jumlah** tiap material → **Ajukan Pass Keluar (Approval)**. Tombol *Preview PDF* untuk cek sebelum diajukan.
+3. Menu **Pass Keluar** → Owner / Co-Owner klik **Approve**: nomor pass otomatis (`RTU-<urut>/EP0651/WH/<tahun>`, bisa diubah), **nama & tanda tangan penyetuju otomatis menjadi Pengirim**, PDF langsung ter-download. Bisa juga **Tolak** atau **Batalkan**.
+4. PDF: A5 landscape, format sama dengan Pass Keluar Barang sistem (11 baris per halaman, lebih dari itu otomatis halaman berikutnya).
+
+- Nama & tanda tangan diatur sendiri oleh tiap Owner / Co-Owner di **Pengaturan → Tanda tangan Pass Keluar** (latar polos otomatis dibuat transparan). Disimpan terenkripsi di `data/signs.js`.
+- Data pass: `data/pass.js` (terenkripsi). Akun **Warehouse** perlu diatur password-nya oleh Owner Utama (Pengaturan → Pengguna) agar bisa mengajukan.
+
 ## Angkutan Berat (Heavy Transport)
 
 Menu **Reservasi Armada** dan **Riwayat Armada** — khusus angkutan berat (Crane, Picker/TMC, Tronton, Trailer, Vacuum Truck), di luar KRP. Tanpa approval: reservasi langsung berstatus **Terjadwal**.

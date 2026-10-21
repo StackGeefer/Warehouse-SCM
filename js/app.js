@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021e'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021f'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -107,11 +107,18 @@
   function item(m, create) {
     var it = S.cart.items[m];
     if (!it && create) {
-      it = S.cart.items[m] = { m: m, t: Date.now(), ro: { on: false, oa: null, qty: null, actual: null, note: '' }, bau: { on: false, alloc: {}, note: '' } };
+      it = S.cart.items[m] = { m: m, t: Date.now(), ro: { on: false, oa: null, qty: null, actual: null, note: '' }, bau: { on: false, alloc: {}, note: '' }, out: { on: false, qty: null, note: '' } };
     }
+    if (it && !it.out) it.out = { on: false, qty: null, note: '' };
     return it;
   }
-  function active(it) { return it && (it.ro.on || it.bau.on); }
+  function isOut(it) { return !!(it && it.out && it.out.on); }
+  function active(it) { return it && (it.ro.on || it.bau.on || isOut(it)); }
+  function setOUT(m, on) {
+    var it = item(m, true);
+    it.out.on = on;
+    saveCart();
+  }
   function saveCart() { Store.save('cart', S.cart); updateCartUI(); }
   function lineOf(o, key) {
     if (!o || !key) return null;
@@ -141,15 +148,16 @@
     saveCart();
   }
   function cartStats() {
-    var ro = 0, bau = 0;
+    var ro = 0, bau = 0, out = 0;
     Object.keys(S.cart.items).forEach(function (k) {
       var it = S.cart.items[k];
       if (!S.idx || !S.idx.mats.has(k)) return;
       if (it.ro.on) ro++;
       if (it.bau.on) bau++;
+      if (isOut(it)) out++;
     });
     var n = Object.keys(S.cart.items).filter(function (k) { return active(S.cart.items[k]) && S.idx && S.idx.mats.has(k); }).length;
-    return { n: n, ro: ro, bau: bau };
+    return { n: n, ro: ro, bau: bau, out: out };
   }
   function updateCartUI() {
     var st = cartStats();
@@ -161,7 +169,7 @@
     if (!st.n || route === 'call-order' || route === 'data' || route === 'pengaturan') { bar.classList.add('hidden'); return; }
     bar.classList.remove('hidden');
     bar.innerHTML = '<span><b>' + st.n + '</b> material dipilih</span>' +
-      '<span class="badge ro">RO ' + st.ro + '</span><span class="badge bau">BAU ' + st.bau + '</span>' +
+      '<span class="badge ro">RO ' + st.ro + '</span><span class="badge bau">BAU ' + st.bau + '</span><span class="badge out">OUT ' + st.out + '</span>' +
       '<a class="btn primary sm" href="#/call-order">Buka Call Order ' + ICON.arrow + '</a>';
   }
 
@@ -267,6 +275,7 @@
     pengaturan: ['Pengaturan', 'Akun, pengguna, koneksi GitHub, Field & kode plant'],
     riwayat: ['Riwayat Order ke MIM', 'Semua Call Order yang sudah di-export, lengkap dengan tanggal & status'],
     tko: ['TKO & Referensi Warehouse', 'Tata Kerja, Pedoman & SOP — preview langsung atau download PDF'],
+    pass: ['Pass Keluar Barang', 'Material keluar dari gudang — approval Owner / Co-Owner, lalu PDF Pass Keluar'],
     angber: ['Reservasi Armada', 'Angkutan Berat — Crane, Picker, Tronton, Trailer, Vacuum Truck & Forklift'],
     'angber-riwayat': ['Riwayat Armada', 'Riwayat pemakaian angkutan berat per bulan — filter, edit & export Excel']
   };
@@ -293,6 +302,7 @@
     else if (r.name === 'pengaturan') renderSettings();
     else if (r.name === 'riwayat') renderOrders();
     else if (r.name === 'tko') renderDocs();
+    else if (r.name === 'pass') passMod().render();
     else if (r.name === 'angber') fleet().renderForm();
     else if (r.name === 'angber-riwayat') fleet().renderHistory();
     updateCartUI();
@@ -407,6 +417,7 @@
       '<td class="c pick-col"><div class="picks">' +
       pick('ro', o.m, it && it.ro.on, !o.oa.length, o.bestOA ? 'Tarik lewat RO (kontrak ' + o.bestOA.pg + ')' : o.oa.length ? 'Tidak ada OA aktif ' + Model.PG_MAIN.join('/') + ' — pilih kontrak PG lain lewat "Other"' : 'Tidak ada kontrak OA untuk material ini') +
       pick('bau', o.m, it && it.bau.on, !canBau && !(it && it.bau.on), canBau ? 'Bantuan Antar Unit dari Field lain' : 'Tidak ada stok di Field lain') +
+      pick('out', o.m, isOut(it), false, 'Material keluar dari gudang ' + homeName() + ' (Pass Keluar Barang)') +
       '</div></td></tr>';
   }
 
@@ -485,7 +496,7 @@
 
     d.innerHTML =
       '<div class="drawer-head"><div style="flex:1;min-width:0"><div class="mat-code">' + esc(o.m) + (o.u ? ' · ' + esc(o.u) : '') + ' ' + agingBadge(o) + '</div><h2>' + esc(o.d) + '</h2>' +
-      '<div class="picks" style="margin-top:12px">' + pick('ro', o.m, it && it.ro.on, !o.oa.length) + pick('bau', o.m, it && it.bau.on, false) +
+      '<div class="picks" style="margin-top:12px">' + pick('ro', o.m, it && it.ro.on, !o.oa.length) + pick('bau', o.m, it && it.bau.on, false) + pick('out', o.m, isOut(it), false) +
       '<button class="btn sm ghost" data-act="copy" data-text="' + esc(o.m) + '">Salin KIMAP</button></div></div>' +
       '<button class="icon-btn" data-act="close-drawer" aria-label="Tutup">' + ICON.close + '</button></div>' +
       '<div class="drawer-body">' +
@@ -764,13 +775,13 @@
     var co = buildCO(), meta = co.meta;
     var activeItems = co.items.filter(active);
     $('#pageActions').innerHTML = '<button class="btn danger" data-act="clear-co">' + ICON.trash + ' Kosongkan</button>' +
-      '<button class="btn success" data-act="export"' + (activeItems.length ? '' : ' disabled') + '>' + ICON.excel + ' Export Excel (Template MIM)</button>';
+      '<button class="btn success" data-act="export"' + (activeItems.some(function (it) { return it.ro.on || it.bau.on; }) ? '' : ' disabled') + '>' + ICON.excel + ' Export Excel (Template MIM)</button>';
     var head = '<div class="card card-pad" style="display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:end">' +
       '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Judul (baris 1 template)</div><input class="input" style="width:100%;font-weight:700" id="coTitle" value="' + esc(co.title) + '"></label>' +
       '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Bulan</div><select class="select" id="coMonth">' + BULAN.map(function (b, i) { return '<option value="' + i + '"' + (meta.month === i ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select></label>' +
       '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Tahun</div><input class="input" style="width:90px" type="number" id="coYear" value="' + meta.year + '"></label></div>';
     if (!activeItems.length) {
-      view.innerHTML = head + '<div class="card empty" style="margin-top:16px"><div class="ico">' + ICON.list + '</div><h3>Call Order masih kosong</h3><p>Cari material lalu centang <b>RO</b> (tarik via kontrak) atau <b>BAU</b> (Bantuan Antar Unit dari Field lain). Anda juga bisa membuka satu kontrak dan mencentang banyak item sekaligus.</p>' +
+      view.innerHTML = head + '<div class="card empty" style="margin-top:16px"><div class="ico">' + ICON.list + '</div><h3>Call Order masih kosong</h3><p>Cari material lalu centang <b>RO</b> (tarik via kontrak), <b>BAU</b> (Bantuan Antar Unit dari Field lain) atau <b>OUT</b> (material keluar / Pass Keluar Barang). Anda juga bisa membuka satu kontrak dan mencentang banyak item sekaligus.</p>' +
         '<div class="toolbar" style="justify-content:center"><a class="btn primary" href="#/cari">' + ICON.search + ' Cari Material</a><a class="btn" href="#/kontrak">Lihat Kontrak</a></div></div>';
       return;
     }
@@ -778,10 +789,12 @@
     var totals = {};
     co.roGroups.forEach(function (g) { g.items.forEach(function (x) { if (x.qty > 0 && x.price != null) totals[x.cur] = (totals[x.cur] || 0) + x.qty * x.price; }); });
     var bauItems = activeItems.filter(function (it) { return it.bau.on; });
+    var outItems = activeItems.filter(isOut);
     var kpis = '<div class="kpis" style="margin:14px 0">' +
       '<div class="kpi"><div class="k">Item RO</div><div class="v" style="color:var(--ro)">' + roCount + '</div><div class="s">' + co.roGroups.length + ' kontrak</div></div>' +
       '<div class="kpi"><div class="k">Nilai RO</div><div class="v" id="kpiTotal">' + (Object.keys(totals).map(function (c) { return fmtBig(totals[c], c); }).join(' + ') || 'Rp 0') + '</div><div class="s">qty × net price</div></div>' +
       '<div class="kpi"><div class="k">Item BAU</div><div class="v" style="color:var(--bau)">' + bauItems.length + '</div><div class="s" id="kpiBauSrc">' + co.bauGroups.length + ' sumber field/plant</div></div>' +
+      '<div class="kpi"><div class="k">Material Keluar</div><div class="v" style="color:var(--out)">' + outItems.length + '</div><div class="s">Pass Keluar Barang</div></div>' +
       '<div class="kpi"><div class="k">Data SAP ' + esc(homeName()) + '</div><div class="v" style="font-size:18px">' + fmtDate(co.homeDate) + '</div><div class="s">History = pemakaian ' + co.histYear + '</div></div></div>';
 
     // ---- Tabel RO ----
@@ -817,7 +830,7 @@
           '<td class="num price" data-total>' + total + '</td>' +
           '<td><div class="oa-pick"><select class="select sm" data-f="oa">' + opts + '</select>' +
           (x.l ? '<span class="pg-tag' + (x.l.main ? '' : ' other') + '" title="Purchasing Group kontrak">' + esc(x.l.pg) + '</span>' : '') + '</div></td>' +
-          '<td class="pick-col"><div class="picks mode">' + pick('ro', x.m, true, false) + pick('bau', x.m, x.it.bau.on, false) +
+          '<td class="pick-col"><div class="picks mode">' + pick('ro', x.m, true, false) + pick('bau', x.m, x.it.bau.on, false) + pick('out', x.m, isOut(x.it), false) +
           '<button class="icon-btn" data-act="remove" data-m="' + esc(x.m) + '" title="Hapus dari Call Order">' + ICON.trash + '</button></div></td></tr>';
       }).join('');
       return '<tr class="group"><td class="c"><span class="letter">' + g.letter + '</span></td><td colspan="9">' +
@@ -849,7 +862,7 @@
         '<td><div class="alloc">' + alloc + '</div></td>' +
         '<td class="num"><b data-bautotal>' + fmtQ(total) + '</b></td>' +
         '<td><input class="input sm note-input" data-f="baunote" value="' + esc(it.bau.note) + '" placeholder="Catatan BAU"></td>' +
-        '<td class="pick-col"><div class="picks mode">' + pick('ro', it.m, it.ro.on, !o.oa.length) + pick('bau', it.m, true, false) +
+        '<td class="pick-col"><div class="picks mode">' + pick('ro', it.m, it.ro.on, !o.oa.length) + pick('bau', it.m, true, false) + pick('out', it.m, isOut(it), false) +
         '<button class="icon-btn" data-act="remove" data-m="' + esc(it.m) + '" title="Hapus dari Call Order">' + ICON.trash + '</button></div></td></tr>';
     }).join('');
     var bauTable = bauItems.length ? '<div class="table-wrap"><table class="grid" id="bauTable"><thead><tr><th class="c">No</th><th>Material</th><th class="num th-field">Stok ' + esc(homeName()) + '<small>' + ddmm(co.homeDate) + '</small></th><th>Sumber BAU &amp; Qty diminta</th><th class="num">Total</th><th>Note</th><th class="pick-col">Mode</th></tr></thead><tbody>' + bauHtml + '</tbody></table></div>'
@@ -857,7 +870,67 @@
 
     view.innerHTML = head + kpis +
       '<div class="co-section"><div class="co-section-head"><span class="badge ro">RO</span><h3>Release Order via Kontrak</h3><span class="muted small">— dikelompokkan per OA seperti template "Call Order to MIM"</span></div>' + roTable + '</div>' +
-      '<div class="co-section"><div class="co-section-head"><span class="badge bau">BAU</span><h3>Bantuan Antar Unit</h3><span class="muted small">— isi qty yang diminta dari tiap Field</span></div>' + bauTable + '</div>';
+      '<div class="co-section"><div class="co-section-head"><span class="badge bau">BAU</span><h3>Bantuan Antar Unit</h3><span class="muted small">— isi qty yang diminta dari tiap Field</span></div>' + bauTable + '</div>' +
+      '<div class="co-section"><div class="co-section-head"><span class="badge out">OUT</span><h3>Material Keluar</h3><span class="muted small">— Pass Keluar Barang, perlu approval Owner / Co-Owner</span></div>' + outSection(outItems) + '</div>';
+  }
+
+  // Material keluar (Pass Keluar Barang): kepala pass + daftar material
+  function passHead() {
+    var h = S.cart.pass || (S.cart.pass = {});
+    if (!h.from) h.from = 'WAREHOUSE FIELD ' + homeName().toUpperCase();
+    if (!h.date) h.date = isoLocal(new Date());
+    return h;
+  }
+  function outSection(outItems) {
+    if (!outItems.length) return '<div class="card card-pad muted">Belum ada material keluar. Centang <b>OUT</b> di Cari Material.</div>';
+    var h = passHead();
+    function inp(k, label, ph, req, type) {
+      return '<label class="fleet-fld"><span>' + esc(label) + (req ? ' *' : '') + '</span><input class="input" data-pass="' + k + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + esc(h[k] || '') + '" placeholder="' + esc(ph || '') + '"></label>';
+    }
+    var rows = outItems.map(function (it, i) {
+      var o = S.idx.mats.get(it.m);
+      var over = it.out.qty > 0 && it.out.qty > (o.homeStock || 0);
+      return '<tr data-m="' + esc(it.m) + '"><td class="c muted">' + (i + 1) + '</td>' +
+        '<td class="mat-cell"><div class="mat-desc"><a href="#" data-act="detail" data-m="' + esc(it.m) + '" style="color:inherit">' + esc(o.d) + '</a></div><div class="mat-code">' + esc(o.m) + '</div></td>' +
+        '<td class="num">' + qtyPill(o.homeStock, true) + '</td>' +
+        '<td class="num"><input class="input num sm" type="number" min="0" step="any" data-outqty value="' + (it.out.qty != null ? it.out.qty : '') + '" placeholder="0">' + (over ? '<div class="small" style="color:var(--bad)">melebihi stok</div>' : '') + '</td>' +
+        '<td>' + esc(o.u || '') + '</td>' +
+        '<td><input class="input sm note-input" data-outnote value="' + esc(it.out.note || '') + '" placeholder="Keterangan tambahan (opsional)"></td>' +
+        '<td class="pick-col"><div class="picks mode">' + pick('ro', it.m, it.ro.on, !o.oa.length) + pick('bau', it.m, it.bau.on, false) + pick('out', it.m, true, false) +
+        '<button class="icon-btn" data-act="remove" data-m="' + esc(it.m) + '" title="Hapus dari Call Order">' + ICON.trash + '</button></div></td></tr>';
+    }).join('');
+    return '<div class="card card-pad pass-form">' +
+      '<div class="pass-grid">' + inp('from', 'Dari', 'WAREHOUSE FIELD RANTAU', true) + inp('to', 'Dikirim ke', 'mis. MEKANIK ROTARY/RAM', true) + inp('ref', 'Referensi', 'mis. no. reservasi 12912328') + inp('date', 'Tanggal', '', true, 'date') +
+      inp('vehicle', 'Kendaraan (No. Polisi)', 'mis. BL 8257 UC', true) + inp('driver', 'Driver', 'Nama driver', true) + inp('requester', 'Pemohon', 'Nama pemohon', true) + inp('receiver', 'Penerima', 'Nama penerima', true) + '</div>' +
+      '<div class="small muted" style="margin-top:8px"><b>Pengirim</b> otomatis = nama &amp; tanda tangan Owner / Co-Owner yang meng-approve.</div></div>' +
+      '<div class="table-wrap" style="margin-top:12px"><table class="grid" id="outTable"><thead><tr><th class="c">No</th><th>Material</th><th class="num th-field">Stok ' + esc(homeName()) + '</th><th class="num">Jumlah</th><th>UOM</th><th>Keterangan</th><th class="pick-col">Mode</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="toolbar" style="margin-top:12px;justify-content:flex-end"><button class="btn" data-act="pass-preview">Preview PDF</button><button class="btn primary" data-act="pass-submit">Ajukan Pass Keluar (Approval)</button></div>';
+  }
+  function outPayload() {
+    var h = passHead(), items = [];
+    Object.keys(S.cart.items).map(function (k) { return S.cart.items[k]; }).filter(function (it) { return isOut(it) && S.idx.mats.has(it.m); })
+      .sort(function (a, b) { return a.t - b.t; })
+      .forEach(function (it) { var o = S.idx.mats.get(it.m); items.push({ m: o.m, d: o.d, u: o.u || '', qty: it.out.qty, note: it.out.note || '' }); });
+    var head = { from: (h.from || '').trim(), to: (h.to || '').trim(), ref: (h.ref || '').trim(), date: h.date, vehicle: (h.vehicle || '').trim(), driver: (h.driver || '').trim(), requester: (h.requester || '').trim(), receiver: (h.receiver || '').trim() };
+    return { head: head, items: items };
+  }
+  async function submitPass() {
+    var pl = outPayload(), h = pl.head;
+    var miss = [['to', 'Dikirim ke'], ['date', 'Tanggal'], ['vehicle', 'Kendaraan'], ['driver', 'Driver'], ['requester', 'Pemohon'], ['receiver', 'Penerima']].filter(function (x) { return !h[x[0]]; }).map(function (x) { return x[1]; });
+    if (miss.length) { toast('Lengkapi: ' + miss.join(', '), true); return; }
+    var noQty = pl.items.filter(function (x) { return !(x.qty > 0); });
+    if (noQty.length) { toast('Isi jumlah untuk ' + noQty.length + ' material', true); return; }
+    if (!confirm('Ajukan Pass Keluar ' + pl.items.length + ' material ke ' + h.to + ' untuk approval?')) return;
+    loading('Mengajukan pass keluar…');
+    try {
+      await passMod().submit(h, pl.items);
+      pl.items.forEach(function (x) { var it = item(x.m); if (it) { it.out = { on: false, qty: null, note: '' }; } });
+      S.cart.pass = { from: h.from, date: isoLocal(new Date()) };
+      saveCart();
+      toast('Pass keluar diajukan — menunggu approval Owner / Co-Owner');
+      location.hash = '#/pass';
+    } catch (e) { toast('Gagal mengajukan: ' + e.message, true); }
+    finally { loading(false); }
   }
 
   function refreshCOTotals() {
@@ -1147,6 +1220,20 @@
   function canAdminFleet() { return canFleet(); } // satu peran Angkutan: isi, edit & master armada
   var FLEET_ROUTES = { angber: 1, 'angber-riwayat': 1 };
   function routeAllowed(name) { return name === 'pengaturan' || (FLEET_ROUTES[name] ? canFleet() : canWarehouse()); }
+  var Pass = null;
+  function passMod() {
+    if (!Pass) Pass = window.PassModule({
+      S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, gh: gh, ghToken: ghToken, branch: GH_BRANCH,
+      route: function () { return currentRoute().name; }, isOwner: isOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav
+    });
+    return Pass;
+  }
+  function refreshPassNav() {
+    var b = $('#navPass');
+    if (!b) return;
+    var n = Pass && isOwner() ? Pass.pendingCount() : 0;
+    b.textContent = n; b.classList.toggle('hidden', !n);
+  }
   var Fleet = null;
   function fleet() {
     if (!Fleet) Fleet = window.FleetModule({
@@ -1343,7 +1430,7 @@
       '<input class="input sm" id="cpPw" type="password" placeholder="Password baru" autocomplete="new-password">' +
       '<input class="input sm" id="cpPw2" type="password" placeholder="Ulangi password baru" autocomplete="new-password">' +
       '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
-      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak &amp; Call Order (tanpa Angkutan Berat). <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
+      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak, Call Order &amp; ajukan Pass Keluar (tanpa Angkutan Berat). <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub (agar upload langsung tampil untuk semua pengguna)</h4>' +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
@@ -1361,7 +1448,7 @@
       '</div>';
     view.innerHTML =
       '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + roleBadge(S.user.role) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
-      ownerHtml + (canAdminFleet() ? fleet().masterCard() : '') + (isOwner() ? heroCard() : '') + synCard() +
+      ownerHtml + (isOwner() ? passMod().signCard() : '') + (canAdminFleet() ? fleet().masterCard() : '') + (isOwner() ? heroCard() : '') + synCard() +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
       '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Centang "Kolom utama" agar field tampil sebagai kolom di Cari Material (default: Lirik, Jambi, Pangkalan Susu). Field lain dicek lewat tombol <b>Cek field lain</b>. Satu field boleh punya beberapa plant, pisahkan dengan koma. Pengaturan ini berlaku di browser ini.</p>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th class="c">Home</th><th class="c">Kolom utama</th><th>Zona</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
@@ -1370,6 +1457,7 @@
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = rata-rata pemakaian/bulan × cover − stok ' + esc(homeName()) + '</div></label>' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div>' +
       '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Kosongkan Call Order &amp; cache browser</button></div>';
+    if (isOwner()) passMod().fillSignCard();
   }
   function heroCard() {
     var list = heroList();
@@ -1895,6 +1983,8 @@
     for (var i = 0; i < Vault.TYPES.length; i++) await Store.del('ds-' + Vault.TYPES[i]);
     S.user = null; S.key = null; S.adminKey = null; S.sharedTok = null; S.ds = { stock: null, oa: null, mb51: null }; S.idx = null;
     if (Fleet) Fleet.reset();
+    if (Pass) Pass.reset();
+    refreshPassNav();
     closeDrawer();
     view.innerHTML = '';
     $('#cartbar').classList.add('hidden');
@@ -1907,6 +1997,7 @@
     loading(false);
     render();
     if (canFleet()) fleet().preload().then(function () { if (S.user) renderSide(); });
+    if (isOwner()) passMod().load().then(refreshPassNav, function () {});
   }
 
   // ================= Event handlers =================
@@ -1932,6 +2023,12 @@
       S.docQ = t.value;
       clearTimeout(searchTimer);
       searchTimer = setTimeout(function () { renderDocs(); var i = $('#docQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250);
+    } else if (t.hasAttribute('data-pass')) {
+      passHead()[t.getAttribute('data-pass')] = t.value; saveCart();
+    } else if (t.hasAttribute('data-outqty') || t.hasAttribute('data-outnote')) {
+      var ito = item(t.closest('tr').getAttribute('data-m'));
+      if (t.hasAttribute('data-outqty')) ito.out.qty = numVal(t.value); else ito.out.note = t.value;
+      saveCart();
     } else if (t.id === 'coTitle') {
       S.cart.meta.title = t.value; saveCart();
     } else if (t.id === 'coYear') {
@@ -1978,6 +2075,7 @@
     if (t.hasAttribute('data-pick')) {
       var m = t.getAttribute('data-m'), kind = t.getAttribute('data-pick');
       if (kind === 'ro') setRO(m, t.checked, t.getAttribute('data-key'));
+      else if (kind === 'out') setOUT(m, t.checked);
       else setBAU(m, t.checked);
       var r = currentRoute().name;
       // sinkronkan tampilan
@@ -1989,7 +2087,7 @@
       if (r === 'kontrak' && $('#oaItems')) renderOAItems($('#oaItems').getAttribute('data-po'));
       if (r === 'call-order') renderCO();
       if ($('#drawer').classList.contains('open') && $('#drawer').getAttribute('data-m') === m && !t.closest('#drawer')) openDrawer(m);
-      if (t.checked) toast((kind === 'ro' ? 'RO' : 'BAU') + ' ditambahkan: ' + (S.idx.mats.get(m).d || m));
+      if (t.checked) toast({ ro: 'RO', bau: 'BAU', out: 'Material keluar (OUT)' }[kind] + ' ditambahkan: ' + (S.idx.mats.get(m).d || m));
     } else if (t.getAttribute('data-f') === 'oa') {
       var tr = t.closest('tr'), it = item(tr.getAttribute('data-m'));
       if (t.value === '__other') {
@@ -2071,6 +2169,8 @@
       else if (act === 'clear-co') {
         if (confirm('Kosongkan semua material di Call Order?')) { S.cart.items = {}; saveCart(); renderCO(); }
       }
+      else if (act === 'pass-submit') submitPass();
+      else if (act === 'pass-preview') { var pl = outPayload(); passMod().previewDraft(pl.head, pl.items); }
       else if (act === 'export') {
         var co = buildCO();
         loading('Menyiapkan file Excel…');
