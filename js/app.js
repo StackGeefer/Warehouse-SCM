@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021h'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021i'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1249,7 +1249,7 @@
   function passMod() {
     if (!Pass) Pass = window.PassModule({
       S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, gh: gh, ghToken: ghToken, branch: GH_BRANCH,
-      route: function () { return currentRoute().name; }, isOwner: isOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav,
+      route: function () { return currentRoute().name; }, isOwner: isOwner, isMainOwner: isMainOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav,
       addManualOut: addManualOut, manualCount: function () { return manualOut().length; }
     });
     return Pass;

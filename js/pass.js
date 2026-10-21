@@ -118,6 +118,8 @@
       var acts = ['<button class="btn sm" data-pa="pdf" data-id="' + esc(r.id) + '">' + (r.status === ST.ok ? 'Download PDF' : 'Preview') + '</button>'];
       if (r.status === ST.pending && canApprove()) acts.unshift('<button class="btn sm primary" data-pa="approve" data-id="' + esc(r.id) + '">Approve</button><button class="btn sm" data-pa="reject" data-id="' + esc(r.id) + '">Tolak</button>');
       if (r.status === ST.pending && (r.createdById === S.user.id || canApprove())) acts.push('<button class="btn sm" data-pa="cancel" data-id="' + esc(r.id) + '">Batalkan</button>');
+      // Hapus pass yang sudah di-approve: khusus Owner Utama
+      if (r.status === ST.ok && ctx.isMainOwner()) acts.push('<button class="btn sm danger" data-pa="delete" data-id="' + esc(r.id) + '" title="Hapus permanen (khusus Owner Utama)">Hapus</button>');
       var first = r.items[0] || {};
       return '<tr><td><b class="mono">' + esc(r.no || '—') + '</b><div class="small">' + esc(dmy(r.date)) + '</div></td>' +
         '<td>' + esc(r.to) + (r.ref ? '<div class="small muted">Ref: ' + esc(r.ref) + '</div>' : '') + '</td>' +
@@ -205,6 +207,17 @@
         }, 'Pass keluar: ' + st.toLowerCase() + ' ' + id + ' (' + me() + ')');
         toast(msg);
       } catch (e) { toast('Gagal: ' + e.message, true); }
+      finally { loading(false); render(); }
+    }
+
+    async function remove(r) {
+      if (!ctx.isMainOwner() || r.status !== ST.ok) return;
+      if (!confirm('Hapus permanen Pass Keluar ' + (r.no || '') + ' ke ' + r.to + '?\nData pass akan hilang dari daftar (nomor pass tidak dipakai ulang).')) return;
+      loading('Menghapus pass…');
+      try {
+        await savePass(function (D) { D.list = D.list.filter(function (x) { return x.id !== r.id; }); return D; }, 'Pass keluar: hapus ' + (r.no || r.id) + ' (' + me() + ')');
+        toast('Pass ' + (r.no || '') + ' dihapus');
+      } catch (e) { toast('Gagal menghapus: ' + e.message, true); }
       finally { loading(false); render(); }
     }
 
@@ -402,6 +415,7 @@
       else if (act === 'approve') openApprove(id);
       else if (act === 'approve-do') approve(id);
       else if (act === 'reject') { var why = prompt('Alasan menolak (opsional):', ''); if (why !== null) setStatus(id, ST.no, { rejectBy: me(), rejectNote: why }, 'Pass ditolak'); }
+      else if (act === 'delete' && r) remove(r);
       else if (act === 'cancel') { if (confirm('Batalkan pengajuan pass ini?')) setStatus(id, ST.cancel, null, 'Pengajuan dibatalkan'); }
       else if (act === 'sign-save') saveSign();
       else if (act === 'manual-add') addManual();
