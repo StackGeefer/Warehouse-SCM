@@ -80,7 +80,7 @@
       F.months[m] = p ? norm(await Vault.decrypt(S.key, p)) : [];
       return F.months[m];
     }
-    function emptyMaster() { return { units: [], drivers: [], helpers: [], fungsi: ['WO', 'WS', 'PE', 'RAM', 'HSSE', 'SCM', 'Finance', 'LR'], types: [] }; }
+    function emptyMaster() { return { units: [], drivers: [], helpers: [], fungsi: ['WO', 'WS', 'PE', 'PO', 'RAM', 'HSSE', 'SCM', 'Finance', 'LR'], types: [] }; }
 
     // ---------- Tulis (atomik: baca terbaru dari GitHub -> gabung -> commit; ulang bila bentrok) ----------
     function monthFile(m, payload) {
