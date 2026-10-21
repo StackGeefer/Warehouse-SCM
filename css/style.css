@@ -563,3 +563,20 @@ tr.oa-other td{opacity:.72}
   .fleet-form { grid-template-columns: 1fr; }
   .fleet-util-row { grid-template-columns: 110px 1fr 64px; }
 }
+
+/* Program Moving Rig: daftar armada otomatis */
+.rig-table { border: 1px solid var(--line, #e3e8ef); border-radius: 12px; overflow: hidden; }
+.rig-row { display: grid; grid-template-columns: minmax(170px, 1.1fr) 1fr 1fr; gap: 8px 10px; align-items: start; padding: 8px 12px; border-top: 1px solid var(--line, #e3e8ef); }
+.rig-row:first-child { border-top: 0; }
+.rig-row.rig-head { background: #f5f8fc; font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted, #5b6675); }
+.rig-row.off { opacity: .45; }
+.rig-unit { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; padding-top: 8px; }
+.rig-unit input { margin-top: 3px; }
+.rig-ppl { display: flex; flex-direction: column; gap: 4px; }
+.rig-ppl .select, .rig-ppl .input { height: 36px; font-size: 13px; }
+.prog-tag { display: inline-block; margin-top: 4px; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #eef1f5; color: #475569; }
+.prog-tag.rig { background: #fff1e6; color: #b45309; }
+@media (max-width: 960px) {
+  .rig-row { grid-template-columns: 1fr; }
+  .rig-row.rig-head { display: none; }
+}

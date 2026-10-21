@@ -23,7 +23,7 @@
 
   root.FleetModule = function (ctx) {
     var S = ctx.S, esc = ctx.esc, toast = ctx.toast, loading = ctx.loading, Vault = ctx.Vault, gh = ctx.gh;
-    var F = S.fleet = { master: null, index: null, months: {}, sel: null, filt: { jenis: '', status: '', q: '' }, date: today() };
+    var F = S.fleet = { master: null, index: null, months: {}, sel: null, filt: { jenis: '', status: '', program: '', q: '' }, date: today() };
 
     function $(s) { return document.querySelector(s); }
     function view() { return document.getElementById('view'); }
@@ -168,11 +168,22 @@
         '<option value="' + OTHER + '"' + (isOther ? ' selected' : '') + '>Other (ketik sendiri)…</option>';
     }
     // select + kotak ketik untuk pilihan Other
-    function personField(name, list, type, sel, emptyLabel, required) {
+    function personField(name, list, type, sel, emptyLabel, required, kind) {
       var known = list.some(function (p) { return p.name === sel; }), isOther = sel === OTHER || (sel && !known);
       return '<select class="select" name="' + name + '"' + (required ? ' required' : '') + ' data-other="' + name + 'Other">' + peopleOpts(list, type, sel, emptyLabel) + '</select>' +
-        '<input class="input' + (isOther ? '' : ' hidden') + '" name="' + name + 'Other" placeholder="Ketik nama ' + (name === 'driver' ? 'driver' : 'helper') + '" value="' + esc(isOther && sel !== OTHER ? sel : '') + '">';
+        '<input class="input' + (isOther ? '' : ' hidden') + '" name="' + name + 'Other" placeholder="Ketik nama ' + (kind || name) + '" value="' + esc(isOther && sel !== OTHER ? sel : '') + '">';
     }
+    function personVal(f, name) {
+      var el = f.elements[name];
+      if (!el) return '';
+      var v = String(el.value).trim();
+      return v === OTHER ? (f.elements[name + 'Other'] ? String(f.elements[name + 'Other'].value).trim() : '') : v;
+    }
+    // Program: Moving Rig = semua armada yang keluar otomatis terisi; Operational = pilih 1 unit
+    function programs() { return (F.master.programs && F.master.programs.length) ? F.master.programs : [{ name: 'Operational', units: [] }]; }
+    function progOf(name) { return programs().filter(function (p) { return p.name === name; })[0] || null; }
+    function isRig(name) { var p = progOf(name); return !!(p && p.units && p.units.length); }
+    function defaultProgram() { var ps = programs(); return (ps.filter(function (p) { return !(p.units && p.units.length); })[0] || ps[0]).name; }
 
     // ================= Section 1: Reservasi Armada =================
     async function renderForm() {
@@ -181,7 +192,7 @@
       try { await loadMaster(); await loadIndex(); await loadMonth(monthOf(F.date)); } catch (e) { v.innerHTML = errCard(e); return; }
       if (!document.getElementById('view') || ctx.route() !== 'angber') return;
       var M = F.master, d = F.draft || {};
-      var tps = types();
+      var tps = types(), prog = d.program && progOf(d.program) ? d.program : defaultProgram(), rig = isRig(prog);
       var jenis = d.jenis || tps[0] || '';
       var units = M.units.filter(function (u) { return u.type === jenis; });
       var busy = busyUnits(F.date, d.id);
@@ -191,14 +202,16 @@
         '<div class="small muted" style="margin:-4px 0 12px">Khusus angkutan berat (' + esc(types().join(', ')) + ') — di luar KRP.</div>' +
         '<form id="fleetForm" class="fleet-form" autocomplete="off">' +
         fld('Tanggal pemakaian', '<input class="input" type="date" name="date" required value="' + esc(F.date) + '">') +
-        fld('Armada (jenis)', '<select class="select" name="jenis" required>' + tps.map(function (t) { return '<option' + (t === jenis ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select>') +
+        fld('Program', '<select class="select" name="program">' + programs().map(function (p) { return '<option' + (p.name === prog ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select>') +
+        (rig ? rigTable(prog, d, busy) : '') +
+        (rig ? '' : fld('Armada (jenis)', '<select class="select" name="jenis" required>' + tps.map(function (t) { return '<option' + (t === jenis ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select>') +
         fld('Unit', '<select class="select" name="unit" required><option value="">Pilih unit…</option>' + units.map(function (u) {
           var b = busy[u.id];
           return '<option value="' + esc(u.id) + '"' + (d.unit === u.id ? ' selected' : '') + '>' + esc(unitLabel(u)) + (b ? ' — terpakai (' + b + ')' : '') + '</option>';
         }).join('') + '</select>') +
         fld('Driver', personField('driver', M.drivers, jenis, d.driver, 'Pilih driver…', true)) +
         fld('Helper', personField('helper', M.helpers, jenis, d.helper, '— Tanpa helper —') +
-          (M.helpers.some(function (h) { return h.type === jenis; }) ? '' : '<div class="small muted">' + esc(jenis) + ' tanpa helper</div>')) +
+          (M.helpers.some(function (h) { return h.type === jenis; }) ? '' : '<div class="small muted">' + esc(jenis) + ' tanpa helper</div>'))) +
         fld('Fungsi', '<select class="select" name="fungsi" required><option value="">Pilih fungsi…</option>' + M.fungsi.map(function (f) { return '<option' + (d.fungsi === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>') +
         fld('Nama User', '<input class="input" name="user" required placeholder="Nama pengguna/pemohon" value="' + esc(d.user || '') + '">', true) +
         fld('Estimasi Tonase (ton)', '<input class="input" name="tonase" type="number" min="0" step="any" placeholder="mis. 8" value="' + esc(d.tonase == null ? '' : d.tonase) + '"><div class="small muted" id="capHint"></div>') +
@@ -207,10 +220,25 @@
         fld('Lokasi (muat)', '<input class="input" name="lokasi" required placeholder="mis. Gudang Rantau" value="' + esc(d.lokasi || '') + '">') +
         fld('Tujuan', '<input class="input" name="tujuan" required placeholder="mis. SP-XII / RIG RTU 01" value="' + esc(d.tujuan || '') + '">') +
         fld('Catatan (opsional)', '<input class="input" name="note" value="' + esc(d.note || '') + '">', true) +
-        '<div class="fleet-actions"><button class="btn primary" type="submit">Simpan Reservasi</button><span class="small muted">Status: <b>Terjadwal</b></span></div>' +
+        '<div class="fleet-actions"><button class="btn primary" type="submit">' + (rig ? 'Simpan Reservasi ' + esc(prog) : 'Simpan Reservasi') + '</button><span class="small muted">Status: <b>Terjadwal</b>' + (rig ? ' · satu reservasi per armada yang dicentang' : '') + '</span></div>' +
         '</form></div>' +
         '<div class="fleet-side">' + dayCard(F.date) + mineCard() + '</div></div>';
       capHint();
+    }
+    // Daftar armada Moving Rig: semua unit terisi otomatis + driver & helper default (bisa diubah / dihapus centangnya)
+    function rigTable(prog, d, busy) {
+      var M = F.master, p = progOf(prog), st = d.rig || {};
+      var rows = p.units.map(function (id) {
+        var u = unitById(id) || { id: id, type: '', nopol: '' }, cur = st[id] || {};
+        var on = cur.on !== false, drv = cur.driver != null ? cur.driver : (u.driver || ''), hlp = cur.helper != null ? cur.helper : (u.helper || '');
+        return '<div class="rig-row' + (on ? '' : ' off') + '">' +
+          '<label class="rig-unit"><input type="checkbox" name="rigOn" value="' + esc(id) + '"' + (on ? ' checked' : '') + '><span><b>' + esc(id) + '</b> <span class="small muted">' + esc(u.type) + (u.nopol ? ' · ' + esc(u.nopol) : '') + '</span>' +
+          (busy[id] ? '<div class="small" style="color:var(--warn, #b45309)">sudah terpakai (' + esc(busy[id]) + ')</div>' : '') + '</span></label>' +
+          '<div class="rig-ppl">' + personField('drv_' + id, M.drivers, u.type, drv, 'Pilih driver…', false, 'driver') + '</div>' +
+          '<div class="rig-ppl">' + personField('hlp_' + id, M.helpers, u.type, hlp, '— Tanpa helper —', false, 'helper') + '</div></div>';
+      }).join('');
+      return '<div class="fleet-fld wide"><span>Armada ' + esc(prog) + ' (' + p.units.length + ' unit — otomatis terisi)</span>' +
+        '<div class="rig-table"><div class="rig-row rig-head"><span>Unit</span><span>Driver</span><span>Helper</span></div>' + rows + '</div></div>';
     }
     function fld(label, input, wide) { return '<label class="fleet-fld' + (wide ? ' wide' : '') + '"><span>' + esc(label) + '</span>' + input + '</label>'; }
     function errCard(e) { return '<div class="card card-pad"><b>Gagal memuat data Angkutan Berat</b><div class="small muted">' + esc(e.message) + '</div><button class="btn sm" data-fa="reload" style="margin-top:8px">Coba lagi</button></div>'; }
@@ -239,26 +267,71 @@
     }
     function capHint() {
       var f = document.getElementById('fleetForm');
-      if (!f) return;
+      if (!f || !f.unit || !f.tonase) return;
       var u = unitById(f.unit.value), t = parseFloat(f.tonase.value), h = document.getElementById('capHint');
       if (!h) return;
       h.innerHTML = u && u.cap ? 'Kapasitas unit ' + esc(u.cap) + ' ton' + (t > +u.cap ? ' — <b style="color:var(--bad, #c0392b)">melebihi kapasitas!</b>' : '') : '';
     }
     function formData(f) {
       var o = {};
-      ['date', 'jenis', 'unit', 'driver', 'helper', 'fungsi', 'user', 'tonase', 'boom', 'barang', 'lokasi', 'tujuan', 'note', 'status'].forEach(function (k) {
+      ['date', 'program', 'jenis', 'unit', 'driver', 'helper', 'fungsi', 'user', 'tonase', 'boom', 'barang', 'lokasi', 'tujuan', 'note', 'status'].forEach(function (k) {
         if (f[k]) o[k] = String(f[k].value).trim();
       });
       ['driver', 'helper'].forEach(function (k) { if (o[k] === OTHER) o[k] = f[k + 'Other'] ? String(f[k + 'Other'].value).trim() : ''; });
       ['tonase', 'boom'].forEach(function (k) { o[k] = o[k] === '' || o[k] == null ? null : +o[k]; });
+      if (o.program && isRig(o.program) && f.elements.rigOn) {
+        o.rig = {};
+        [].slice.call(f.querySelectorAll('[name=rigOn]')).forEach(function (cb) {
+          var id = cb.value;
+          o.rig[id] = { on: cb.checked, driver: personVal(f, 'drv_' + id), helper: personVal(f, 'hlp_' + id) };
+          if (f.elements['drv_' + id].value === OTHER && !o.rig[id].driver) o.rig[id].driver = OTHER;
+          if (f.elements['hlp_' + id].value === OTHER && !o.rig[id].helper) o.rig[id].helper = OTHER;
+        });
+      }
       return o;
     }
     function oldestAllowed() {
       var ms = (F.index && F.index.months) || [];
       return ms.length >= KEEP_MONTHS ? ms[0] : null;
     }
+    async function submitRig(f, o) {
+      if (!o.fungsi || !o.user || !o.barang || !o.lokasi || !o.tujuan) { toast('Lengkapi Fungsi, Nama User, Barang, Lokasi & Tujuan', true); return; }
+      var ids = Object.keys(o.rig || {}).filter(function (id) { return o.rig[id].on; });
+      if (!ids.length) { toast('Centang minimal 1 armada', true); return; }
+      var noDrv = ids.filter(function (id) { return !o.rig[id].driver || o.rig[id].driver === OTHER; });
+      if (noDrv.length) { toast('Pilih/ketik driver untuk ' + noDrv.join(', '), true); return; }
+      var m = monthOf(o.date), old = oldestAllowed();
+      if (old && m < old) { toast('Tanggal di luar masa simpan 6 bulan (' + monthName(old) + ' paling lama)', true); return; }
+      var busy = busyUnits(o.date), clash = ids.filter(function (id) { return busy[id]; });
+      if (clash.length && !confirm('Sudah ada reservasi di tanggal ini untuk ' + clash.join(', ') + '. Tetap simpan?')) return;
+      var grp = 'G' + Date.now().toString(36), at = new Date().toISOString(), recs = [];
+      loading('Menyimpan ' + ids.length + ' reservasi ' + o.program + '…');
+      try {
+        var x = {};
+        x[m] = function (list) {
+          var n = list.reduce(function (a, r) { var k = +(String(r.no || '').split('-').pop()) || 0; return Math.max(a, k); }, 0);
+          recs = ids.map(function (id, i) {
+            var u = unitById(id) || {}, h = o.rig[id].helper;
+            return {
+              id: 'R' + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5), grp: grp,
+              no: 'AB-' + m.slice(2, 4) + m.slice(5, 7) + '-' + ('00' + (n + i + 1)).slice(-3),
+              date: o.date, program: o.program, jenis: u.type || '', unit: id, nopol: u.nopol || '',
+              driver: o.rig[id].driver, helper: h === OTHER ? '' : h, fungsi: o.fungsi, user: o.user, tonase: o.tonase, boom: o.boom,
+              barang: o.barang, lokasi: o.lokasi, tujuan: o.tujuan, note: o.note || '', status: 'Terjadwal', createdBy: me(), createdAt: at
+            };
+          });
+          return list.concat(recs);
+        };
+        await commit({ months: x }, 'Angkutan berat: ' + o.program + ' ' + o.date + ' — ' + ids.length + ' armada (' + me() + ')');
+        F.draft = { program: o.program };
+        toast(recs.length + ' reservasi ' + o.program + ' tersimpan (' + recs[0].no + ' s/d ' + recs[recs.length - 1].no + ')');
+        renderForm();
+      } catch (e) { toast('Gagal menyimpan: ' + e.message, true); }
+      finally { loading(false); }
+    }
     async function submit(f) {
       var o = formData(f);
+      if (o.program && isRig(o.program)) return submitRig(f, o);
       if (!o.date || !o.unit || !o.driver || !o.fungsi || !o.user || !o.barang || !o.lokasi || !o.tujuan) { toast('Lengkapi semua kolom wajib' + (f.driver.value === OTHER && !o.driver ? ' (ketik nama driver)' : ''), true); return; }
       var m = monthOf(o.date), old = oldestAllowed();
       if (old && m < old) { toast('Tanggal di luar masa simpan 6 bulan (' + monthName(old) + ' paling lama)', true); return; }
@@ -314,6 +387,7 @@
       v.innerHTML = retentionCard() +
         '<div class="card card-pad toolbar" style="margin-bottom:14px">' +
         '<select class="select" id="fMonth">' + months.map(function (m) { return '<option value="' + m + '"' + (m === F.sel ? ' selected' : '') + '>' + monthName(m) + (F.index.exported[m] ? ' ✓' : '') + '</option>'; }).join('') + '</select>' +
+        '<select class="select" id="fProgram"><option value="">Semua program</option>' + programs().map(function (p) { return '<option' + (F.filt.program === p.name ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select>' +
         '<select class="select" id="fJenis"><option value="">Semua armada</option>' + types().map(function (t) { return '<option' + (F.filt.jenis === t ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select>' +
         '<select class="select" id="fStatus"><option value="">Semua status</option>' + STATUS.map(function (t) { return '<option' + (F.filt.status === t ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select>' +
         '<input class="input" id="fQ" style="flex:1;min-width:180px" placeholder="Cari unit, driver, user, barang, tujuan…" value="' + esc(F.filt.q) + '">' +
@@ -333,8 +407,9 @@
       var q = F.filt.q.trim().toLowerCase();
       return (F.months[F.sel] || []).filter(function (r) {
         if (F.filt.jenis && r.jenis !== F.filt.jenis) return false;
+        if (F.filt.program && (r.program || '') !== F.filt.program) return false;
         if (F.filt.status && r.status !== F.filt.status) return false;
-        if (q && [r.no, r.unit, r.nopol, r.driver, r.helper, r.user, r.fungsi, r.barang, r.lokasi, r.tujuan, r.note, r.createdBy].join(' ').toLowerCase().indexOf(q) < 0) return false;
+        if (q && [r.no, r.program, r.unit, r.nopol, r.driver, r.helper, r.user, r.fungsi, r.barang, r.lokasi, r.tujuan, r.note, r.createdBy].join(' ').toLowerCase().indexOf(q) < 0) return false;
         return true;
       }).sort(function (a, b) { return (b.date + b.createdAt).localeCompare(a.date + a.createdAt); });
     }
@@ -343,7 +418,7 @@
       if (adm && r.status === 'Terjadwal') acts.push('<button class="btn sm" data-fa="status" data-v="Selesai" data-id="' + esc(r.id) + '">Selesai</button>');
       if (adm) acts.push('<button class="btn sm" data-fa="edit" data-id="' + esc(r.id) + '">Edit</button>');
       return '<tr><td><b class="mono">' + esc(r.no) + '</b><div class="small">' + esc(fmtDate(r.date)) + '</div></td>' +
-        '<td><b>' + esc(r.unit) + '</b><div class="small muted">' + esc(r.jenis) + (r.nopol ? ' · ' + esc(r.nopol) : '') + '</div></td>' +
+        '<td><b>' + esc(r.unit) + '</b><div class="small muted">' + esc(r.jenis) + (r.nopol ? ' · ' + esc(r.nopol) : '') + '</div>' + (r.program ? '<span class="prog-tag' + (isRig(r.program) ? ' rig' : '') + '">' + esc(r.program) + '</span>' : '') + '</td>' +
         '<td>' + esc(r.driver) + '<div class="small muted">' + esc(r.helper || '—') + '</div></td>' +
         '<td><b>' + esc(r.fungsi) + '</b><div class="small muted">' + esc(r.user) + '</div></td>' +
         '<td class="num">' + nf(r.tonase) + (r.boom != null ? '<div class="small muted">boom ' + nf(r.boom) + ' m</div>' : '') + '</td>' +
@@ -386,6 +461,7 @@
       d.innerHTML = '<div class="drawer-head"><div style="flex:1"><div class="mono muted">' + esc(r.no) + '</div><h2>Edit reservasi</h2></div><button class="icon-btn" data-act="close-drawer">✕</button></div>' +
         '<div class="drawer-body"><form id="fleetEdit" class="fleet-form" data-id="' + esc(r.id) + '">' +
         fld('Tanggal pemakaian', '<input class="input" type="date" name="date" required value="' + esc(r.date) + '">') +
+        fld('Program', '<select class="select" name="program">' + programs().map(function (p) { return '<option' + (p.name === (r.program || defaultProgram()) ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select>') +
         fld('Armada (jenis)', '<select class="select" name="jenis">' + types().map(function (t) { return '<option' + (t === r.jenis ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select>') +
         fld('Unit', '<select class="select" name="unit">' + units.map(function (u) { return '<option value="' + esc(u.id) + '"' + (u.id === r.unit ? ' selected' : '') + '>' + esc(unitLabel(u)) + '</option>'; }).join('') + '</select>') +
         fld('Driver', personField('driver', M.drivers, r.jenis, r.driver, '—')) +
@@ -461,7 +537,7 @@
         var thin = { style: 'thin', color: { argb: 'FF000000' } }, border = { top: thin, left: thin, bottom: thin, right: thin };
         var head = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBDD7EE' } };
         var ws = wb.addWorksheet('Reservasi ' + monthName(m));
-        var cols = [['No', 6], ['No. Reservasi', 15], ['Tanggal', 12], ['Jenis Armada', 15], ['Unit', 10], ['No. Polisi', 13], ['Driver', 22], ['Helper', 22], ['Fungsi', 9], ['Nama User', 20], ['Est. Tonase (ton)', 12], ['Radius / Boom (m)', 12], ['Barang yang dibawa', 32], ['Lokasi (muat)', 22], ['Tujuan', 22], ['Catatan', 22], ['Status', 14], ['Dibuat oleh', 16], ['Waktu dibuat', 17], ['Diubah oleh', 16], ['Waktu diubah', 17]];
+        var cols = [['No', 6], ['No. Reservasi', 15], ['Tanggal', 12], ['Program', 16], ['Jenis Armada', 15], ['Unit', 10], ['No. Polisi', 13], ['Driver', 22], ['Helper', 22], ['Fungsi', 9], ['Nama User', 20], ['Est. Tonase (ton)', 12], ['Radius / Boom (m)', 12], ['Barang yang dibawa', 32], ['Lokasi (muat)', 22], ['Tujuan', 22], ['Catatan', 22], ['Status', 14], ['Dibuat oleh', 16], ['Waktu dibuat', 17], ['Diubah oleh', 16], ['Waktu diubah', 17]];
         ws.columns = cols.map(function (c) { return { width: c[1] }; });
         ws.mergeCells(1, 1, 1, cols.length);
         ws.getCell(1, 1).value = 'RESERVASI ANGKUTAN BERAT — FIELD RANTAU ZONA 1';
@@ -472,9 +548,9 @@
         cols.forEach(function (c, i) { var cell = hr.getCell(i + 1); cell.value = c[0]; cell.font = { bold: true }; cell.fill = head; cell.border = border; cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }; });
         list.forEach(function (r, i) {
           var row = ws.getRow(5 + i);
-          [i + 1, r.no, r.date ? new Date(r.date + 'T00:00:00') : '', r.jenis, r.unit, r.nopol || '', r.driver, r.helper || '', r.fungsi, r.user, r.tonase == null ? '' : r.tonase, r.boom == null ? '' : r.boom, r.barang, r.lokasi, r.tujuan, r.note || '', r.status, r.createdBy || '', r.createdAt ? new Date(r.createdAt) : '', r.updatedBy || '', r.updatedAt ? new Date(r.updatedAt) : '']
+          [i + 1, r.no, r.date ? new Date(r.date + 'T00:00:00') : '', r.program || '', r.jenis, r.unit, r.nopol || '', r.driver, r.helper || '', r.fungsi, r.user, r.tonase == null ? '' : r.tonase, r.boom == null ? '' : r.boom, r.barang, r.lokasi, r.tujuan, r.note || '', r.status, r.createdBy || '', r.createdAt ? new Date(r.createdAt) : '', r.updatedBy || '', r.updatedAt ? new Date(r.updatedAt) : '']
             .forEach(function (v, j) { var c = row.getCell(j + 1); c.value = v; c.border = border; c.alignment = { vertical: 'top', wrapText: true }; });
-          row.getCell(3).numFmt = 'dd/mm/yyyy'; row.getCell(19).numFmt = 'dd/mm/yyyy hh:mm'; row.getCell(21).numFmt = 'dd/mm/yyyy hh:mm';
+          row.getCell(3).numFmt = 'dd/mm/yyyy'; row.getCell(20).numFmt = 'dd/mm/yyyy hh:mm'; row.getCell(22).numFmt = 'dd/mm/yyyy hh:mm';
         });
         ws.views = [{ state: 'frozen', ySplit: 4 }];
         ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + Math.max(list.length, 1), column: cols.length } };
@@ -527,7 +603,8 @@
       var M = await loadMaster(true);
       function ta(id, rows, ph) { return '<textarea class="input mono" id="' + id + '" rows="' + Math.min(18, Math.max(5, rows.length + 1)) + '" style="width:100%;font-size:12.5px" placeholder="' + esc(ph) + '">' + esc(rows.join('\n')) + '</textarea>'; }
       box.innerHTML = '<div class="fleet-master">' +
-        '<div><b>Armada</b> <span class="small muted">No. Lambung | No. Polisi | Jenis | Kapasitas (ton) | Kontraktor</span>' + ta('fmUnits', M.units.map(function (u) { return [u.id, u.nopol, u.type, u.cap, u.contractor].join(' | '); }), 'VT-01 | B 9766 UFV | Vacuum Truck | 12 | PT ...') + '</div>' +
+        '<div><b>Armada</b> <span class="small muted">No. Lambung | No. Polisi | Jenis | Kapasitas (ton) | Kontraktor | Driver default | Helper default</span>' + ta('fmUnits', M.units.map(function (u) { return [u.id, u.nopol, u.type, u.cap, u.contractor, u.driver || '', u.helper || ''].join(' | '); }), 'VT-01 | B 9766 UFV | Vacuum Truck | 12 | PT ... | Nama driver | Nama helper') + '</div>' +
+        '<div><b>Program</b> <span class="small muted">Nama program | unit yang otomatis terisi (pisahkan koma; kosongkan = pilih 1 unit manual)</span>' + ta('fmPrograms', programs().map(function (p) { return p.name + ' | ' + (p.units || []).join(', '); }), 'Moving Rig 01 | AB-01, AB-02, ...') + '</div>' +
         '<div><b>Driver / Operator</b> <span class="small muted">Nama | Jenis armada</span>' + ta('fmDrivers', M.drivers.map(function (p) { return p.name + ' | ' + p.type; }), 'Nama | Crane') + '</div>' +
         '<div><b>Helper</b> <span class="small muted">Nama | Jenis armada</span>' + ta('fmHelpers', M.helpers.map(function (p) { return p.name + ' | ' + p.type; }), 'Nama | Crane') + '</div>' +
         '<div><b>Fungsi</b> <span class="small muted">pisahkan dengan koma</span><input class="input" id="fmFungsi" value="' + esc(M.fungsi.join(', ')) + '"></div>' +
@@ -536,7 +613,8 @@
     async function saveMaster() {
       function lines(id) { return document.getElementById(id).value.split('\n').map(function (l) { return l.split('|').map(function (x) { return x.trim(); }); }).filter(function (p) { return p[0]; }); }
       var M = {
-        units: lines('fmUnits').map(function (p) { return { id: p[0], nopol: p[1] || '', type: p[2] || 'Lainnya', cap: p[3] ? +p[3] || p[3] : '', contractor: p[4] || '' }; }),
+        units: lines('fmUnits').map(function (p) { return { id: p[0], nopol: p[1] || '', type: p[2] || 'Lainnya', cap: p[3] ? +p[3] || p[3] : '', contractor: p[4] || '', driver: p[5] || '', helper: p[6] || '' }; }),
+        programs: lines('fmPrograms').map(function (p) { return { name: p[0], units: (p[1] || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean) }; }),
         drivers: lines('fmDrivers').map(function (p) { return { name: p[0], type: p[1] || '' }; }),
         helpers: lines('fmHelpers').map(function (p) { return { name: p[0], type: p[1] || '' }; }),
         fungsi: document.getElementById('fmFungsi').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean)
@@ -568,17 +646,25 @@
       }
       if (f && f.id === 'fleetForm') {
         F.draft = formData(f);
-        if (f.driver.value === OTHER) F.draft.driver = F.draft.driver || OTHER;
-        if (f.helper.value === OTHER) F.draft.helper = F.draft.helper || OTHER;
-        if (t.name === 'date') { F.date = t.value || today(); loadMonth(monthOf(F.date)).then(renderForm, function (er) { toast(er.message, true); }); }
+        if (f.driver && f.driver.value === OTHER) F.draft.driver = F.draft.driver || OTHER;
+        if (f.helper && f.helper.value === OTHER) F.draft.helper = F.draft.helper || OTHER;
+        if (t.name === 'program') { F.draft.rig = null; renderForm(); }
+        else if (t.name === 'rigOn') t.closest('.rig-row').classList.toggle('off', !t.checked);
+        else if (t.name === 'unit') {
+          // driver & helper default unit terisi otomatis
+          var du = unitById(t.value);
+          if (du && du.driver) { F.draft.driver = du.driver; F.draft.helper = du.helper || ''; renderForm(); } else capHint();
+        }
+        else if (t.name === 'date') { F.date = t.value || today(); loadMonth(monthOf(F.date)).then(renderForm, function (er) { toast(er.message, true); }); }
         else if (t.name === 'jenis') { F.draft.unit = ''; renderForm(); }
-        else if (t.name === 'unit' || t.name === 'tonase') capHint();
+        else if (t.name === 'tonase') capHint();
         return;
       } else if (f && f.id === 'fleetEdit' && t.name === 'jenis') {
         var us = F.master.units.filter(function (u) { return u.type === t.value; });
         f.unit.innerHTML = us.map(function (u) { return '<option value="' + esc(u.id) + '">' + esc(unitLabel(u)) + '</option>'; }).join('');
       } else if (t.id === 'fMonth') { F.sel = t.value; renderHistory(); }
       else if (t.id === 'fJenis') { F.filt.jenis = t.value; renderHistory(); }
+      else if (t.id === 'fProgram') { F.filt.program = t.value; renderHistory(); }
       else if (t.id === 'fStatus') { F.filt.status = t.value; renderHistory(); }
     });
     var qTimer;
