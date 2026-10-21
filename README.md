@@ -121,6 +121,7 @@ vendor/               SheetJS, ExcelJS, PDF.js
 3. Menu **Pass Keluar** → Owner / Co-Owner klik **Approve**: nomor pass otomatis (`RTU-<urut>/EP0651/WH/<tahun>`, bisa diubah), **nama & tanda tangan penyetuju otomatis menjadi Pengirim**, PDF langsung ter-download. Bisa juga **Tolak** atau **Batalkan**.
 4. PDF: A5 landscape, format sama dengan Pass Keluar Barang sistem (11 baris per halaman, lebih dari itu otomatis halaman berikutnya).
 
+- **Material Non Stock** (tidak ada di data SAP): di halaman **Pass Keluar → Tambah material manual**, ketik KIMAP (opsional), deskripsi, UOM (& jumlah) → masuk ke Call Order bagian Material Keluar, lalu alur & PDF sama.
 - Nama & tanda tangan diatur sendiri oleh tiap Owner / Co-Owner di **Pengaturan → Tanda tangan Pass Keluar** (latar polos otomatis dibuat transparan). Disimpan terenkripsi di `data/signs.js`.
 - Data pass: `data/pass.js` (terenkripsi). Akun **Warehouse** perlu diatur password-nya oleh Owner Utama (Pengaturan → Pengguna) agar bisa mengajukan.
 

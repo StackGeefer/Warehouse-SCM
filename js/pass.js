@@ -104,7 +104,7 @@
       var tabs = [ST.pending, ST.ok, ST.no, ST.cancel, 'Semua'];
       var list = P.filt === 'Semua' ? all : all.filter(function (r) { return r.status === P.filt; });
       var mySign = P.signs.users[S.user.id];
-      v.innerHTML =
+      v.innerHTML = manualCard() +
         (canApprove() && !mySign ? '<div class="card card-pad remind-card">Anda belum mengatur <b>nama &amp; tanda tangan</b> untuk Pass Keluar. Atur di <a href="#/pengaturan">Pengaturan → Tanda tangan Pass Keluar</a> sebelum approve.</div>' : '') +
         '<div class="card card-pad toolbar" style="margin-bottom:14px">' + tabs.map(function (t) {
           var n = t === 'Semua' ? all.length : (cnt[t] || 0);
@@ -129,6 +129,32 @@
         '<td><div class="fleet-acts">' + acts.join('') + '</div></td></tr>';
     }
     function find(id) { return P.data.list.filter(function (r) { return r.id === id; })[0]; }
+
+    // ---------- Material manual (Non Stock): KIMAP & deskripsi diketik sendiri → masuk Call Order ----------
+    var UOMS = ['PCS', 'EA', 'SET', 'UNIT', 'KG', 'L', 'M', 'M2', 'M3', 'ROLL', 'BOX', 'PAA', 'JT', 'LOT', 'TIN', 'DRUM', 'BTL', 'LBR', 'BAG', 'CYL'];
+    function manualCard() {
+      var n = ctx.manualCount();
+      return '<div class="card card-pad" id="manualOut" style="margin-bottom:14px"><h4 class="section-title">Tambah material manual (Non Stock)</h4>' +
+        '<p class="small muted" style="margin-top:0">Untuk material yang tidak ada di data stok SAP. Setelah ditambahkan, material masuk ke <b>Call Order → Material Keluar</b> — lengkapi jumlah &amp; data pass seperti biasa, alur approval &amp; PDF sama.</p>' +
+        '<div class="manual-grid">' +
+        '<label class="fleet-fld"><span>KIMAP / No. Material</span><input class="input mono" id="mnM" placeholder="mis. K480900120 (kosongkan bila tidak ada)"></label>' +
+        '<label class="fleet-fld"><span>Deskripsi material *</span><input class="input" id="mnD" placeholder="mis. PAINT, ALKYD ENAMEL, YELLOW, 5LTR"></label>' +
+        '<label class="fleet-fld"><span>UOM *</span><input class="input" id="mnU" list="uomList" value="PCS"><datalist id="uomList">' + UOMS.map(function (u) { return '<option value="' + u + '">'; }).join('') + '</datalist></label>' +
+        '<label class="fleet-fld"><span>Jumlah</span><input class="input" id="mnQ" type="number" min="0" step="any" placeholder="bisa diisi nanti"></label>' +
+        '<div class="fleet-fld"><span>&nbsp;</span><button class="btn primary" data-pa="manual-add">+ Tambah ke Call Order</button></div></div>' +
+        (n ? '<div class="small" style="margin-top:8px"><b>' + n + '</b> material non-stock sudah ada di Call Order. <a href="#/call-order">Buka Call Order →</a></div>' : '') + '</div>';
+    }
+    function addManual() {
+      var m = ($('#mnM').value || '').trim().toUpperCase(), d = ($('#mnD').value || '').trim().toUpperCase(), u = ($('#mnU').value || '').trim().toUpperCase(), q = $('#mnQ').value;
+      if (!d) { toast('Isi deskripsi material', true); $('#mnD').focus(); return; }
+      if (!u) { toast('Isi UOM', true); return; }
+      ctx.addManualOut({ m: m, d: d, u: u, qty: q === '' ? null : +q });
+      toast('Ditambahkan ke Call Order: ' + d);
+      ['mnM', 'mnD', 'mnQ'].forEach(function (id) { $('#' + id).value = ''; });
+      var box = document.getElementById('manualOut');
+      if (box) box.outerHTML = manualCard();
+      var f = document.getElementById('mnD'); if (f) f.focus();
+    }
 
     // ---------- Approve (Owner / Co-Owner) ----------
     function openApprove(id) {
@@ -268,7 +294,10 @@
         if (sg) {
           doc.text(String(sg.name || '').toUpperCase(), (sx[2] + sx[3]) / 2, sb - 5, { align: 'center' });
           // tanda tangan mengisi kotak 92 x 31 pt, sama seperti PDF sistem pass keluar
-          doc.addImage(sg.img, 'PNG', (sx[2] + sx[3]) / 2 - 46, st + hdr + 0.8, 92, 31);
+          var ip = doc.getImageProperties(sg.img), iw = 92, ih = 31;
+          // tanda tangan tegak (portrait): lebih tinggi & sedikit dilebarkan agar terbaca (sistem pass juga melebarkan tanda tangan)
+          if (ip.width / ip.height < 1.4) { ih = 34; iw = Math.min(92, ih * ip.width / ip.height * 1.6); }
+          doc.addImage(sg.img, 'PNG', (sx[2] + sx[3]) / 2 - iw / 2, st + hdr + 0.5, iw, ih);
         }
         doc.setFont('times', 'normal'); doc.setFontSize(7.5);
         doc.text('Document printed is issued by PT.Pertamina EP -', 25, 383);
@@ -375,6 +404,7 @@
       else if (act === 'reject') { var why = prompt('Alasan menolak (opsional):', ''); if (why !== null) setStatus(id, ST.no, { rejectBy: me(), rejectNote: why }, 'Pass ditolak'); }
       else if (act === 'cancel') { if (confirm('Batalkan pengajuan pass ini?')) setStatus(id, ST.cancel, null, 'Pengajuan dibatalkan'); }
       else if (act === 'sign-save') saveSign();
+      else if (act === 'manual-add') addManual();
     });
 
     function pendingCount() { return P.data ? P.data.list.filter(function (r) { return r.status === ST.pending; }).length : 0; }

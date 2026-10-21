@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021f'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021g'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -114,6 +114,12 @@
   }
   function isOut(it) { return !!(it && it.out && it.out.on); }
   function active(it) { return it && (it.ro.on || it.bau.on || isOut(it)); }
+  // Material keluar manual (Non Stock): tidak ada di data SAP, diketik dari halaman Pass Keluar
+  function manualOut() { return S.cart.manualOut || (S.cart.manualOut = []); }
+  function addManualOut(x) {
+    manualOut().push({ id: 'N' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), m: x.m || '', d: x.d, u: x.u, qty: x.qty, note: '', t: Date.now() });
+    saveCart();
+  }
   function setOUT(m, on) {
     var it = item(m, true);
     it.out.on = on;
@@ -157,7 +163,8 @@
       if (isOut(it)) out++;
     });
     var n = Object.keys(S.cart.items).filter(function (k) { return active(S.cart.items[k]) && S.idx && S.idx.mats.has(k); }).length;
-    return { n: n, ro: ro, bau: bau, out: out };
+    var nm = (S.cart.manualOut || []).length;
+    return { n: n + nm, ro: ro, bau: bau, out: out + nm };
   }
   function updateCartUI() {
     var st = cartStats();
@@ -780,7 +787,7 @@
       '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Judul (baris 1 template)</div><input class="input" style="width:100%;font-weight:700" id="coTitle" value="' + esc(co.title) + '"></label>' +
       '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Bulan</div><select class="select" id="coMonth">' + BULAN.map(function (b, i) { return '<option value="' + i + '"' + (meta.month === i ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select></label>' +
       '<label><div class="small muted" style="margin-bottom:4px;font-weight:700">Tahun</div><input class="input" style="width:90px" type="number" id="coYear" value="' + meta.year + '"></label></div>';
-    if (!activeItems.length) {
+    if (!activeItems.length && !manualOut().length) {
       view.innerHTML = head + '<div class="card empty" style="margin-top:16px"><div class="ico">' + ICON.list + '</div><h3>Call Order masih kosong</h3><p>Cari material lalu centang <b>RO</b> (tarik via kontrak), <b>BAU</b> (Bantuan Antar Unit dari Field lain) atau <b>OUT</b> (material keluar / Pass Keluar Barang). Anda juga bisa membuka satu kontrak dan mencentang banyak item sekaligus.</p>' +
         '<div class="toolbar" style="justify-content:center"><a class="btn primary" href="#/cari">' + ICON.search + ' Cari Material</a><a class="btn" href="#/kontrak">Lihat Kontrak</a></div></div>';
       return;
@@ -882,7 +889,8 @@
     return h;
   }
   function outSection(outItems) {
-    if (!outItems.length) return '<div class="card card-pad muted">Belum ada material keluar. Centang <b>OUT</b> di Cari Material.</div>';
+    var manual = manualOut();
+    if (!outItems.length && !manual.length) return '<div class="card card-pad muted">Belum ada material keluar. Centang <b>OUT</b> di Cari Material, atau tambah material <b>Non Stock</b> di <a href="#/pass">Pass Keluar</a>.</div>';
     var h = passHead();
     function inp(k, label, ph, req, type) {
       return '<label class="fleet-fld"><span>' + esc(label) + (req ? ' *' : '') + '</span><input class="input" data-pass="' + k + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + esc(h[k] || '') + '" placeholder="' + esc(ph || '') + '"></label>';
@@ -898,19 +906,29 @@
         '<td><input class="input sm note-input" data-outnote value="' + esc(it.out.note || '') + '" placeholder="Keterangan tambahan (opsional)"></td>' +
         '<td class="pick-col"><div class="picks mode">' + pick('ro', it.m, it.ro.on, !o.oa.length) + pick('bau', it.m, it.bau.on, false) + pick('out', it.m, true, false) +
         '<button class="icon-btn" data-act="remove" data-m="' + esc(it.m) + '" title="Hapus dari Call Order">' + ICON.trash + '</button></div></td></tr>';
+    }).join('') + manual.map(function (x, i) {
+      return '<tr data-mid="' + esc(x.id) + '" class="manual-row"><td class="c muted">' + (outItems.length + i + 1) + '</td>' +
+        '<td class="mat-cell"><input class="input sm" data-mf="d" value="' + esc(x.d) + '" placeholder="Deskripsi material">' +
+        '<div class="toolbar" style="margin-top:4px;gap:6px"><input class="input sm mono" data-mf="m" style="width:150px" value="' + esc(x.m) + '" placeholder="KIMAP"><span class="badge out">Non Stock</span></div></td>' +
+        '<td class="num"><span class="qty na" title="Material non-stock (tidak ada di data SAP)">—</span></td>' +
+        '<td class="num"><input class="input num sm" type="number" min="0" step="any" data-outqty value="' + (x.qty != null ? x.qty : '') + '" placeholder="0"></td>' +
+        '<td><input class="input sm" data-mf="u" style="width:70px" value="' + esc(x.u) + '"></td>' +
+        '<td><input class="input sm note-input" data-outnote value="' + esc(x.note || '') + '" placeholder="Keterangan tambahan (opsional)"></td>' +
+        '<td class="pick-col"><div class="picks mode"><button class="icon-btn" data-act="remove-manual" data-mid="' + esc(x.id) + '" title="Hapus">' + ICON.trash + '</button></div></td></tr>';
     }).join('');
     return '<div class="card card-pad pass-form">' +
       '<div class="pass-grid">' + inp('from', 'Dari', 'WAREHOUSE FIELD RANTAU', true) + inp('to', 'Dikirim ke', 'mis. MEKANIK ROTARY/RAM', true) + inp('ref', 'Referensi', 'mis. no. reservasi 12912328') + inp('date', 'Tanggal', '', true, 'date') +
       inp('vehicle', 'Kendaraan (No. Polisi)', 'mis. BL 8257 UC', true) + inp('driver', 'Driver', 'Nama driver', true) + inp('requester', 'Pemohon', 'Nama pemohon', true) + inp('receiver', 'Penerima', 'Nama penerima', true) + '</div>' +
       '<div class="small muted" style="margin-top:8px"><b>Pengirim</b> otomatis = nama &amp; tanda tangan Owner / Co-Owner yang meng-approve.</div></div>' +
       '<div class="table-wrap" style="margin-top:12px"><table class="grid" id="outTable"><thead><tr><th class="c">No</th><th>Material</th><th class="num th-field">Stok ' + esc(homeName()) + '</th><th class="num">Jumlah</th><th>UOM</th><th>Keterangan</th><th class="pick-col">Mode</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<div class="toolbar" style="margin-top:12px;justify-content:flex-end"><button class="btn" data-act="pass-preview">Preview PDF</button><button class="btn primary" data-act="pass-submit">Ajukan Pass Keluar (Approval)</button></div>';
+      '<div class="toolbar" style="margin-top:12px;justify-content:flex-end"><a class="btn" href="#/pass" style="margin-right:auto">+ Material Non Stock</a><button class="btn" data-act="pass-preview">Preview PDF</button><button class="btn primary" data-act="pass-submit">Ajukan Pass Keluar (Approval)</button></div>';
   }
   function outPayload() {
     var h = passHead(), items = [];
     Object.keys(S.cart.items).map(function (k) { return S.cart.items[k]; }).filter(function (it) { return isOut(it) && S.idx.mats.has(it.m); })
       .sort(function (a, b) { return a.t - b.t; })
       .forEach(function (it) { var o = S.idx.mats.get(it.m); items.push({ m: o.m, d: o.d, u: o.u || '', qty: it.out.qty, note: it.out.note || '' }); });
+    manualOut().forEach(function (x) { items.push({ m: x.m || '', d: x.d, u: x.u || '', qty: x.qty, note: x.note || '', manual: true }); });
     var head = { from: (h.from || '').trim(), to: (h.to || '').trim(), ref: (h.ref || '').trim(), date: h.date, vehicle: (h.vehicle || '').trim(), driver: (h.driver || '').trim(), requester: (h.requester || '').trim(), receiver: (h.receiver || '').trim() };
     return { head: head, items: items };
   }
@@ -918,6 +936,7 @@
     var pl = outPayload(), h = pl.head;
     var miss = [['to', 'Dikirim ke'], ['date', 'Tanggal'], ['vehicle', 'Kendaraan'], ['driver', 'Driver'], ['requester', 'Pemohon'], ['receiver', 'Penerima']].filter(function (x) { return !h[x[0]]; }).map(function (x) { return x[1]; });
     if (miss.length) { toast('Lengkapi: ' + miss.join(', '), true); return; }
+    if (pl.items.some(function (x) { return !x.d || !x.u; })) { toast('Material non-stock wajib punya deskripsi & UOM', true); return; }
     var noQty = pl.items.filter(function (x) { return !(x.qty > 0); });
     if (noQty.length) { toast('Isi jumlah untuk ' + noQty.length + ' material', true); return; }
     if (!confirm('Ajukan Pass Keluar ' + pl.items.length + ' material ke ' + h.to + ' untuk approval?')) return;
@@ -926,6 +945,7 @@
       await passMod().submit(h, pl.items);
       pl.items.forEach(function (x) { var it = item(x.m); if (it) { it.out = { on: false, qty: null, note: '' }; } });
       S.cart.pass = { from: h.from, date: isoLocal(new Date()) };
+      S.cart.manualOut = [];
       saveCart();
       toast('Pass keluar diajukan — menunggu approval Owner / Co-Owner');
       location.hash = '#/pass';
@@ -1224,7 +1244,8 @@
   function passMod() {
     if (!Pass) Pass = window.PassModule({
       S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, gh: gh, ghToken: ghToken, branch: GH_BRANCH,
-      route: function () { return currentRoute().name; }, isOwner: isOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav
+      route: function () { return currentRoute().name; }, isOwner: isOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav,
+      addManualOut: addManualOut, manualCount: function () { return manualOut().length; }
     });
     return Pass;
   }
@@ -2025,6 +2046,14 @@
       searchTimer = setTimeout(function () { renderDocs(); var i = $('#docQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250);
     } else if (t.hasAttribute('data-pass')) {
       passHead()[t.getAttribute('data-pass')] = t.value; saveCart();
+    } else if (t.closest('tr[data-mid]') && (t.hasAttribute('data-outqty') || t.hasAttribute('data-outnote') || t.hasAttribute('data-mf'))) {
+      var mid = t.closest('tr').getAttribute('data-mid'), mx = manualOut().filter(function (x) { return x.id === mid; })[0];
+      if (mx) {
+        if (t.hasAttribute('data-outqty')) mx.qty = numVal(t.value);
+        else if (t.hasAttribute('data-outnote')) mx.note = t.value;
+        else mx[t.getAttribute('data-mf')] = t.getAttribute('data-mf') === 'd' ? t.value : t.value.toUpperCase();
+        saveCart();
+      }
     } else if (t.hasAttribute('data-outqty') || t.hasAttribute('data-outnote')) {
       var ito = item(t.closest('tr').getAttribute('data-m'));
       if (t.hasAttribute('data-outqty')) ito.out.qty = numVal(t.value); else ito.out.note = t.value;
@@ -2170,6 +2199,7 @@
         if (confirm('Kosongkan semua material di Call Order?')) { S.cart.items = {}; saveCart(); renderCO(); }
       }
       else if (act === 'pass-submit') submitPass();
+      else if (act === 'remove-manual') { var rid = a.getAttribute('data-mid'); S.cart.manualOut = manualOut().filter(function (x) { return x.id !== rid; }); saveCart(); renderCO(); }
       else if (act === 'pass-preview') { var pl = outPayload(); passMod().previewDraft(pl.head, pl.items); }
       else if (act === 'export') {
         var co = buildCO();

@@ -603,3 +603,6 @@ tr.oa-other td{opacity:.72}
 .sign-grid { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
 .pass-table td { vertical-align: top; }
 @media (max-width: 960px) { .pass-grid { grid-template-columns: 1fr 1fr; } .sign-grid { grid-template-columns: 1fr; } }
+.manual-grid { display: grid; grid-template-columns: 1.1fr 2fr .7fr .7fr auto; gap: 10px 12px; align-items: end; }
+.manual-row td { background: #fffaf5; }
+@media (max-width: 960px) { .manual-grid { grid-template-columns: 1fr 1fr; } }
