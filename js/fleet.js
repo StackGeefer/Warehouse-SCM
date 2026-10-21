@@ -19,6 +19,7 @@
   var BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
   var ACTIVE = { 'Terjadwal': 1, 'Selesai': 1 };
   var OTHER = '__other';
+  var MAX_TON = 1000; // batas estimasi tonase untuk semua armada
   function norm(list) { return (list || []).map(function (r) { return OLD_STATUS[r.status] ? Object.assign({}, r, { status: OLD_STATUS[r.status] }) : r; }); }
 
   root.FleetModule = function (ctx) {
@@ -221,7 +222,7 @@
           (M.helpers.some(function (h) { return h.type === jenis; }) ? '' : '<div class="small muted">' + esc(jenis) + ' tanpa helper</div>'))) +
         fld('Fungsi', '<select class="select" name="fungsi" required><option value="">Pilih fungsi…</option>' + M.fungsi.map(function (f) { return '<option' + (d.fungsi === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>') +
         fld('Nama User', '<input class="input" name="user" required placeholder="Nama pengguna/pemohon" value="' + esc(d.user || '') + '">', true) +
-        fld('Estimasi Tonase (ton)', '<input class="input" name="tonase" type="number" min="0" step="any" placeholder="mis. 8" value="' + esc(d.tonase == null ? '' : d.tonase) + '"><div class="small muted" id="capHint"></div>') +
+        fld('Estimasi Tonase (ton)', '<input class="input" name="tonase" type="number" min="0" max="' + MAX_TON + '" step="any" placeholder="mis. 8" value="' + esc(d.tonase == null ? '' : d.tonase) + '"><div class="small muted" id="capHint"></div>') +
         fld('Radius angkut / Boom (meter)', '<input class="input" name="boom" type="number" min="0" step="any" placeholder="mis. 12" value="' + esc(d.boom == null ? '' : d.boom) + '">') +
         fld('Barang yang dibawa', '<input class="input" name="barang" required placeholder="mis. Pipa 2-7/8&quot; 20 joint" value="' + esc(d.barang || '') + '">', true) +
         fld('Lokasi (muat)', '<input class="input" name="lokasi" required placeholder="mis. Gudang Rantau" value="' + esc(d.lokasi || '') + '">') +
@@ -277,7 +278,12 @@
       if (!f || !f.unit || !f.tonase) return;
       var u = unitById(f.unit.value), t = parseFloat(f.tonase.value), h = document.getElementById('capHint');
       if (!h) return;
-      h.innerHTML = u && u.cap ? 'Kapasitas unit ' + esc(u.cap) + ' ton' + (t > +u.cap ? ' — <b style="color:var(--bad, #c0392b)">melebihi kapasitas!</b>' : '') : '';
+      // tidak dibatasi kapasitas unit (diatur pemesan); hanya info + batas umum 1000 ton
+      h.innerHTML = (u && u.cap ? 'Kapasitas unit ' + esc(u.cap) + ' ton (info) · ' : '') + 'maks. ' + MAX_TON + ' ton' + (t > MAX_TON ? ' — <b style="color:var(--bad, #c0392b)">melebihi ' + MAX_TON + ' ton</b>' : '');
+    }
+    function tonOk(o) {
+      if (o.tonase != null && (o.tonase < 0 || o.tonase > MAX_TON)) { toast('Estimasi tonase maksimal ' + MAX_TON + ' ton', true); return false; }
+      return true;
     }
     function formData(f) {
       var o = {};
@@ -338,6 +344,7 @@
     }
     async function submit(f) {
       var o = formData(f);
+      if (!tonOk(o)) return;
       if (o.program && isRig(o.program)) return submitRig(f, o);
       if (!o.date || !o.unit || !o.driver || !o.fungsi || !o.user || !o.barang || !o.lokasi || !o.tujuan) { toast('Lengkapi semua kolom wajib' + (f.driver.value === OTHER && !o.driver ? ' (ketik nama driver)' : ''), true); return; }
       var m = monthOf(o.date), old = oldestAllowed();
@@ -475,7 +482,7 @@
         fld('Helper', personField('helper', M.helpers, r.jenis, r.helper, '— Tanpa helper —')) +
         fld('Fungsi', '<select class="select" name="fungsi">' + M.fungsi.map(function (f) { return '<option' + (f === r.fungsi ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>') +
         fld('Nama User', '<input class="input" name="user" value="' + esc(r.user) + '">', true) +
-        fld('Estimasi Tonase (ton)', '<input class="input" name="tonase" type="number" min="0" step="any" value="' + esc(r.tonase == null ? '' : r.tonase) + '">') +
+        fld('Estimasi Tonase (ton)', '<input class="input" name="tonase" type="number" min="0" max="' + MAX_TON + '" step="any" value="' + esc(r.tonase == null ? '' : r.tonase) + '">') +
         fld('Radius angkut / Boom (meter)', '<input class="input" name="boom" type="number" min="0" step="any" value="' + esc(r.boom == null ? '' : r.boom) + '">') +
         fld('Barang yang dibawa', '<input class="input" name="barang" value="' + esc(r.barang) + '">', true) +
         fld('Lokasi (muat)', '<input class="input" name="lokasi" value="' + esc(r.lokasi) + '">') +
@@ -490,7 +497,7 @@
     }
     async function saveEdit(f) {
       var id = f.getAttribute('data-id'), r = findRec(id), o = formData(f);
-      if (!r) return;
+      if (!r || !tonOk(o)) return;
       var from = F.sel, to = monthOf(o.date), old = oldestAllowed();
       if (old && to < old) { toast('Tanggal di luar masa simpan 6 bulan', true); return; }
       var u = unitById(o.unit);
