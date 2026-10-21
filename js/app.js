@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021c'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021d'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -267,7 +267,7 @@
     pengaturan: ['Pengaturan', 'Akun, pengguna, koneksi GitHub, Field & kode plant'],
     riwayat: ['Riwayat Order ke MIM', 'Semua Call Order yang sudah di-export, lengkap dengan tanggal & status'],
     tko: ['TKO & Referensi Warehouse', 'Tata Kerja, Pedoman & SOP — preview langsung atau download PDF'],
-    angber: ['Reservasi Armada', 'Angkutan Berat — ajukan pemakaian Crane, Picker, Tronton, Trailer & Vacuum Truck'],
+    angber: ['Reservasi Armada', 'Angkutan Berat — Crane, Picker, Tronton, Trailer, Vacuum Truck & Forklift'],
     'angber-riwayat': ['Riwayat Armada', 'Riwayat pemakaian angkutan berat per bulan — filter, edit & export Excel']
   };
   function render() {

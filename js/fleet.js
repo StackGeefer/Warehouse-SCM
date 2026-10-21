@@ -157,7 +157,7 @@
       return out;
     }
     function unitById(id) { return (F.master.units || []).filter(function (u) { return u.id === id; })[0] || null; }
-    function unitLabel(u) { return u ? u.id + ' · ' + u.nopol + (u.cap ? ' · ' + u.cap + ' T' : '') : '—'; }
+    function unitLabel(u) { return u ? [u.id, u.nopol, u.cap ? u.cap + ' T' : ''].filter(Boolean).join(' · ') : '—'; }
     function peopleOpts(list, type, sel, emptyLabel) {
       var a = list.filter(function (p) { return p.type === type; }), b = list.filter(function (p) { return p.type !== type; });
       var known = list.some(function (p) { return p.name === sel; }), isOther = sel === OTHER || (sel && !known);
@@ -188,7 +188,7 @@
       v.innerHTML =
         '<div class="fleet-grid">' +
         '<div class="card card-pad"><h4 class="section-title">Form Reservasi Armada</h4>' +
-        '<div class="small muted" style="margin:-4px 0 12px">Khusus angkutan berat (Crane, Picker, Tronton, Trailer, Vacuum Truck) — di luar KRP.</div>' +
+        '<div class="small muted" style="margin:-4px 0 12px">Khusus angkutan berat (' + esc(types().join(', ')) + ') — di luar KRP.</div>' +
         '<form id="fleetForm" class="fleet-form" autocomplete="off">' +
         fld('Tanggal pemakaian', '<input class="input" type="date" name="date" required value="' + esc(F.date) + '">') +
         fld('Armada (jenis)', '<select class="select" name="jenis" required>' + tps.map(function (t) { return '<option' + (t === jenis ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join('') + '</select>') +
@@ -197,7 +197,8 @@
           return '<option value="' + esc(u.id) + '"' + (d.unit === u.id ? ' selected' : '') + '>' + esc(unitLabel(u)) + (b ? ' — terpakai (' + b + ')' : '') + '</option>';
         }).join('') + '</select>') +
         fld('Driver', personField('driver', M.drivers, jenis, d.driver, 'Pilih driver…', true)) +
-        fld('Helper', personField('helper', M.helpers, jenis, d.helper, '— Tanpa helper —')) +
+        fld('Helper', personField('helper', M.helpers, jenis, d.helper, '— Tanpa helper —') +
+          (M.helpers.some(function (h) { return h.type === jenis; }) ? '' : '<div class="small muted">' + esc(jenis) + ' tanpa helper</div>')) +
         fld('Fungsi', '<select class="select" name="fungsi" required><option value="">Pilih fungsi…</option>' + M.fungsi.map(function (f) { return '<option' + (d.fungsi === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>') +
         fld('Nama User', '<input class="input" name="user" required placeholder="Nama pengguna/pemohon" value="' + esc(d.user || '') + '">', true) +
         fld('Estimasi Tonase (ton)', '<input class="input" name="tonase" type="number" min="0" step="any" placeholder="mis. 8" value="' + esc(d.tonase == null ? '' : d.tonase) + '"><div class="small muted" id="capHint"></div>') +
