@@ -173,6 +173,13 @@
       return '<select class="select" name="' + name + '"' + (required ? ' required' : '') + ' data-other="' + name + 'Other">' + peopleOpts(list, type, sel, emptyLabel) + '</select>' +
         '<input class="input' + (isOther ? '' : ' hidden') + '" name="' + name + 'Other" placeholder="Ketik nama ' + (kind || name) + '" value="' + esc(isOther && sel !== OTHER ? sel : '') + '">';
     }
+    function setPerson(f, name, val) {
+      var sel = f.elements[name], other = f.elements[name + 'Other'];
+      if (!sel) return;
+      var known = [].some.call(sel.options, function (o) { return o.value === val; });
+      sel.value = known ? val : OTHER;
+      if (other) { other.value = known ? '' : val; other.classList.toggle('hidden', known); }
+    }
     function personVal(f, name) {
       var el = f.elements[name];
       if (!el) return '';
@@ -659,9 +666,14 @@
         else if (t.name === 'jenis') { F.draft.unit = ''; renderForm(); }
         else if (t.name === 'tonase') capHint();
         return;
-      } else if (f && f.id === 'fleetEdit' && t.name === 'jenis') {
-        var us = F.master.units.filter(function (u) { return u.type === t.value; });
-        f.unit.innerHTML = us.map(function (u) { return '<option value="' + esc(u.id) + '">' + esc(unitLabel(u)) + '</option>'; }).join('');
+      } else if (f && f.id === 'fleetEdit' && (t.name === 'jenis' || t.name === 'unit')) {
+        // ganti armada saat edit: daftar unit menyesuaikan, driver & helper default unit langsung terisi
+        if (t.name === 'jenis') {
+          var us = F.master.units.filter(function (u) { return u.type === t.value; });
+          f.unit.innerHTML = us.map(function (u) { return '<option value="' + esc(u.id) + '">' + esc(unitLabel(u)) + '</option>'; }).join('');
+        }
+        var nu = unitById(f.unit.value);
+        if (nu && nu.driver) { setPerson(f, 'driver', nu.driver); setPerson(f, 'helper', nu.helper || ''); }
       } else if (t.id === 'fMonth') { F.sel = t.value; renderHistory(); }
       else if (t.id === 'fJenis') { F.filt.jenis = t.value; renderHistory(); }
       else if (t.id === 'fProgram') { F.filt.program = t.value; renderHistory(); }

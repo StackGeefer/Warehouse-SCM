@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021i'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021j'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -2016,6 +2016,19 @@
     $('#cartbar').classList.add('hidden');
     showLogin();
   }
+  // Cek versi terbaru di server: bila browser masih memakai versi lama (cache), muat ulang otomatis sekali
+  function checkUpdate() {
+    fetch('index.html?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+      var m = /app\.js\?v=([\w]+)/.exec(html || '');
+      if (!m || m[1] === APP_VERSION) return;
+      var k = 'mw:reload-' + m[1];
+      try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); } catch (e) { return; }
+      toast('Versi baru website tersedia — memuat ulang…');
+      setTimeout(function () { location.reload(); }, 900);
+    }).catch(function () {});
+  }
+  // juga saat tab dibuka kembali (website yang dibiarkan terbuka lama)
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkUpdate(); });
   async function startApp() {
     await unlockShared();
     if (canWarehouse()) await loadData();
@@ -2411,6 +2424,7 @@
   // ================= Start =================
   (async function init() {
     loading('Memuat…');
+    checkUpdate();
     ['stock', 'oa', 'mb51'].forEach(function (k) { Store.del(k); }); // sisa versi lama
     await loadRepoMeta();
     var sess = sessionGet();
