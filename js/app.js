@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261021b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -268,7 +268,7 @@
     riwayat: ['Riwayat Order ke MIM', 'Semua Call Order yang sudah di-export, lengkap dengan tanggal & status'],
     tko: ['TKO & Referensi Warehouse', 'Tata Kerja, Pedoman & SOP — preview langsung atau download PDF'],
     angber: ['Reservasi Armada', 'Angkutan Berat — ajukan pemakaian Crane, Picker, Tronton, Trailer & Vacuum Truck'],
-    'angber-riwayat': ['Riwayat Armada', 'Riwayat pemakaian angkutan berat per bulan — filter, approval, edit & export Excel']
+    'angber-riwayat': ['Riwayat Armada', 'Riwayat pemakaian angkutan berat per bulan — filter, edit & export Excel']
   };
   function render() {
     if (!S.user) return;
@@ -1139,14 +1139,14 @@
   // Owner Utama & Co-Owner boleh mengubah data; hanya Owner Utama yang mengatur token & pengguna
   function isOwner() { return !!(S.user && Vault.isEditor(S.user.role)); }
   function isMainOwner() { return !!(S.user && S.user.role === 'owner'); }
-  var ROLE_LABEL = { owner: 'Owner Utama', coowner: 'Co-Owner', viewer: 'Warehouse', angkutan: 'User Angkutan', admin_angkutan: 'Admin Angkutan' };
+  var ROLE_LABEL = { owner: 'Owner Utama', coowner: 'Co-Owner', viewer: 'Warehouse', angkutan: 'Angkutan', admin_angkutan: 'Angkutan' };
   function roleLabel(r) { return ROLE_LABEL[r] || 'Warehouse'; }
   function roleBadge(r) { return '<span class="badge ' + ({ owner: 'ok', coowner: 'ro', admin_angkutan: 'bau', angkutan: 'bau' }[r] || '') + '">' + roleLabel(r) + '</span>'; }
   // Akses menu: Warehouse = material & order; Angkutan = angkutan berat; Owner/Co-Owner = semua
   function role() { return S.user ? S.user.role : ''; }
   function canWarehouse() { return ['owner', 'coowner', 'viewer'].indexOf(role()) >= 0 || !ROLE_LABEL[role()]; }
   function canFleet() { return ['owner', 'coowner', 'angkutan', 'admin_angkutan'].indexOf(role()) >= 0; }
-  function canAdminFleet() { return ['owner', 'coowner', 'admin_angkutan'].indexOf(role()) >= 0; }
+  function canAdminFleet() { return canFleet(); } // satu peran Angkutan: isi, edit & master armada
   var FLEET_ROUTES = { angber: 1, 'angber-riwayat': 1 };
   function routeAllowed(name) { return name === 'pengaturan' || (FLEET_ROUTES[name] ? canFleet() : canWarehouse()); }
   var Fleet = null;
@@ -1319,7 +1319,7 @@
       var me = u.id === S.user.id;
       var warn = Vault.hasAdminKey(u.role) && u.role !== 'owner' && !u.ak ? ' <span class="badge warn" title="Atur ulang dengan password agar bisa publikasi">belum bisa publikasi</span>' : '';
       var ctl = me || u.role === 'owner' ? '' :
-        '<select class="select sm" data-role>' + ['viewer', 'coowner', 'angkutan', 'admin_angkutan'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
+        '<select class="select sm" data-role>' + ['viewer', 'coowner', 'angkutan'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
         '<input class="input sm" data-rpw type="password" placeholder="Password (wajib utk Co-Owner)" autocomplete="new-password" style="width:200px">' +
         '<button class="btn sm" data-act="set-role" data-id="' + esc(u.id) + '">Simpan</button>' +
         '<button class="btn sm danger" data-act="del-user" data-id="' + esc(u.id) + '">' + ICON.trash + '</button>';
@@ -1339,13 +1339,13 @@
       '<div><div style="font-weight:700;margin-bottom:6px">Tambah pengguna</div><div class="toolbar">' +
       '<input class="input sm" id="nuName" placeholder="Username" autocomplete="off">' +
       '<input class="input sm" id="nuPw" type="password" placeholder="Password" autocomplete="new-password">' +
-      '<select class="select sm" id="nuRole"><option value="viewer">Warehouse (material &amp; Call Order)</option><option value="coowner">Co-Owner (semua menu, upload &amp; ubah data)</option><option value="angkutan">User Angkutan (reservasi armada)</option><option value="admin_angkutan">Admin Angkutan (approval &amp; edit riwayat)</option></select>' +
+      '<select class="select sm" id="nuRole"><option value="viewer">Warehouse (material &amp; Call Order)</option><option value="coowner">Co-Owner (semua menu, upload &amp; ubah data)</option><option value="angkutan">Angkutan (reservasi &amp; riwayat armada)</option></select>' +
       '<button class="btn sm primary" data-act="add-user">Tambah</button></div></div>' +
       '<div><div style="font-weight:700;margin-bottom:6px">Ganti password saya</div><div class="toolbar">' +
       '<input class="input sm" id="cpPw" type="password" placeholder="Password baru" autocomplete="new-password">' +
       '<input class="input sm" id="cpPw2" type="password" placeholder="Ulangi password baru" autocomplete="new-password">' +
       '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
-      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak &amp; Call Order (tanpa Angkutan Berat). <b>User Angkutan</b>: hanya Reservasi &amp; Riwayat Armada. <b>Admin Angkutan</b>: + approval, edit &amp; master armada. Untuk Co-Owner/User Angkutan/Admin Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
+      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak &amp; Call Order (tanpa Angkutan Berat). <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub (agar upload langsung tampil untuk semua pengguna)</h4>' +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
