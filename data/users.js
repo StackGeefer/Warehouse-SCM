@@ -34,10 +34,10 @@ window.MW_USERS = [
   "id": "f0b23ff080cc6dd66b8d628563c79bc92e1189e6308e3583d1bcb822f0c2a9ae",
   "name": "Angkutan",
   "role": "angkutan",
-  "salt": "idZe0QKiBRTGQxePdVegxQ==",
-  "iv": "lIhaH2LOYonAwDys",
-  "wk": "zQvznReL1yXXKQWpdjc4u/oET8UYDs92ovnTxvh/zepmDZKCQL9Hkn5rQJbNAFwc",
-  "aiv": "f+QRz9anpHaCUqJ2",
-  "ak": "w6SfRygA8/VorVTDvAaHKaDTQQZa9iOYqGD4Lvr9ZObRN0M85h5/ROE8H9m/PXbO"
+  "salt": "60lBlnduajVlThUSJtf/aQ==",
+  "iv": "4NVsi8uWeFeodtvz",
+  "wk": "Ch+z8NcfNb4S0R6+J4WiP+w7XbxOGXIxLNIJzz6XJvsQzzQiwfZHDF5WqSnfIW2t",
+  "aiv": "wqMX7rVQffH0F4mg",
+  "ak": "XRudp7waYP+x8fCcYLz41eU+SEcBTv1qhOSOxcV2BMi+7IiwPQ7kNR5J6PYT2Ma8"
  }
 ];
