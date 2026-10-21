@@ -1,2 +1,2 @@
 /* Token GitHub Owner Utama untuk publikasi Co-Owner — TERENKRIPSI (hanya Owner/Co-Owner yang bisa membuka) */
-window.MW_ADMIN = {"tok":"MWK1.+oWaTT1CKPvU5PD2FSycU02yECGjXmDp5er1ojXuhcXISDlDGbEHaAgJwo4zi7j2iz2tzGa5EjMprsl9VQOJtI2kVkkFOeBPAxSvjcVeIyBviAzAzoa6j89jJjqbxo7l6qH1Z/m+ls7iFFj3wzbVdCKcX7+dcQ9eTnV4Yut4GVBmzK7WKw7471jX9YV4gOQpDrFnr/Y=","by":"Gerald.samosir","at":"2026-10-20T07:22:09.583Z"};
+window.MW_ADMIN = {"tok":"MWK1.J8pXAc2m2psJ9l6wj30gZBjDwrymqf3Y6VXxo4Ze+AMGpK3Wdkm8i+fqprdAsyga1mgK0dPjfG6jwZXUTh0z45XuaKVcLEq+Z4UxSspQU0Zc3TVn3e+hn3xaqN3cxTK5BeUdOqZP/+ITjag2QWTZhX89xAMHwX4yni/gg89H4BfBxDDZuoR2AvcnqTzK0wDFI0Xz9C4=","by":"Gerald.samosir","at":"2026-10-21T10:50:58.761Z"};
