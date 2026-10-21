@@ -33,11 +33,11 @@ window.MW_USERS = [
  {
   "id": "f0b23ff080cc6dd66b8d628563c79bc92e1189e6308e3583d1bcb822f0c2a9ae",
   "name": "Angkutan",
-  "role": "admin_angkutan",
-  "salt": "3H1HvfSorXi/R4vvmQx8Ng==",
-  "iv": "qtfgrGjb0BqJMpZT",
-  "wk": "32xnlmCez/ftVsB4M/gjzgMp+vNKf9kle8efdkxKt3qqtorae9hVwnCX3YPAMjgP",
-  "aiv": "CcwDaBbrQKZdLY61",
-  "ak": "JhSswghFNs5TEIWeMuNMurA+DD/3xvs1Apl2NpKJKUsPmjX8JwW0Y/R04OuGrF3p"
+  "role": "angkutan",
+  "salt": "WH/hYMz5FJr6R9xvAjd8Sg==",
+  "iv": "WwD+eon28rz2uZ6T",
+  "wk": "hmJMGPwEN1OMWvqE1kjWfQONf+5FnYOhQgy7yDIDfGcQmd8xFLTP38bKXo3ep9oc",
+  "aiv": "qf5UpMZsrWusY+3n",
+  "ak": "o/y0sX5LqSSPhaIItJyDFe5AsF3yW4CAJ2/MHmRq8oQLx0A6xBhBMTPhKs725ua4"
  }
 ];
