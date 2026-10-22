@@ -92,7 +92,8 @@
 
     // ch = { months: { 'YYYY-MM': function (list) { return list } }, master: obj, exported: 'YYYY-MM' }
     async function commit(ch, message) {
-      if (!ctx.ghToken()) throw new Error('Akun ini belum punya akses publikasi. Minta Owner Utama mengatur akses Anda.');
+      if (!ctx.ghToken() && ctx.ensureToken) await ctx.ensureToken();
+      if (!ctx.ghToken()) throw new Error('Akun ini belum diberi akses simpan. Minta Owner Utama mengatur akses (Pengaturan → Pengguna: pilih peran + isi password), lalu coba lagi.');
       for (var attempt = 0; attempt < 4; attempt++) {
         var ref = await gh('GET', '/git/ref/heads/' + ctx.branch);
         var base = ref.object.sha;

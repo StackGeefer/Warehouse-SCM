@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261022b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261022c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1285,7 +1285,7 @@
     if (!Pass) Pass = window.PassModule({
       S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, gh: gh, ghToken: ghToken, branch: GH_BRANCH,
       route: function () { return currentRoute().name; }, isOwner: isOwner, isMainOwner: isMainOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav,
-      addManualOut: addManualOut, manualCount: function () { return manualOut().length; }
+      addManualOut: addManualOut, manualCount: function () { return manualOut().length; }, ensureToken: ensureToken
     });
     return Pass;
   }
@@ -1300,12 +1300,53 @@
     if (!Fleet) Fleet = window.FleetModule({
       S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, gh: gh, ghToken: ghToken, branch: GH_BRANCH,
       route: function () { return currentRoute().name; }, canAdminFleet: canAdminFleet, closeDrawer: closeDrawer,
-      loadExcelJS: Exporter.loadExcelJS, refreshSide: function () { if (S.user) renderSide(); }
+      loadExcelJS: Exporter.loadExcelJS, refreshSide: function () { if (S.user) renderSide(); }, ensureToken: ensureToken
     });
     return Fleet;
   }
   function ghToken() { return (isMainOwner() && Store.load('ghToken')) || S.sharedTok || null; }
   // Token bersama: dienkripsi kunci admin (hanya Owner/Co-Owner bisa membuka)
+  // Pastikan akses simpan (token bersama) aktif. Bila sesi lama belum membawa kunci akses
+  // (login sebelum Owner mengaktifkan akses), minta password akun sekali — tanpa perlu Owner.
+  async function ensureToken() {
+    if (ghToken()) return true;
+    var t = Date.now();
+    await loadScript('data/users.js?t=' + t).catch(function () {});
+    await loadScript('data/admin.js?t=' + t).catch(function () {});
+    S.users = (S.pending && S.pending.users) || (S.recent && S.recent.users) || window.MW_USERS || S.users;
+    await unlockShared();
+    if (ghToken()) return true;
+    var me = (S.users || []).filter(function (x) { return x.id === S.user.id; })[0];
+    if (!me || !me.ak || !Vault.hasAdminKey(me.role)) return false; // akses belum diatur Owner Utama
+    var pw = await askPassword();
+    if (!pw) return false;
+    try {
+      var r = await Vault.login(S.users, S.user.name, pw);
+      if (!r.adminKey) return false;
+      S.adminKey = r.adminKey;
+      var sess = sessionGet();
+      if (sess) { sess.ak = Vault.toB64(r.adminKey); sessionSet(sess, !!localStorage.getItem('mw:session')); }
+      await unlockShared();
+      if (ghToken()) toast('Akses simpan aktif');
+      return !!ghToken();
+    } catch (e) { toast('Password salah', true); return false; }
+  }
+  function askPassword() {
+    return new Promise(function (resolve) {
+      var el = document.createElement('div');
+      el.className = 'pw-modal';
+      el.innerHTML = '<form class="card card-pad"><h3 style="margin:0 0 6px">Aktifkan akses simpan</h3>' +
+        '<p class="small muted" style="margin:0 0 12px">Masukkan password akun <b>' + esc(S.user.name) + '</b> sekali agar data bisa tersimpan untuk semua pengguna.</p>' +
+        '<input class="input" type="password" autocomplete="current-password" placeholder="Password" style="width:100%">' +
+        '<div class="toolbar" style="margin-top:12px;justify-content:flex-end"><button type="button" class="btn" data-x>Batal</button><button class="btn primary" type="submit">Aktifkan</button></div></form>';
+      document.body.appendChild(el);
+      var inp = el.querySelector('input');
+      setTimeout(function () { inp.focus(); }, 30);
+      function done(v) { el.remove(); resolve(v); }
+      el.querySelector('[data-x]').onclick = function () { done(null); };
+      el.querySelector('form').onsubmit = function (e) { e.preventDefault(); done(inp.value); };
+    });
+  }
   async function unlockShared() {
     S.sharedTok = null;
     var adm = localVal('admin') || window.MW_ADMIN;

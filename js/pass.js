@@ -51,7 +51,8 @@
     function fileText(varName, note, payload) { return '/* ' + note + ' — TERENKRIPSI */\nwindow.' + varName + ' = ' + JSON.stringify(payload) + ';\n'; }
     // Ubah satu file: baca terbaru dari GitHub → mutate → commit; ulang bila ada commit lain di saat yang sama
     async function atomic(path, varName, note, mutate, message) {
-      if (!ctx.ghToken()) throw new Error('Akun ini belum punya akses publikasi. Minta Owner Utama mengatur akses Anda (Pengaturan → Pengguna, isi password) lalu login ulang.');
+      if (!ctx.ghToken() && ctx.ensureToken) await ctx.ensureToken();
+      if (!ctx.ghToken()) throw new Error('Akun ini belum diberi akses simpan. Minta Owner Utama mengatur akses (Pengaturan → Pengguna: pilih peran + isi password), lalu coba lagi.');
       for (var attempt = 0; attempt < 4; attempt++) {
         var ref = await gh('GET', '/git/ref/heads/' + ctx.branch), base = ref.object.sha;
         var cm = await gh('GET', '/git/commits/' + base);
