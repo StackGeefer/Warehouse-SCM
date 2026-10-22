@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261022a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261022b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -193,9 +193,44 @@
     if (!parts.length && others.length) txt = 'Stok di field lain: ' + others.slice(0, 4).join(', ') + (others.length > 4 ? ', …' : '');
     return txt;
   }
-  function suggestion(o) {
-    var c = +S.settings.coverMonths || 3;
-    return Math.max(0, Math.ceil(o.avg12 * c - o.homeStock));
+  // Saran qty RO: pemakaian rata-rata tertimbang (3 bln terakhir 60% + 12 bln 40%) × (cover + lead time) − stok
+  function lastOrderOf(m) {
+    var list = allOrders();
+    for (var i = 0; i < list.length; i++) {
+      var rec = list[i], hit = null;
+      (rec.roGroups || []).forEach(function (g) { (g.items || []).forEach(function (x) { if (x.m === m && x.qty > 0 && !hit) hit = x; }); });
+      if (hit && rec.status !== 'Dibatalkan') return { qty: hit.qty, at: rec.createdAt, id: rec.id };
+    }
+    return null;
+  }
+  function suggestDetail(o, actual) {
+    var cover = +S.settings.coverMonths || 3, lead = S.settings.leadMonths != null ? +S.settings.leadMonths : 1;
+    var sp = o.spark || [], m12 = o.avg12 || 0;
+    var m3 = sp.length >= 3 ? (sp[sp.length - 1] + sp[sp.length - 2] + sp[sp.length - 3]) / 3 : m12;
+    var rate = m12 > 0 || m3 > 0 ? 0.6 * m3 + 0.4 * m12 : 0;
+    var stock = actual != null ? actual : (o.homeStock || 0);
+    var target = rate * (cover + lead);
+    return {
+      sug: Math.max(0, Math.ceil(target - stock)), rate: rate, m12: m12, m3: m3, stock: stock, actual: actual != null,
+      months: rate > 0 ? stock / rate : null, target: target, cover: cover, lead: lead, peak: Math.max.apply(null, sp.concat([0])), last: lastOrderOf(o.m)
+    };
+  }
+  function suggestion(o) { return suggestDetail(o).sug; }
+  function sugHtml(o, actual) {
+    var d = suggestDetail(o, actual), f1 = function (n) { return fmtQ(Math.round(n * 10) / 10); };
+    var last = d.last ? 'order terakhir ' + fmtQ(d.last.qty) + ' (' + fmtDate(String(d.last.at).slice(0, 10)) + ')' : '';
+    var tip = d.rate > 0
+      ? 'Pemakaian ' + homeName() + ': rata-rata 12 bln ' + f1(d.m12) + '/bln, 3 bln terakhir ' + f1(d.m3) + '/bln, tertinggi ' + fmtQ(d.peak) + '/bln.\n' +
+        'Dipakai ' + f1(d.rate) + '/bln (60% 3 bln + 40% 12 bln).\n' +
+        'Target stok = ' + f1(d.rate) + ' × (cover ' + d.cover + ' + lead time ' + d.lead + ' bln) = ' + fmtQ(Math.ceil(d.target)) + '.\n' +
+        'Stok ' + (d.actual ? 'aktual' : 'SAP') + ' ' + fmtQ(d.stock) + ' → saran ' + fmtQ(d.sug) + '.' + (last ? '\n' + last.charAt(0).toUpperCase() + last.slice(1) + '.' : '') + '\nKlik untuk mengisi Call RO.'
+      : 'Tidak ada pemakaian ' + homeName() + ' 12 bulan terakhir (MB51).' + (last ? '\n' + last : '');
+    var btn = d.rate > 0
+      ? (d.sug > 0 ? '<button class="hint-btn" data-act="sug" data-v="' + d.sug + '" title="' + esc(tip) + '">saran ' + fmtQ(d.sug) + '</button>'
+        : '<span class="hint-btn ok" title="' + esc(tip) + '">saran 0 · stok cukup</span>')
+      : '<span class="hint-btn none" title="' + esc(tip) + '">tanpa pemakaian</span>';
+    var info = [d.rate > 0 ? (d.months > 99 ? 'stok > 99 bln' : 'cukup ±' + f1(d.months) + ' bln') + ' · ' + f1(d.rate) + '/bln' : '', last].filter(Boolean).join(' · ');
+    return '<div class="sug-box" data-sugbox title="' + esc(tip) + '">' + btn + (info ? '<div class="sug-info">' + esc(info) + '</div>' : '') + '</div>';
   }
 
   // ================= Komponen kecil =================
@@ -832,7 +867,7 @@
           '<td class="num"><input class="input num sm" type="number" min="0" step="any" data-f="actual" value="' + (x.actual != null ? x.actual : '') + '" placeholder="—"></td>' +
           '<td class="num">' + fmtQ(x.hist) + '</td>' +
           '<td class="num"><input class="input num sm" type="number" min="0" step="any" data-f="qty" value="' + (x.qty != null ? x.qty : '') + '" placeholder="0">' +
-          (x.sug > 0 ? '<button class="hint-btn" data-act="sug" data-v="' + x.sug + '" title="Rata-rata pakai ' + S.settings.coverMonths + ' bulan dikurangi stok">saran ' + fmtQ(x.sug) + '</button>' : '') + '</td>' +
+          sugHtml(x.o, x.actual) + '</td>' +
           '<td class="num price">' + fmtMoney(x.price, x.cur) + '</td>' +
           '<td class="num price" data-total>' + total + '</td>' +
           '<td><div class="oa-pick"><select class="select sm" data-f="oa">' + opts + '</select>' +
@@ -1544,7 +1579,8 @@
       '<div class="table-wrap"><table class="grid"><thead><tr><th class="c">Home</th><th class="c">Kolom utama</th><th>Zona</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div class="toolbar" style="margin-top:10px"><button class="btn sm" data-act="add-field">+ Tambah Field</button><span class="small muted">Plant di data saat ini: <span class="mono">' + esc(known) + '</span></span></div></div>' +
       '<div class="card card-pad" style="margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">' +
-      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = rata-rata pemakaian/bulan × cover − stok ' + esc(homeName()) + '</div></label>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = pemakaian/bulan (60% rata-rata 3 bln terakhir + 40% rata-rata 12 bln) × (cover + lead time) − stok ' + esc(homeName()) + '</div></label>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Lead time RO (bulan)</div><input class="input" type="number" min="0" max="12" step="0.5" id="setLead" value="' + esc(st.leadMonths != null ? st.leadMonths : 1) + '"><div class="small muted" style="margin-top:4px">Perkiraan waktu dari Call RO sampai barang tiba di gudang</div></label>' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div>' +
       '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Kosongkan Call Order &amp; cache browser</button></div>';
     if (isOwner()) passMod().fillSignCard();
@@ -1586,6 +1622,7 @@
       if (h) f.home = h.checked;
     });
     var c = $('#setCover'); if (c) st.coverMonths = Math.max(1, +c.value || 3);
+    var ld = $('#setLead'); if (ld) st.leadMonths = Math.max(0, +ld.value || 0);
     var hy = $('#setHist'); if (hy) st.historyYear = hy.value ? +hy.value : null;
     return st;
   }
@@ -2167,7 +2204,10 @@
         var cell = tr.querySelector('[data-total]');
         if (cell) cell.textContent = it2.ro.qty > 0 && l ? fmtMoney(it2.ro.qty * l.price, l.cur) : '—';
         saveCart(); refreshCOTotals();
-      } else if (f === 'actual') { it2.ro.actual = numVal(t.value); saveCart(); }
+      } else if (f === 'actual') {
+        it2.ro.actual = numVal(t.value); saveCart();
+        var sb = tr.querySelector('[data-sugbox]'); if (sb) sb.outerHTML = sugHtml(S.idx.mats.get(it2.m), it2.ro.actual);
+      }
       else if (f === 'note') { it2.ro.note = t.value; saveCart(); }
       else if (f === 'baunote') { it2.bau.note = t.value; saveCart(); }
       else if (t.hasAttribute('data-alloc')) {
@@ -2272,7 +2312,7 @@
         toast(n + ' item ' + (act === 'check-all' ? 'ditambahkan ke' : 'dihapus dari') + ' RO');
       }
       else if (act === 'sug') {
-        var inp = a.parentNode.querySelector('input');
+        var inp = a.closest('td').querySelector('input[data-f="qty"], input');
         inp.value = a.getAttribute('data-v');
         inp.dispatchEvent(new Event('input', { bubbles: true }));
       }

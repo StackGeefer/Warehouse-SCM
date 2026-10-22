@@ -139,3 +139,8 @@ Menu **Reservasi Armada** dan **Riwayat Armada** — khusus angkutan berat (Cran
 | Warehouse | Material, kontrak, Call Order, riwayat order, TKO, Pass Keluar + **Reservasi Armada** (tanpa Riwayat Armada) |
 | Angkutan | Hanya Reservasi & Riwayat Armada — isi, edit, tandai selesai/batal, export & master armada |
 | Owner Utama / Co-Owner | Semua menu |
+
+## Saran qty Call RO
+
+Di bawah kolom **Call RO** selalu tampil saran: `pemakaian/bulan × (cover + lead time) − stok`, dengan pemakaian/bulan = 60% rata-rata 3 bulan terakhir + 40% rata-rata 12 bulan (MB51 Rantau). Bila **Stok Aktual** diisi, saran memakai stok aktual. Ditampilkan juga stok cukup ±berapa bulan dan **order terakhir** (dari Riwayat Order). Arahkan kursor ke saran untuk rincian perhitungan; klik saran untuk mengisi Call RO. Cover & lead time diatur di **Pengaturan**.
+
