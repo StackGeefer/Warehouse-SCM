@@ -628,3 +628,7 @@ tr.oa-other td{opacity:.72}
 .sug-info { font-size: 10.5px; color: var(--muted); line-height: 1.3; white-space: nowrap; }
 .pw-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
 .pw-modal .card { width: 100%; max-width: 380px; }
+/* Program per unit (VT Rutin): + kolom Alokasi & User PO */
+.rig-table.pu .rig-sub { grid-column: 2; }
+.rig-lbl { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+@media (max-width: 960px) { .rig-table.pu .rig-sub { grid-column: auto; } }

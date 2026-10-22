@@ -202,6 +202,7 @@
       if (!document.getElementById('view') || ctx.route() !== 'angber') return;
       var M = F.master, d = F.draft || {};
       var tps = types(), prog = d.program && progOf(d.program) ? d.program : defaultProgram(), rig = isRig(prog);
+      var pobj = progOf(prog) || {}, pu = rig && !!pobj.perUnit, fdef = d.fungsi || pobj.fungsi || '';
       var jenis = d.jenis || tps[0] || '';
       var units = M.units.filter(function (u) { return u.type === jenis; });
       var busy = busyUnits(F.date, d.id);
@@ -221,13 +222,13 @@
         fld('Driver', personField('driver', M.drivers, jenis, d.driver, 'Pilih driver…', true)) +
         fld('Helper', personField('helper', M.helpers, jenis, d.helper, '— Tanpa helper —') +
           (M.helpers.some(function (h) { return h.type === jenis; }) ? '' : '<div class="small muted">' + esc(jenis) + ' tanpa helper</div>'))) +
-        fld('Fungsi', '<select class="select" name="fungsi" required><option value="">Pilih fungsi…</option>' + M.fungsi.map(function (f) { return '<option' + (d.fungsi === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>') +
-        fld('Nama User', '<input class="input" name="user" required placeholder="Nama pengguna/pemohon" value="' + esc(d.user || '') + '">', true) +
+        fld('Fungsi', '<select class="select" name="fungsi" required><option value="">Pilih fungsi…</option>' + M.fungsi.map(function (f) { return '<option' + (fdef === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>') +
+        (pu ? '' : fld('Nama User', '<input class="input" name="user" required placeholder="Nama pengguna/pemohon" value="' + esc(d.user || '') + '">', true)) +
         fld('Estimasi Tonase (ton)', '<input class="input" name="tonase" type="number" min="0" max="' + MAX_TON + '" step="any" placeholder="mis. 8" value="' + esc(d.tonase == null ? '' : d.tonase) + '"><div class="small muted" id="capHint"></div>') +
         fld('Radius angkut / Boom (meter)', '<input class="input" name="boom" type="number" min="0" step="any" placeholder="mis. 12" value="' + esc(d.boom == null ? '' : d.boom) + '">') +
-        fld('Barang yang dibawa', '<input class="input" name="barang" required placeholder="mis. Pipa 2-7/8&quot; 20 joint" value="' + esc(d.barang || '') + '">', true) +
-        fld('Lokasi (muat)', '<input class="input" name="lokasi" required placeholder="mis. Gudang Rantau" value="' + esc(d.lokasi || '') + '">') +
-        fld('Tujuan', '<input class="input" name="tujuan" required placeholder="mis. SP-XII / RIG RTU 01" value="' + esc(d.tujuan || '') + '">') +
+        fld('Barang yang dibawa' + (pu ? ' (opsional)' : ''), '<input class="input" name="barang"' + (pu ? '' : ' required') + ' placeholder="mis. Pipa 2-7/8&quot; 20 joint" value="' + esc(d.barang || '') + '">', true) +
+        fld('Lokasi (muat)' + (pu ? ' (opsional)' : ''), '<input class="input" name="lokasi"' + (pu ? '' : ' required') + ' placeholder="mis. Gudang Rantau" value="' + esc(d.lokasi || '') + '">') +
+        (pu ? '' : fld('Tujuan', '<input class="input" name="tujuan" required placeholder="mis. SP-XII / RIG RTU 01" value="' + esc(d.tujuan || '') + '">')) +
         fld('Catatan (opsional)', '<input class="input" name="note" value="' + esc(d.note || '') + '">', true) +
         '<div class="fleet-actions"><button class="btn primary" type="submit">' + (rig ? 'Simpan Reservasi ' + esc(prog) : 'Simpan Reservasi') + '</button><span class="small muted">Status: <b>Terjadwal</b>' + (rig ? ' · satu reservasi per armada yang dicentang' : '') + '</span></div>' +
         '</form></div>' +
@@ -236,18 +237,20 @@
     }
     // Daftar armada Moving Rig: semua unit terisi otomatis + driver & helper default (bisa diubah / dihapus centangnya)
     function rigTable(prog, d, busy) {
-      var M = F.master, p = progOf(prog), st = d.rig || {};
+      var M = F.master, p = progOf(prog), st = d.rig || {}, pu = !!p.perUnit, pr = p.rows || {};
       var rows = p.units.map(function (id) {
-        var u = unitById(id) || { id: id, type: '', nopol: '' }, cur = st[id] || {};
+        var u = unitById(id) || { id: id, type: '', nopol: '' }, cur = st[id] || {}, dr = pr[id] || {};
         var on = cur.on !== false, drv = cur.driver != null ? cur.driver : (u.driver || ''), hlp = cur.helper != null ? cur.helper : (u.helper || '');
         return '<div class="rig-row' + (on ? '' : ' off') + '">' +
           '<label class="rig-unit"><input type="checkbox" name="rigOn" value="' + esc(id) + '"' + (on ? ' checked' : '') + '><span><b>' + esc(id) + '</b> <span class="small muted">' + esc(u.type) + (u.nopol ? ' · ' + esc(u.nopol) : '') + '</span>' +
           (busy[id] ? '<div class="small" style="color:var(--warn, #b45309)">sudah terpakai (' + esc(busy[id]) + ')</div>' : '') + '</span></label>' +
           '<div class="rig-ppl">' + personField('drv_' + id, M.drivers, u.type, drv, 'Pilih driver…', false, 'driver') + '</div>' +
-          '<div class="rig-ppl">' + personField('hlp_' + id, M.helpers, u.type, hlp, '— Tanpa helper —', false, 'helper') + '</div></div>';
+          '<div class="rig-ppl">' + personField('hlp_' + id, M.helpers, u.type, hlp, '— Tanpa helper —', false, 'helper') + '</div>' +
+          (pu ? '<div class="rig-ppl rig-sub"><span class="rig-lbl">Alokasi / Tujuan</span><input class="input" name="tuj_' + esc(id) + '" placeholder="Alokasi / tujuan" value="' + esc(cur.tujuan != null ? cur.tujuan : (dr.tujuan || '')) + '"></div>' +
+            '<div class="rig-ppl"><span class="rig-lbl">User PO</span><input class="input" name="usr_' + esc(id) + '" placeholder="User PO" value="' + esc(cur.user != null ? cur.user : (dr.user || '')) + '"></div>' : '') + '</div>';
       }).join('');
-      return '<div class="fleet-fld wide"><span>Armada ' + esc(prog) + ' (' + p.units.length + ' unit — otomatis terisi)</span>' +
-        '<div class="rig-table"><div class="rig-row rig-head"><span>Unit</span><span>Driver</span><span>Helper</span></div>' + rows + '</div></div>';
+      return '<div class="fleet-fld wide"><span>Armada ' + esc(prog) + ' (' + p.units.length + ' unit — otomatis terisi' + (pu ? '; alokasi &amp; user PO per unit' : '') + ')</span>' +
+        '<div class="rig-table' + (pu ? ' pu' : '') + '"><div class="rig-row rig-head"><span>Unit</span><span>Driver</span><span>Helper</span>' + '' + '</div>' + rows + '</div></div>';
     }
     function fld(label, input, wide) { return '<label class="fleet-fld' + (wide ? ' wide' : '') + '"><span>' + esc(label) + '</span>' + input + '</label>'; }
     function errCard(e) { return '<div class="card card-pad"><b>Gagal memuat data Angkutan Berat</b><div class="small muted">' + esc(e.message) + '</div><button class="btn sm" data-fa="reload" style="margin-top:8px">Coba lagi</button></div>'; }
@@ -298,6 +301,7 @@
         [].slice.call(f.querySelectorAll('[name=rigOn]')).forEach(function (cb) {
           var id = cb.value;
           o.rig[id] = { on: cb.checked, driver: personVal(f, 'drv_' + id), helper: personVal(f, 'hlp_' + id) };
+          if (f.elements['tuj_' + id]) { o.rig[id].tujuan = String(f.elements['tuj_' + id].value).trim(); o.rig[id].user = String(f.elements['usr_' + id].value).trim(); }
           if (f.elements['drv_' + id].value === OTHER && !o.rig[id].driver) o.rig[id].driver = OTHER;
           if (f.elements['hlp_' + id].value === OTHER && !o.rig[id].helper) o.rig[id].helper = OTHER;
         });
@@ -309,9 +313,14 @@
       return ms.length >= KEEP_MONTHS ? ms[0] : null;
     }
     async function submitRig(f, o) {
-      if (!o.fungsi || !o.user || !o.barang || !o.lokasi || !o.tujuan) { toast('Lengkapi Fungsi, Nama User, Barang, Lokasi & Tujuan', true); return; }
+      var pu = !!(progOf(o.program) || {}).perUnit;
+      if (pu ? !o.fungsi : (!o.fungsi || !o.user || !o.barang || !o.lokasi || !o.tujuan)) { toast(pu ? 'Pilih Fungsi' : 'Lengkapi Fungsi, Nama User, Barang, Lokasi & Tujuan', true); return; }
       var ids = Object.keys(o.rig || {}).filter(function (id) { return o.rig[id].on; });
       if (!ids.length) { toast('Centang minimal 1 armada', true); return; }
+      if (pu) {
+        var noTuj = ids.filter(function (id) { return !o.rig[id].tujuan; });
+        if (noTuj.length) { toast('Isi Alokasi / Tujuan untuk ' + noTuj.join(', '), true); return; }
+      }
       var noDrv = ids.filter(function (id) { return !o.rig[id].driver || o.rig[id].driver === OTHER; });
       if (noDrv.length) { toast('Pilih/ketik driver untuk ' + noDrv.join(', '), true); return; }
       var m = monthOf(o.date), old = oldestAllowed();
@@ -330,8 +339,8 @@
               id: 'R' + Date.now().toString(36) + i + Math.random().toString(36).slice(2, 5), grp: grp,
               no: 'AB-' + m.slice(2, 4) + m.slice(5, 7) + '-' + ('00' + (n + i + 1)).slice(-3),
               date: o.date, program: o.program, jenis: u.type || '', unit: id, nopol: u.nopol || '',
-              driver: o.rig[id].driver, helper: h === OTHER ? '' : h, fungsi: o.fungsi, user: o.user, tonase: o.tonase, boom: o.boom,
-              barang: o.barang, lokasi: o.lokasi, tujuan: o.tujuan, note: o.note || '', status: 'Terjadwal', createdBy: me(), createdAt: at
+              driver: o.rig[id].driver, helper: h === OTHER ? '' : h, fungsi: o.fungsi, user: pu ? (o.rig[id].user || '') : o.user, tonase: o.tonase, boom: o.boom,
+              barang: o.barang || '', lokasi: o.lokasi || '', tujuan: pu ? o.rig[id].tujuan : o.tujuan, note: o.note || '', status: 'Terjadwal', createdBy: me(), createdAt: at
             };
           });
           return list.concat(recs);
@@ -619,7 +628,8 @@
       function ta(id, rows, ph) { return '<textarea class="input mono" id="' + id + '" rows="' + Math.min(18, Math.max(5, rows.length + 1)) + '" style="width:100%;font-size:12.5px" placeholder="' + esc(ph) + '">' + esc(rows.join('\n')) + '</textarea>'; }
       box.innerHTML = '<div class="fleet-master">' +
         '<div><b>Armada</b> <span class="small muted">No. Lambung | No. Polisi | Jenis | Kapasitas (ton) | Kontraktor | Driver default | Helper default</span>' + ta('fmUnits', M.units.map(function (u) { return [u.id, u.nopol, u.type, u.cap, u.contractor, u.driver || '', u.helper || ''].join(' | '); }), 'VT-01 | B 9766 UFV | Vacuum Truck | 12 | PT ... | Nama driver | Nama helper') + '</div>' +
-        '<div><b>Program</b> <span class="small muted">Nama program | unit yang otomatis terisi (pisahkan koma; kosongkan = pilih 1 unit manual)</span>' + ta('fmPrograms', programs().map(function (p) { return p.name + ' | ' + (p.units || []).join(', '); }), 'Moving Rig 01 | AB-01, AB-02, ...') + '</div>' +
+        '<div><b>Program</b> <span class="small muted">Nama program | unit yang otomatis terisi (pisahkan koma; kosongkan = pilih 1 unit manual) | fungsi default (opsional)</span>' + ta('fmPrograms', programs().map(function (p) { return [p.name, (p.units || []).join(', '), p.fungsi || ''].join(' | ').replace(/ \| $/, ''); }), 'Moving Rig 01 | AB-01, AB-02, ...') + '</div>' +
+        '<div><b>Alokasi &amp; User PO per unit</b> <span class="small muted">Program | Unit | Alokasi / Tujuan | User PO — program yang punya baris di sini mengisi tujuan &amp; user per unit (mis. VT Rutin)</span>' + ta('fmProgRows', [].concat.apply([], programs().map(function (p) { return Object.keys(p.rows || {}).map(function (id) { return [p.name, id, p.rows[id].tujuan || '', p.rows[id].user || ''].join(' | '); }); })), 'VT Rutin | VT-01 | Recover Sektor Rantau | TM JAMIL') + '</div>' +
         '<div><b>Driver / Operator</b> <span class="small muted">Nama | Jenis armada</span>' + ta('fmDrivers', M.drivers.map(function (p) { return p.name + ' | ' + p.type; }), 'Nama | Crane') + '</div>' +
         '<div><b>Helper</b> <span class="small muted">Nama | Jenis armada</span>' + ta('fmHelpers', M.helpers.map(function (p) { return p.name + ' | ' + p.type; }), 'Nama | Crane') + '</div>' +
         '<div><b>Fungsi</b> <span class="small muted">pisahkan dengan koma</span><input class="input" id="fmFungsi" value="' + esc(M.fungsi.join(', ')) + '"></div>' +
@@ -629,7 +639,14 @@
       function lines(id) { return document.getElementById(id).value.split('\n').map(function (l) { return l.split('|').map(function (x) { return x.trim(); }); }).filter(function (p) { return p[0]; }); }
       var M = {
         units: lines('fmUnits').map(function (p) { return { id: p[0], nopol: p[1] || '', type: p[2] || 'Lainnya', cap: p[3] ? +p[3] || p[3] : '', contractor: p[4] || '', driver: p[5] || '', helper: p[6] || '' }; }),
-        programs: lines('fmPrograms').map(function (p) { return { name: p[0], units: (p[1] || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean) }; }),
+        programs: lines('fmPrograms').map(function (p) {
+          var rows = {};
+          lines('fmProgRows').forEach(function (r) { if (r[0] === p[0] && r[1]) rows[r[1]] = { tujuan: r[2] || '', user: r[3] || '' }; });
+          var o = { name: p[0], units: (p[1] || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean) };
+          if (p[2]) o.fungsi = p[2];
+          if (Object.keys(rows).length) { o.perUnit = true; o.rows = rows; }
+          return o;
+        }),
         drivers: lines('fmDrivers').map(function (p) { return { name: p[0], type: p[1] || '' }; }),
         helpers: lines('fmHelpers').map(function (p) { return { name: p[0], type: p[1] || '' }; }),
         fungsi: document.getElementById('fmFungsi').value.split(',').map(function (x) { return x.trim(); }).filter(Boolean)
@@ -663,7 +680,7 @@
         F.draft = formData(f);
         if (f.driver && f.driver.value === OTHER) F.draft.driver = F.draft.driver || OTHER;
         if (f.helper && f.helper.value === OTHER) F.draft.helper = F.draft.helper || OTHER;
-        if (t.name === 'program') { F.draft.rig = null; renderForm(); }
+        if (t.name === 'program') { F.draft.rig = null; F.draft.fungsi = ''; renderForm(); }
         else if (t.name === 'rigOn') t.closest('.rig-row').classList.toggle('off', !t.checked);
         else if (t.name === 'unit') {
           // driver & helper default unit terisi otomatis
