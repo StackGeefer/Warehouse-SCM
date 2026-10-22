@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261021k'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261022a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1327,7 +1327,71 @@
         : '<div class="card card-pad muted">Hanya <b>Owner</b> yang dapat meng-upload data SAP. Di bawah ini versi data yang sedang dipakai website.</div>') +
       (S.lastLog ? '<div class="log" style="margin-top:14px">' + esc(S.lastLog) + '</div>' : '') +
       '<div class="ds-grid" style="margin-top:18px">' + Vault.TYPES.map(versionsCard).join('') + '</div>' +
-      dataGuide(owner);
+      dataGuide(owner) + (owner ? '<div class="card card-pad" style="margin-top:18px" id="storageCard"><h4 class="section-title">Penyimpanan GitHub</h4><div class="small muted">Menghitung…</div></div>' : '');
+    if (owner) fillStorage();
+  }
+
+  // ---------- Pemakaian penyimpanan GitHub (repo & website) ----------
+  var REPO_SOFT_LIMIT = 1024 * 1024 * 1024; // anjuran GitHub: repo < 1 GB
+  var PAGES_LIMIT = 1024 * 1024 * 1024;     // batas GitHub Pages: situs maks. 1 GB
+  function fmtSize(b) {
+    if (b == null) return '—';
+    if (b < 1024) return b + ' B';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1).replace('.', ',') + ' KB';
+    if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1).replace('.', ',') + ' MB';
+    return (b / 1024 / 1024 / 1024).toFixed(2).replace('.', ',') + ' GB';
+  }
+  function storageGroup(path) {
+    if (/^data\/(stock|oa|mb51)-/.test(path)) return 'Data SAP (stok, kontrak, pemakaian)';
+    if (/^data\/docs\//.test(path) || path === 'data/docs.js') return 'Dokumen TKO & Referensi (PDF)';
+    if (/^data\/fleet\//.test(path)) return 'Angkutan Berat (reservasi & master)';
+    if (/^data\/(pass|signs)\.js$/.test(path)) return 'Pass Keluar & tanda tangan';
+    if (/^data\/orders\.js$/.test(path)) return 'Riwayat Order';
+    if (/^data\//.test(path)) return 'Data lain (pengguna, manifest, sinonim, dll.)';
+    if (/^assets\//.test(path)) return 'Foto & gambar (login, tutorial, logo)';
+    if (/^vendor\//.test(path)) return 'Library (Excel, PDF)';
+    return 'Kode website (HTML, JS, CSS) & lainnya';
+  }
+  function bar(used, limit) {
+    var pct = Math.min(100, used / limit * 100);
+    return '<div class="progress storage-bar' + (pct >= 90 ? ' bad' : pct >= 70 ? ' warn' : '') + '"><i style="width:' + Math.max(pct, 0.6).toFixed(1) + '%"></i></div>';
+  }
+  async function fillStorage(force) {
+    var box = $('#storageCard');
+    if (!box) return;
+    var head = '<h4 class="section-title" style="display:flex;align-items:center">Penyimpanan GitHub<span class="spacer"></span><button class="btn sm" data-act="storage-refresh">Hitung ulang</button></h4>';
+    if (!ghToken()) { box.innerHTML = head + '<div class="small muted">Perlu koneksi GitHub (Pengaturan → Koneksi GitHub) untuk membaca ukuran penyimpanan.</div>'; return; }
+    if (force) box.innerHTML = head + '<div class="small muted">Menghitung…</div>';
+    try {
+      var info = await gh('GET', '');
+      var tree = await gh('GET', '/git/trees/' + GH_BRANCH + '?recursive=1');
+      var groups = {}, total = 0, files = [];
+      tree.tree.forEach(function (e) {
+        if (e.type !== 'blob') return;
+        total += e.size || 0;
+        files.push(e);
+        var g = storageGroup(e.path);
+        (groups[g] = groups[g] || { size: 0, n: 0 }).size += e.size || 0;
+        groups[g].n++;
+      });
+      var repo = (info.size || 0) * 1024; // GitHub: ukuran repo (KB) termasuk riwayat semua versi
+      var gl = Object.keys(groups).sort(function (a, b) { return groups[b].size - groups[a].size; });
+      var big = files.sort(function (a, b) { return (b.size || 0) - (a.size || 0); }).slice(0, 6);
+      box.innerHTML = head +
+        '<div class="storage-grid">' +
+        '<div class="storage-kpi"><div class="k">Website (file yang tayang)</div><div class="v">' + fmtSize(total) + '</div>' + bar(total, PAGES_LIMIT) +
+        '<div class="s">' + (total / PAGES_LIMIT * 100).toFixed(2).replace('.', ',') + '% dari batas GitHub Pages 1 GB · ' + files.length + ' file</div></div>' +
+        '<div class="storage-kpi"><div class="k">Repo GitHub (termasuk riwayat versi)</div><div class="v">' + fmtSize(repo) + '</div>' + bar(repo, REPO_SOFT_LIMIT) +
+        '<div class="s">' + (repo / REPO_SOFT_LIMIT * 100).toFixed(2).replace('.', ',') + '% dari anjuran 1 GB · diperbarui GitHub berkala (bisa telat beberapa jam)</div></div></div>' +
+        '<div class="storage-cols"><div><div class="small" style="font-weight:700;margin:10px 0 6px">Rincian isi website</div><table class="grid"><tbody>' +
+        gl.map(function (g) { return '<tr><td>' + esc(g) + '<div class="small muted">' + groups[g].n + ' file</div></td><td class="num"><b>' + fmtSize(groups[g].size) + '</b></td><td class="num small muted">' + (groups[g].size / total * 100).toFixed(1).replace('.', ',') + '%</td></tr>'; }).join('') +
+        '</tbody></table></div><div><div class="small" style="font-weight:700;margin:10px 0 6px">File terbesar</div><table class="grid"><tbody>' +
+        big.map(function (e) { return '<tr><td class="mono small" style="word-break:break-all">' + esc(e.path) + '</td><td class="num"><b>' + fmtSize(e.size) + '</b></td></tr>'; }).join('') +
+        '</tbody></table></div></div>' +
+        '<div class="small muted" style="margin-top:10px">Batas lain GitHub Pages: trafik ±100 GB/bulan, satu file maks. 100 MB. Data lama otomatis dibatasi (SAP 3 versi, Angkutan Berat 6 bulan), jadi ukuran website tetap terkendali; ukuran repo naik pelan karena GitHub menyimpan riwayat setiap perubahan.</div>';
+    } catch (e) {
+      box.innerHTML = head + '<div class="small" style="color:var(--bad)">Gagal membaca dari GitHub: ' + esc(e.message) + '</div>';
+    }
   }
 
   // Pengingat tarik data: ZMB52 tiap hari; ZMB51 & ME3N tiap ganti bulan (mulai tanggal 1)
@@ -2300,6 +2364,7 @@
       }
       else if (act === 'viewer-close') { $('#viewer').classList.add('hidden'); $('#viewer').innerHTML = ''; }
       else if (act === 'publish') { publish(); }
+      else if (act === 'storage-refresh') fillStorage(true);
       else if (act === 'use-version') useVersion(a.getAttribute('data-type'), a.getAttribute('data-id'));
       else if (act === 'gh-save') {
         var repo = $('#ghRepo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
