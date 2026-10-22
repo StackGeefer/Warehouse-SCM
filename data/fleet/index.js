@@ -1,2 +1,2 @@
 /* Daftar bulan data Angkutan Berat (maks. 6 bulan) */
-window.MW_FLEET_INDEX = {"months":["2026-10"],"exported":{},"updatedAt":"2026-10-22T03:05:33.614Z"};
+window.MW_FLEET_INDEX = {"months":["2026-10"],"exported":{},"updatedAt":"2026-10-22T03:14:25.072Z"};
