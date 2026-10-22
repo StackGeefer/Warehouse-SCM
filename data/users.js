@@ -14,11 +14,11 @@ window.MW_USERS = [
   "id": "70960129af204a5878b66ae72f1fa1a62c62b9d1d2bff23104577da91b01ad76",
   "name": "Warehouse",
   "role": "viewer",
-  "salt": "x1a9bJa0HU0EVvd4v1GViA==",
-  "iv": "RoV4Y5oCLYaFByrP",
-  "wk": "yBR0qCmYN95os9/n08iTyd9ULFABnjBVaVvfIkyTWjzwOfOEZHrWrmYsQX7asADw",
-  "aiv": "OZbEWRnNjAEAicld",
-  "ak": "4xMzuAtI6QfEVtr75WfNOH7gjOKvje5GMzOng+kN+7fZHVAHbns8/5I/CLypTM8j"
+  "salt": "HjNORlvQV7NcREw7UW3t/w==",
+  "iv": "ectUFb0wtaD4GJgf",
+  "wk": "WnE9TUw542A5GQvNTRzyASeKVQZXINMUFjzvlH3+WDSpvH7LD5jCTYX4Xjeu2Eu9",
+  "aiv": "IWN00yhgCfPIgsYR",
+  "ak": "TNI67iSsSOqE1RT60KVitAUw0vG+ocdXfbboHsQTvRSZpbsiaKfhjcXMke5QPTET"
  },
  {
   "id": "70d8af702770439c5e6afac27ec7b67754068acd2154314c8612c0999bc20eb0",
