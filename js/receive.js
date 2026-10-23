@@ -208,7 +208,19 @@
         opts.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>';
     }
     function fld(label, html, cls) { return '<label class="fleet-fld' + (cls ? ' ' + cls : '') + '"><span>' + label + '</span>' + html + '</label>'; }
+    function nonPers(d) { return (d.h || {}).tipe === 'Non Persediaan'; }
+    // Non Persediaan: BASTB ditandatangani User (Fungsi Pengguna) — TKO Tabel 2; Persediaan: profil Receiving
+    function syncBastbSlot(d) {
+      var v = d.sign.bastb || {};
+      if (nonPers(d) && !v.user) d.sign.bastb = { manual: true, user: true, name: '', jab: '', fungsi: '' };
+      if (!nonPers(d) && v.user) d.sign.bastb = defaultSlot('recv');
+    }
     function slotHtml(d, s) {
+      if (s.k === 'bastb' && nonPers(d)) {
+        var u = d.sign.bastb || {};
+        return '<div class="rcv-slot wide"><span class="rcv-slot-t">User / Fungsi Pengguna (Non Persediaan)</span><div class="rcv-slot-m rcv-slot-3">' +
+          inp('sign.bastb.name', u.name, { ph: 'Nama user' }) + inp('sign.bastb.jab', u.jab, { ph: 'Jabatan' }) + inp('sign.bastb.fungsi', u.fungsi, { ph: 'Fungsi' }) + '</div></div>';
+      }
       var v = d.sign[s.k] || {}, mode = v.uid ? v.uid : v.manual ? '__m' : '';
       var ps = profiles();
       var h = '<div class="rcv-slot"><span class="rcv-slot-t">' + esc(s.t) + '</span><select class="select" data-slot="' + s.k + '"><option value="">— Kosong (tanda tangan basah) —</option>' +
@@ -258,6 +270,7 @@
       if (ctx.route() !== 'terima') return;
       setTimeout(function () { window.scrollTo(0, sy); if (main) main.scrollTop = my; }, 0);
       var d = loadDraft(), h = d.h;
+      syncBastbSlot(d);
       if (!h.seqManual) h.seq = R.data.seq || FIRST_SEQ;
       var c = calc(d);
       var edit = R.editId ? find(R.editId) : null;
@@ -272,7 +285,7 @@
         fld('Nomor Kontrak/OA', inp('h.oa', h.oa, { cls: 'mono', ph: 'mis. 4720000471 — vendor terisi otomatis' })) +
         fld('Jangka Waktu Kontrak', inp('h.jangka', h.jangka, { ph: 'mis. 2 (DUA) TAHUN' })) +
         fld('Delivery Date (PO/RO) *', inp('h.delivery', h.delivery, { type: 'date', rr: 1 })) +
-        fld('Tipe Material', sel('h.tipe', h.tipe, ['Persediaan', 'Non Persediaan'])) +
+        fld('Tipe Material', sel('h.tipe', h.tipe, ['Persediaan', 'Non Persediaan'], { rr: 1 })) +
         fld('Partial Quantity diizinkan', sel('h.partial', h.partial, ['Ya', 'Tidak'])) +
         fld('Vendor Commitment', sel('h.commit', h.commit, ['Full Delivery', 'Partial Delivery'])) +
         fld('ID Vendor', inp('h.vendorId', h.vendorId, { cls: 'mono' })) +
@@ -771,6 +784,11 @@
       return K;
     }
 
+    function bastbSigner(r) {
+      var p = who(r, 'bastb');
+      if (((r.sign || {}).bastb || {}).user && p.fungsi) p.jab = [p.jab, 'Fungsi ' + p.fungsi].filter(Boolean).join(' – ');
+      return p;
+    }
     function bastbRows(c) { return c.rows.filter(function (x) { return num(x.qrc) > 0; }); }
     function buyer(r) { return r.h.buyer || 'PT Pertamina EP'; }
     function vendorName(r) { return r.h.vendor || 'Vendor'; }
@@ -801,7 +819,7 @@
         'e. Dokumen Berita Acara ini menjadi salah satu dasar pembayaran tagihan Penyedia Barang/Jasa oleh ' + B + '.'].forEach(function (t) { K.para(t, { indent: 12, after: 1.5 }); });
       K.y += 8;
       var vs = (r.sign || {}).vendor || {};
-      K.signs([{ h: B, p: who(r, 'bastb'), foot: 'Jabatan' }, { h: V, p: { name: vs.name, jab: vs.jab }, foot: 'Jabatan' }], { h: 66 });
+      K.signs([{ h: B, p: bastbSigner(r), foot: 'Jabatan' }, { h: V, p: { name: vs.name, jab: vs.jab }, foot: 'Jabatan' }], { h: 66 });
     }
     function pdfSpb(K, r, c) {
       var doc = K.doc;
@@ -1032,7 +1050,7 @@
       setv(ws, 'A38', 'd. ' + B + ' telah melakukan pemeriksaan atas seluruh dokumen pendukung yang telah disampaikan oleh ' + V + '.');
       setv(ws, 'A39', 'e. Dokumen Berita Acara ini menjadi salah satu dasar pembayaran tagihan Penyedia Barang/Jasa oleh ' + B + '.');
       setv(ws, 'A41', B); setv(ws, 'D41', V);
-      var p = who(r, 'bastb'), vs = (r.sign || {}).vendor || {};
+      var p = bastbSigner(r), vs = (r.sign || {}).vendor || {};
       setv(ws, 'A47', p.name); setv(ws, 'A48', p.jab); setv(ws, 'D47', vs.name || ''); setv(ws, 'D48', vs.jab || '');
       if (p.img) await xlImg(wb, ws, p.img, 1, 3, 42, 46, { padX: 120, padY: 4 });
       await xlLogo(wb, ws, 2);
