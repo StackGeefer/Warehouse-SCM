@@ -496,7 +496,7 @@
       acts.push('<button class="btn sm" data-ra="export" data-id="' + esc(r.id) + '">' + (r.status === ST.ok ? 'Export' : 'Preview') + '</button>');
       if (r.status === ST.pending && canApprove()) acts.unshift('<button class="btn sm primary" data-ra="approve" data-id="' + esc(r.id) + '">Approve</button><button class="btn sm" data-ra="reject" data-id="' + esc(r.id) + '">Tolak</button>');
       if (r.status === ST.pending && (r.createdById === myUid || canApprove() || isWh())) acts.push('<button class="btn sm" data-ra="edit" data-id="' + esc(r.id) + '">Edit</button><button class="btn sm" data-ra="cancel" data-id="' + esc(r.id) + '">Batalkan</button>');
-      if (r.status === ST.ok && mine && mine.img && slotUids(r).indexOf(myUid) >= 0 && !(r.signed || {})[myUid]) acts.unshift('<button class="btn sm primary" data-ra="cosign" data-id="' + esc(r.id) + '">Tanda tangani</button>');
+      if (r.status === ST.ok && mine && mine.img && slotUids(r).indexOf(myUid) >= 0 && !(r.signed || {})[myUid]) acts.unshift('<button class="btn sm primary" data-ra="cosign" data-id="' + esc(r.id) + '">' + (((r.sign || {}).bastb || {}).uid === myUid ? 'Approve BASTB &amp; tanda tangani' : 'Tanda tangani') + '</button>');
       if (r.status !== ST.pending && ctx.isMainOwner()) acts.push('<button class="btn sm danger" data-ra="delete" data-id="' + esc(r.id) + '" title="Hapus permanen (khusus Owner Utama)">Hapus</button>');
       var signedNames = Object.keys(r.signed || {}).map(function (u) { var p = profile(u); return p ? p.short || p.name : ''; }).filter(Boolean);
       return '<tr><td><b class="mono">' + esc(docNo(r, 'bastb') || '—') + '</b><div class="small">' + esc(dot(r.h.tglTerima)) + '</div></td>' +
@@ -506,7 +506,7 @@
         (c.rejected.length ? '<span class="badge bad">' + c.rejected.length + ' ditolak</span>' : '') + '</td>' +
         '<td class="num">' + idr(c.totRc) + '</td>' +
         '<td>' + (c.late ? '<span class="badge bad">Terlambat ' + c.lateDays + ' hr</span><div class="small muted">Denda Rp ' + idr(c.totDenda) + '</div>' : '<span class="badge ok">Tepat waktu</span>') + '</td>' +
-        '<td>' + badge(r.status) + '<div class="small muted">' + esc(r.status === ST.ok ? 'TTD: ' + signedNames.join(', ') : r.status === ST.no ? (r.rejectBy || '') + (r.rejectNote ? ': ' + r.rejectNote : '') : 'oleh ' + (r.createdBy || '') + ' · ' + fmtTime(r.createdAt)) + '</div></td>' +
+        '<td>' + badge(r.status) + (r.status === ST.ok && !bastbOk(r) ? '<div><span class="badge warn">BASTB menunggu ' + esc(who(r, 'bastb').name) + '</span></div>' : '') + '<div class="small muted">' + esc(r.status === ST.ok ? 'Approve: ' + signedNames.join(', ') : r.status === ST.no ? (r.rejectBy || '') + (r.rejectNote ? ': ' + r.rejectNote : '') : 'oleh ' + (r.createdBy || '') + ' · ' + fmtTime(r.createdAt)) + '</div></td>' +
         '<td><div class="fleet-acts">' + acts.join('') + '</div></td></tr>';
     }
 
@@ -520,7 +520,8 @@
       if (!r) return;
       if (!sg || !sg.img) { toast('Atur tanda tangan & profil Anda dulu di Pengaturan', true); location.hash = '#/pengaturan'; return; }
       var c = calc(r), seq = r.no && r.no.seq ? r.no.seq : (R.data.seq || FIRST_SEQ), nb = numbers(seq, r.h.tglBast || r.h.tglTerima);
-      var mySlots = SLOTS.filter(function (s) { return ((r.sign || {})[s.k] || {}).uid === S.user.id; }).map(function (s) { return s.doc + ' ' + s.t; });
+      var mySlots = SLOTS.filter(function (s) { return s.k !== 'bastb' && ((r.sign || {})[s.k] || {}).uid === S.user.id; }).map(function (s) { return s.doc + ' ' + s.t; });
+      var myBastb = ((r.sign || {}).bastb || {}).uid === S.user.id;
       drawerOpen('<div class="drawer-head"><div style="flex:1"><div class="mono muted">Approval Penerimaan Barang</div><h2>' + esc(r.h.vendor) + '</h2></div><button class="icon-btn" data-act="close-drawer">✕</button></div>' +
         '<div class="drawer-body">' +
         '<div class="kv"><div><span>PO/RO</span><b>' + esc(r.h.po) + '</b></div><div><span>OA</span><b>' + esc(r.h.oa || '—') + '</b></div><div><span>Tgl terima</span><b>' + esc(dot(r.h.tglTerima)) + '</b></div><div><span>Delivery date</span><b>' + esc(dot(r.h.delivery)) + '</b></div>' +
@@ -529,7 +530,8 @@
         c.rows.map(function (x) { return '<tr><td>' + x.no + '</td><td class="mono">' + esc(x.m || '') + '</td><td>' + esc(x.d) + '</td><td class="num">' + qty(x.qpo) + '</td><td class="num">' + qty(x.qrc) + ' ' + esc(x.u || '') + '</td><td>' + esc(x.st || '') + '</td></tr>'; }).join('') + '</tbody></table>' +
         '<label class="fleet-fld"><span>Nomor urut dokumen</span><input class="input mono" id="rcvSeq" type="number" min="1" value="' + seq + '"></label>' +
         '<div class="small muted" id="rcvNoPrev">' + noPreview(nb, c) + '</div>' +
-        '<div class="sign-preview"><div class="small muted">Tanda tangan Anda tertempel di: ' + esc(mySlots.join(', ') || '— (Anda tidak tercantum sebagai penandatangan; ubah di Edit bila perlu)') + '</div><img src="' + sg.img + '" alt="Tanda tangan"><b>' + esc(sg.full || sg.name) + '</b><div class="small muted">' + esc(sg.jab || '') + '</div></div>' +
+        (myBastb ? '<div class="small" style="margin:6px 0"><b>BASTB:</b> approve Anda menghapus tanda DRAFT di BASTB (tanpa tempel tanda tangan).</div>' : (((r.sign || {}).bastb || {}).uid ? '<div class="small muted" style="margin:6px 0">BASTB tetap DRAFT sampai di-approve ' + esc(who(r, 'bastb').name) + '.</div>' : '')) +
+        '<div class="sign-preview"><div class="small muted">Tanda tangan Anda tertempel di: ' + esc(mySlots.join(', ') || '— (tidak ada slot tanda tangan Anda; ubah di Edit bila perlu)') + '</div><img src="' + sg.img + '" alt="Tanda tangan"><b>' + esc(sg.full || sg.name) + '</b><div class="small muted">' + esc(sg.jab || '') + '</div></div>' +
         '<div class="toolbar"><button class="btn primary" data-ra="approve-do" data-id="' + esc(r.id) + '">Approve &amp; tempel tanda tangan</button><button class="btn" data-ra="export" data-id="' + esc(r.id) + '">Preview</button></div></div>');
     }
     function noPreview(nb, c) {
@@ -654,7 +656,7 @@
     // ================= PDF (A4 portrait, mengikuti form Lampiran 3–7) =================
     function pdfKit(doc, r, lg, draft) {
       var W = 595.28, H = 841.89, L = 36, RR = W - 36, CW = RR - L, BOT = H - 40;
-      var K = { doc: doc, L: L, R: RR, W: CW, y: 0, page: 0 };
+      var K = { doc: doc, L: L, R: RR, W: CW, y: 0, page: 0, draft: draft };
       K.font = function (sz, st) { doc.setFont('helvetica', st || 'normal'); doc.setFontSize(sz); };
       K.wrap = function (t, w, sz) { if (sz) doc.setFontSize(sz); return doc.splitTextToSize(String(t == null ? '' : t), Math.max(4, w)); };
       K.footer = function (lamp) {
@@ -662,9 +664,9 @@
         doc.text(lamp + ' · Revisi Ke-0', L, 24);
         doc.text('Dicetak dari Material Warehouse & Heavy Transport — SCM Field Rantau', L, H - 18);
         doc.setTextColor(0);
-        if (draft) {
-          doc.setTextColor(210, 50, 50); K.font(34, 'bold');
-          doc.text(draft, W / 2, H / 2, { align: 'center', angle: 30 });
+        if (K.draft) {
+          doc.setTextColor(210, 50, 50); K.font(K.draft.length > 32 ? 19 : 34, 'bold');
+          doc.text(K.draft, W / 2, H / 2, { align: 'center', angle: 30 });
           doc.setTextColor(0);
         }
       };
@@ -784,8 +786,16 @@
       return K;
     }
 
+    // BASTB tidak ditempel tanda tangan. DRAFT hilang setelah pejabat BASTB (mis. Seto Agustian) approve / tanda tangani;
+    // bila penandatangan BASTB diketik manual (User Non Persediaan) cukup pengajuan disetujui.
+    function bastbOk(r) {
+      if (r.status !== ST.ok) return false;
+      var s = (r.sign || {}).bastb || {};
+      return s.uid ? !!(r.signed || {})[s.uid] : true;
+    }
+    function bastbWait(r) { var p = who(r, 'bastb'); return 'DRAFT - MENUNGGU APPROVAL ' + String(p.name || 'BASTB').toUpperCase(); }
     function bastbSigner(r) {
-      var p = who(r, 'bastb');
+      var p = who(r, 'bastb'); delete p.img;
       if (((r.sign || {}).bastb || {}).user && p.fungsi) p.jab = [p.jab, 'Fungsi ' + p.fungsi].filter(Boolean).join(' – ');
       return p;
     }
@@ -973,7 +983,7 @@
       var doc = new JsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' }), c = calc(r);
       var draft = r.status === ST.ok ? '' : r.status === ST.pending || !r.status ? 'DRAFT - MENUNGGU APPROVAL' : r.status.toUpperCase();
       var K = pdfKit(doc, r, lg, draft);
-      if (docs.bastb) pdfBastb(K, r, c);
+      if (docs.bastb) { K.draft = r.status !== ST.ok ? draft : bastbOk(r) ? '' : bastbWait(r); pdfBastb(K, r, c); K.draft = draft; }
       if (docs.spb && c.rejected.length) pdfSpb(K, r, c);
       if (docs.lhpb) pdfLhpb(K, r, c);
       if (docs.denda) await pdfDenda(K, r, c);
@@ -1204,7 +1214,8 @@
       Object.keys(map).forEach(function (k) {
         var ws = wb.getWorksheet(map[k]);
         if (!docs[k]) { wb.removeWorksheet(ws.id); return; }
-        if (draft) { var a1 = ws.getCell('A1'); a1.value = draft + a1.value; a1.font = Object.assign({}, a1.font, { color: { argb: 'FFC00000' }, bold: true }); }
+        var dr = k === 'bastb' && r.status === ST.ok && !bastbOk(r) ? bastbWait(r).replace('DRAFT - ', 'DRAFT – ') + ' · ' : draft;
+        if (dr) { var a1 = ws.getCell('A1'); a1.value = dr + a1.value; a1.font = Object.assign({}, a1.font, { color: { argb: 'FFC00000' }, bold: true }); }
       });
       if (docs.spb && c.rejected.length) await sheetSpb(wb, r, c);
       if (docs.stamp && c.late) await sheetStamp(wb, r, c);
