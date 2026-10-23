@@ -306,12 +306,9 @@
         doc.text(String(r.requester || '').toUpperCase(), (sx[1] + sx[2]) / 2, sb - 5, { align: 'center' });
         doc.text(String(r.receiver || '').toUpperCase(), (sx[3] + sx[4]) / 2, sb - 5, { align: 'center' });
         if (sg) {
+          // tanda tangan proporsional (tidak ditarik/digencet), di tengah kolom, tepat di atas nama
+          placeSign(doc, sg.img, (sx[2] + sx[3]) / 2, sb - 9, sx[3] - sx[2] - 30, sb - 9 - (st + hdr + 1.5));
           doc.text(String(sg.name || '').toUpperCase(), (sx[2] + sx[3]) / 2, sb - 5, { align: 'center' });
-          // tanda tangan mengisi kotak 92 x 31 pt, sama seperti PDF sistem pass keluar
-          var ip = doc.getImageProperties(sg.img), iw = 92, ih = 31;
-          // tanda tangan tegak (portrait): lebih tinggi & sedikit dilebarkan agar terbaca (sistem pass juga melebarkan tanda tangan)
-          if (ip.width / ip.height < 1.4) { ih = 34; iw = Math.min(92, ih * ip.width / ip.height * 1.6); }
-          doc.addImage(sg.img, 'PNG', (sx[2] + sx[3]) / 2 - iw / 2, st + hdr + 0.5, iw, ih);
         }
         doc.setFont('times', 'normal'); doc.setFontSize(7.5);
         doc.text('Document printed is issued by PT.Pertamina EP -', 25, 383);
@@ -325,6 +322,12 @@
         }
       }
       return doc;
+    }
+    // Tempel tanda tangan: skala proporsional agar muat di kotak maxW x maxH, rata tengah (cx) & rata bawah (bottom)
+    function placeSign(doc, img, cx, bottom, maxW, maxH) {
+      var ip = doc.getImageProperties(img), k = Math.min(maxW / ip.width, maxH / ip.height);
+      var w = ip.width * k, h = ip.height * k;
+      doc.addImage(img, 'PNG', cx - w / 2, bottom - h, w, h);
     }
     function fileName(r) { return 'PassKeluar_' + String(r.no || ('DRAFT_' + r.id)).replace(/[\/\\]/g, '_') + '.pdf'; }
     async function downloadPdf(r) {
@@ -342,8 +345,8 @@
     // ================= Tanda tangan (Owner / Co-Owner) =================
     function signCard() {
       if (!canApprove()) return '';
-      return '<div class="card card-pad" style="margin-top:16px" id="signCard"><h4 class="section-title">Tanda tangan Pass Keluar</h4>' +
-        '<p class="small muted" style="margin-top:0">Nama &amp; tanda tangan ini otomatis menjadi <b>Pengirim</b> di PDF saat Anda meng-approve Pass Keluar. Disimpan terenkripsi.</p><div id="signBody" class="small muted">Memuat…</div></div>';
+      return '<div class="card card-pad" style="margin-top:16px" id="signCard"><h4 class="section-title">Tanda tangan &amp; profil penyetuju</h4>' +
+        '<p class="small muted" style="margin-top:0">Nama &amp; tanda tangan ini otomatis menjadi <b>Pengirim</b> di PDF Pass Keluar, dan tertempel di dokumen <b>Penerimaan Barang</b> (BASTB, SPB, LHPB, Form Denda) saat Anda meng-approve. Disimpan terenkripsi.</p><div id="signBody" class="small muted">Memuat…</div></div>';
     }
     async function fillSignCard() {
       var box = document.getElementById('signBody');
@@ -353,6 +356,10 @@
       box.className = '';
       box.innerHTML = '<div class="sign-grid"><div class="sign-preview">' + (sg.img ? '<img id="signImg" src="' + sg.img + '" alt="Tanda tangan">' : '<div class="muted" id="signImg">Belum ada tanda tangan</div>') + '<b>' + esc(sg.name || '') + '</b></div>' +
         '<div style="display:flex;flex-direction:column;gap:8px"><label class="fleet-fld"><span>Nama di Pass Keluar</span><input class="input" id="signName" value="' + esc(sg.name || '') + '" placeholder="mis. GERALD FREDERICK R. S."></label>' +
+        '<div class="sign-prof"><label class="fleet-fld"><span>Nama lengkap (BASTB/LHPB/SPB/Denda)</span><input class="input" id="signFull" value="' + esc(sg.full || '') + '" placeholder="mis. Gerald Frederick Ryel Samosir"></label>' +
+        '<label class="fleet-fld"><span>No. ID</span><input class="input mono" id="signNid" value="' + esc(sg.nid || '') + '"></label>' +
+        '<label class="fleet-fld"><span>Jabatan</span><input class="input" id="signJab" value="' + esc(sg.jab || '') + '" placeholder="mis. Officer SCM Support &amp; Receiving Rantau"></label>' +
+        '<label class="fleet-fld"><span>Fungsi / Sub Fungsi</span><input class="input" id="signFungsi" value="' + esc(sg.fungsi || '') + '" placeholder="SCM"></label></div>' +
         '<label class="fleet-fld"><span>Gambar tanda tangan (PNG/JPG — latar polos otomatis dibuat transparan)</span><input class="input" type="file" id="signFile" accept="image/*"></label>' +
         '<div class="toolbar"><button class="btn sm primary" data-pa="sign-save">Simpan tanda tangan</button></div></div></div>';
     }
@@ -395,7 +402,8 @@
         if (!img) throw new Error('Pilih gambar tanda tangan');
         P.signs = await atomic('data/signs.js', 'MW_SIGNS', 'Nama & tanda tangan penyetuju Pass Keluar', function (D) {
           D = D || { users: {} };
-          D.users[S.user.id] = { name: name, img: img, user: me(), at: new Date().toISOString() };
+          D.users[S.user.id] = { name: name, img: img, user: me(), at: new Date().toISOString(),
+            full: ($('#signFull').value || '').trim(), nid: ($('#signNid').value || '').trim(), jab: ($('#signJab').value || '').trim(), fungsi: ($('#signFungsi').value || '').trim() };
           return D;
         }, 'Pass keluar: tanda tangan ' + me());
         toast('Tanda tangan disimpan');
@@ -424,6 +432,8 @@
 
     function pendingCount() { return P.data ? P.data.list.filter(function (r) { return r.status === ST.pending; }).length : 0; }
     function reset() { P.data = null; P.signs = null; P.filt = ST.pending; }
-    return { render: render, submit: submit, previewDraft: previewDraft, signCard: signCard, fillSignCard: fillSignCard, load: load, pendingCount: pendingCount, reset: reset };
+    return { render: render, submit: submit, previewDraft: previewDraft, signCard: signCard, fillSignCard: fillSignCard, load: load, pendingCount: pendingCount, reset: reset,
+      // dipakai modul Penerimaan Barang
+      atomic: atomic, readJSON: readJSON, loadJsPDF: loadJsPDF, placeSign: placeSign, signs: function () { return P.signs; } };
   };
 })(this);

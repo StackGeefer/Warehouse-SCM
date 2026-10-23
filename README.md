@@ -125,6 +125,17 @@ vendor/               SheetJS, ExcelJS, PDF.js
 - Nama & tanda tangan diatur sendiri oleh tiap Owner / Co-Owner di **Pengaturan → Tanda tangan Pass Keluar** (latar polos otomatis dibuat transparan). Disimpan terenkripsi di `data/signs.js`.
 - Data pass: `data/pass.js` (terenkripsi). Akun **Warehouse** perlu diatur password-nya oleh Owner Utama (Pengaturan → Pengguna) agar bisa mengajukan.
 
+## Penerimaan Barang (barang masuk — TKO B7-084 Lampiran 3–7)
+
+- **Penerimaan Barang** (Section 1): satu form untuk 4 dokumen sekaligus — **BASTB**, **SPB** (otomatis aktif bila ada item *Ditolak*), **LHPB**, dan **Form Perhitungan Denda Keterlambatan** + **Stamp Keterlambatan**.
+  Isi Nomor Kontrak/OA → vendor, ID vendor & harga terisi dari data ME3N; isi KIMAP → deskripsi & satuan dari data stok. Kontak vendor (NPWP, email, telp) diingat untuk pengisian berikutnya.
+  Hari terlambat = Tgl Penerimaan − Tgl Jatuh Tempo (default Delivery Date); denda = Jumlah Harga PO/RO × min(hari × tarif, maksimum).
+- **Riwayat Penerimaan** (Section 2): filter bulan/status/terlambat, Approve/Tolak (Owner & Co-Owner), Edit/Batalkan selama menunggu approval, Hapus (khusus Owner Utama).
+- Saat approve: nomor dokumen urut otomatis (`0042/BASTB/10/2026`, `/LHPB/`, `/SPB/`, `/DENDA/`) dan tanda tangan penyetuju tertempel di slot miliknya. Penandatangan lain yang tercantum bisa **Tanda tangani** setelahnya.
+- Export: pilih dokumen → **PDF** (A4, format Lampiran) atau **Excel** (template BASTB/LHPB/Denda + sheet SPB & Stamp).
+- Profil penandatangan (nama lengkap, No. ID, jabatan, fungsi, tanda tangan): **Pengaturan → Tanda tangan & profil penyetuju**.
+- Data: `data/terima.js` (terenkripsi). Aset: `assets/terima/` (logo PHE, stamp Lampiran 7, template Excel kosong).
+
 ## Angkutan Berat (Heavy Transport)
 
 Menu **Reservasi Armada** dan **Riwayat Armada** — khusus angkutan berat (Crane, Picker/TMC, Tronton, Trailer, Vacuum Truck), di luar KRP. Tanpa approval: reservasi langsung berstatus **Terjadwal**.

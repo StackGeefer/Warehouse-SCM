@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261023b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261023c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -318,6 +318,8 @@
     riwayat: ['Riwayat Order ke MIM', 'Semua Call Order yang sudah di-export, lengkap dengan tanggal & status'],
     tko: ['TKO & Referensi Warehouse', 'Tata Kerja, Pedoman & SOP — preview langsung atau download PDF'],
     pass: ['Pass Keluar Barang', 'Material keluar dari gudang — approval Owner / Co-Owner, lalu PDF Pass Keluar'],
+    terima: ['Penerimaan Barang', 'Barang masuk — BASTB, SPB, LHPB & Form Denda Keterlambatan (TKO B7-084 Lampiran 3–7) dalam satu form'],
+    'terima-riwayat': ['Riwayat Penerimaan Barang', 'Approval Owner / Co-Owner, tanda tangan otomatis, export PDF atau Excel'],
     angber: ['Reservasi Armada', 'Angkutan Berat — Crane, Picker, Tronton, Trailer, Vacuum Truck & Forklift'],
     'angber-riwayat': ['Riwayat Armada', 'Riwayat pemakaian angkutan berat per bulan — filter, edit & export Excel']
   };
@@ -345,6 +347,8 @@
     else if (r.name === 'riwayat') renderOrders();
     else if (r.name === 'tko') renderDocs();
     else if (r.name === 'pass') passMod().render();
+    else if (r.name === 'terima') recvMod().renderForm();
+    else if (r.name === 'terima-riwayat') recvMod().renderHistory();
     else if (r.name === 'angber') fleet().renderForm();
     else if (r.name === 'angber-riwayat') fleet().renderHistory();
     updateCartUI();
@@ -1294,6 +1298,18 @@
     if (!b) return;
     var n = Pass && isOwner() ? Pass.pendingCount() : 0;
     b.textContent = n; b.classList.toggle('hidden', !n);
+    var t = $('#navTerima');
+    if (t) { var m = Recv && isOwner() ? Recv.pendingCount() : 0; t.textContent = m; t.classList.toggle('hidden', !m); }
+  }
+  // Penerimaan Barang (BASTB / SPB / LHPB / Denda) — memakai penyimpanan, PDF & tanda tangan modul Pass Keluar
+  var Recv = null;
+  function recvMod() {
+    if (!Recv) Recv = window.ReceiveModule({
+      S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, route: function () { return currentRoute().name; },
+      isOwner: isOwner, isMainOwner: isMainOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav,
+      loadExcelJS: Exporter.loadExcelJS, pass: passMod
+    });
+    return Recv;
   }
   var Fleet = null;
   function fleet() {
@@ -2161,6 +2177,7 @@
     S.user = null; S.key = null; S.adminKey = null; S.sharedTok = null; S.ds = { stock: null, oa: null, mb51: null }; S.idx = null;
     if (Fleet) Fleet.reset();
     if (Pass) Pass.reset();
+    if (Recv) Recv.reset();
     refreshPassNav();
     closeDrawer();
     view.innerHTML = '';
@@ -2188,6 +2205,7 @@
     render();
     if (canFleet()) fleet().preload().then(function () { if (S.user) renderSide(); });
     if (isOwner()) passMod().load().then(refreshPassNav, function () {});
+    if (isOwner()) recvMod().load().then(refreshPassNav, function () {});
   }
 
   // ================= Event handlers =================
