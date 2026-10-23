@@ -72,6 +72,14 @@
     });
   }
 
+  // Buka kunci admin milik akun yang sudah login (tanpa perlu username). Gagal => Error
+  function unlockAdmin(u, password) {
+    if (!u || !u.ak || !hasAdminKey(u.role)) return Promise.reject(new Error('Akses belum diatur'));
+    return kek(password, fromB64(u.salt)).then(function (k) {
+      return C.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(u.aiv) }, k, fromB64(u.ak)).then(function (ak) { return new Uint8Array(ak); });
+    }).catch(function () { throw new Error('Password salah'); });
+  }
+
   // Login: cari pengguna & buka kunci data. Gagal => Error
   function login(users, username, password) {
     return hashUser(username).then(function (h) {
@@ -189,7 +197,7 @@
 
   root.Vault = {
     TYPES: TYPES, KEEP_VERSIONS: KEEP_VERSIONS,
-    newDataKey: newDataKey, makeUser: makeUser, isEditor: isEditor, hasAdminKey: hasAdminKey, login: login, hashUser: hashUser,
+    newDataKey: newDataKey, makeUser: makeUser, unlockAdmin: unlockAdmin, isEditor: isEditor, hasAdminKey: hasAdminKey, login: login, hashUser: hashUser,
     encrypt: encrypt, decrypt: decrypt, encryptBytes: encryptBytes, decryptBytes: decryptBytes, toB64: toB64, fromB64: fromB64,
     usersFile: usersFile, manifestFile: manifestFile, snapFile: snapFile, snapPath: snapPath,
     listFile: listFile, docPath: docPath, docFile: docFile,

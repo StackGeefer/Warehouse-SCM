@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261023a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261023b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1039,7 +1039,7 @@
     S.orders = orders;
     var payload = await Vault.encrypt(S.key, orders);
     await queuePending({ files: { 'data/orders.js': Vault.listFile('MW_ORDERS', payload, 'Riwayat Call Order') }, deletes: [] }, [msg], null, null, { orders: orders });
-    if (ghToken()) await publish();
+    if (await canPublish()) await publish();
   }
   function renderOrders() {
     var list = allOrders(), q = (S.ordQ || '').trim().toUpperCase(), stF = S.ordStatus || '';
@@ -1188,7 +1188,7 @@
     var idxPayload = await Vault.encrypt(S.key, docs);
     changes.files['data/docs.js'] = Vault.listFile('MW_DOCS', idxPayload, 'Daftar dokumen TKO & referensi');
     await queuePending(changes, [msg], null, null, { docs: docs });
-    if (ghToken()) await publish();
+    if (await canPublish()) await publish();
     else render();
   }
   async function uploadDoc() {
@@ -1321,15 +1321,20 @@
     var pw = await askPassword();
     if (!pw) return false;
     try {
-      var r = await Vault.login(S.users, S.user.name, pw);
-      if (!r.adminKey) return false;
-      S.adminKey = r.adminKey;
+      S.adminKey = await Vault.unlockAdmin(me, pw);
       var sess = sessionGet();
-      if (sess) { sess.ak = Vault.toB64(r.adminKey); sessionSet(sess, !!localStorage.getItem('mw:session')); }
+      if (sess) { sess.ak = Vault.toB64(S.adminKey); sessionSet(sess, !!localStorage.getItem('mw:session')); }
       await unlockShared();
       if (ghToken()) toast('Akses simpan aktif');
       return !!ghToken();
     } catch (e) { toast('Password salah', true); return false; }
+  }
+  // Publikasi otomatis setelah upload/ubah data: Owner Utama pakai tokennya sendiri,
+  // Co-Owner pakai token bersama (bila sesi lama belum membawa kunci, diminta password sekali)
+  async function canPublish() {
+    if (ghToken()) return true;
+    if (!S.user || isMainOwner() || !isOwner()) return false;
+    return ensureToken();
   }
   function askPassword() {
     return new Promise(function (resolve) {
@@ -1369,7 +1374,7 @@
       '<button class="btn danger" data-act="drop-pending">Buang perubahan</button></div>';
     return '<div class="card card-pad pending-banner"><div><b>Ada perubahan yang belum dipublikasikan</b> (' + esc((S.pending.msgs || []).join(', ')) + ').<div class="small muted">Saat ini perubahan hanya ada di browser ini. Publikasikan agar semua pengguna melihat data terbaru.</div></div>' +
       '<div class="toolbar">' + (hasTok ? '<button class="btn primary" data-act="publish">Publikasikan sekarang</button>'
-        : isMainOwner() ? '<a class="btn primary" href="#/pengaturan">Hubungkan GitHub dulu</a>' : '<span class="small muted">Menunggu akses publikasi dari Owner Utama</span>') +
+        : isMainOwner() ? '<a class="btn primary" href="#/pengaturan">Hubungkan GitHub dulu</a>' : '<button class="btn primary" data-act="publish">Publikasikan sekarang</button>') +
       '<button class="btn" data-act="drop-pending">Buang</button></div></div>';
   }
   function versionsCard(type) {
@@ -1685,7 +1690,7 @@
     var file = '/* Sinonim pencarian tambahan (diisi Owner). Satu kelompok = istilah yang dianggap sama. */\nwindow.MW_SYNONYMS = ' + JSON.stringify(groups, null, 1) + ';\n';
     await queuePending({ files: { 'data/synonyms.js': file }, deletes: [] }, ['sinonim pencarian'], null, null, { synonyms: groups });
     rebuild();
-    if (ghToken()) await publish();
+    if (await canPublish()) await publish();
     else { toast('Sinonim disimpan di browser ini — publikasikan setelah GitHub terhubung'); render(); }
   }
   function parseInWorker(buf, name, lm) {
@@ -1772,7 +1777,7 @@
       rebuild();
       await queuePending(changes, msgs, man);
       S.lastLog = log.join('\n');
-      if (ghToken()) await publish();
+      if (await canPublish()) await publish();
       else toast('Data tersimpan di browser ini. Hubungkan GitHub di Pengaturan agar tampil untuk semua pengguna.');
     } catch (e) {
       console.error(e);
@@ -1797,7 +1802,7 @@
     await queuePending({ files: { 'data/manifest.js': Vault.manifestFile(man) }, deletes: [] }, ['pakai ' + TYPE_SHORT[type] + ' ' + ddmm(v.date)], man);
     try { await loadData(); } finally { loading(false); }
     toast('Data ' + TYPE_SHORT[type] + ' ' + fmtDate(v.date) + ' sekarang dipakai');
-    if (ghToken()) await publish();
+    if (await canPublish()) await publish();
     render();
   }
 
@@ -1884,7 +1889,11 @@
   async function publish() {
     if (!S.pending) return;
     if (S.pending.stale) { toast('Perubahan lokal sudah kedaluwarsa — buang dulu di halaman Data SAP', true); location.hash = '#/data'; return; }
-    if (!ghToken()) { toast('Hubungkan GitHub dulu di Pengaturan', true); location.hash = '#/pengaturan'; return; }
+    if (!(await canPublish())) {
+      if (isMainOwner()) { toast('Hubungkan GitHub dulu di Pengaturan', true); location.hash = '#/pengaturan'; }
+      else toast('Akses publikasi belum aktif — minta Owner Utama menyimpan koneksi GitHub di Pengaturan', true);
+      return;
+    }
     loading('Mempublikasikan ke website (GitHub)…');
     try {
       await ghCommit(S.pending.files, S.pending.deletes, 'Update data: ' + (S.pending.msgs || []).join(', '));
@@ -1960,7 +1969,7 @@
   async function saveUsers(users, msg) {
     S.users = users;
     await queuePending({ files: { 'data/users.js': Vault.usersFile(users) }, deletes: [] }, [msg], null, users);
-    if (ghToken()) await publish();
+    if (await canPublish()) await publish();
     else { toast(msg + ' — tersimpan di browser ini, publikasikan setelah GitHub terhubung'); render(); }
   }
 
@@ -2106,7 +2115,7 @@
     changes.files['data/hero.js'] = file;
     window.MW_HERO = list;
     await queuePending(changes, [msg], null, null, { hero: list, heroData: heroData });
-    if (ghToken()) await publish();
+    if (await canPublish()) await publish();
     else { toast('Foto tersimpan di browser ini — publikasikan setelah GitHub terhubung'); render(); }
   }
   async function uploadHero(files) {
