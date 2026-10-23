@@ -632,3 +632,15 @@ tr.oa-other td{opacity:.72}
 .rig-table.pu .rig-sub { grid-column: 2; }
 .rig-lbl { font-size: 10.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 @media (max-width: 960px) { .rig-table.pu .rig-sub { grid-column: auto; } }
+
+/* Riwayat armada: filter status */
+.fleet-statbar { border-bottom: 1px solid var(--line); padding-top: 12px; padding-bottom: 12px; }
+.chip-toggle .chip-n { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 4px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); font-size: 11.5px; text-align: center; }
+.chip-toggle.on .chip-n { background: rgba(255,255,255,.22); color: #fff; }
+.chip-toggle.st-terjadwal.on { background: #16a34a; border-color: #16a34a; }
+.chip-toggle.st-selesai.on { background: #2563eb; border-color: #2563eb; }
+.chip-toggle.st-dibatalkan.on { background: #64748b; border-color: #64748b; }
+.kpi-click { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.kpi-click:hover { border-color: #c5d0de; }
+.kpi-click.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.select.on { border-color: var(--ink); font-weight: 600; }
