@@ -687,3 +687,5 @@ tr.oa-other td{opacity:.72}
   .rcv-grid .fleet-fld.wide { grid-column: auto; }
   .sign-prof { grid-template-columns: 1fr; }
 }
+.rcv-telat { display: flex; gap: 8px; align-items: baseline; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+.rcv-telat input { transform: scale(1.25); }

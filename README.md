@@ -127,11 +127,12 @@ vendor/               SheetJS, ExcelJS, PDF.js
 
 ## Penerimaan Barang (barang masuk — TKO B7-084 Lampiran 3–7)
 
-- **Penerimaan Barang** (Section 1): satu form untuk 4 dokumen sekaligus — **BASTB**, **SPB** (otomatis aktif bila ada item *Ditolak*), **LHPB**, dan **Form Perhitungan Denda Keterlambatan** + **Stamp Keterlambatan**.
+- **Penerimaan Barang** (Section 1): satu form — default **BASTB + LHPB**; **SPB** otomatis bila ada item *Ditolak*; **Form Denda + Stamp** hanya bila bagian F **"Material terlambat"** dicentang (jumlah hari otomatis dari tanggal, bisa diisi manual).
+  Nomor BASTB/LHPB (`0043/BASTB/10/2026`) terisi otomatis saat mengisi form & bisa diedit; nomor yang dihapus tidak dipakai ulang, nomor manual (mis. 0001) melanjutkan urutan berikutnya (0002). Akun Warehouse bisa mengisi, mengajukan, mengedit pengajuan, preview & download.
   Isi Nomor Kontrak/OA → vendor, ID vendor & harga terisi dari data ME3N; isi KIMAP → deskripsi & satuan dari data stok. Kontak vendor (NPWP, email, telp) diingat untuk pengisian berikutnya.
   Hari terlambat = Tgl Penerimaan − Tgl Jatuh Tempo (default Delivery Date); denda = Jumlah Harga PO/RO × min(hari × tarif, maksimum).
 - **Riwayat Penerimaan** (Section 2): filter bulan/status/terlambat, Approve/Tolak (Owner & Co-Owner), Edit/Batalkan selama menunggu approval, Hapus (khusus Owner Utama).
-- Saat approve: nomor dokumen urut otomatis (`0042/BASTB/10/2026`, `/LHPB/`, `/SPB/`, `/DENDA/`) dan tanda tangan penyetuju tertempel di slot miliknya. Penandatangan lain yang tercantum bisa **Tanda tangani** setelahnya.
+- Saat approve (Owner Utama atau Co-Owner, siapa pun duluan): tanda tangan penyetuju tertempel di slot miliknya. Penandatangan lain yang tercantum bisa **Tanda tangani** setelahnya.
 - Export: pilih dokumen → **PDF** (A4, format Lampiran) atau **Excel** (template BASTB/LHPB/Denda + sheet SPB & Stamp).
 - Profil penandatangan (nama lengkap, No. ID, jabatan, fungsi, tanda tangan): **Pengaturan → Tanda tangan & profil penyetuju**.
 - Data: `data/terima.js` (terenkripsi). Aset: `assets/terima/` (logo PHE, stamp Lampiran 7, template Excel kosong).

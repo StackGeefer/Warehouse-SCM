@@ -73,6 +73,7 @@
     function pct(p) { return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(p * 100) + '%'; }
     function me() { return S.user ? S.user.name : ''; }
     function canApprove() { return ctx.isOwner(); }
+    function isWh() { return !!(S.user && (ctx.isOwner() || S.user.role === 'viewer')); }
     function badge(st) { return '<span class="badge ' + (ST_CLS[st] || '') + '">' + esc(st) + '</span>'; }
     function clone(o) { return JSON.parse(JSON.stringify(o)); }
     function getPath(o, p) { return p.split('.').reduce(function (a, k) { return a == null ? a : a[k]; }, o); }
@@ -128,10 +129,14 @@
 
     // ---------- perhitungan (sama seperti rumus di Excel contoh) ----------
     function calc(r) {
-      var h = r.h || {}, tarif = num(h.tarif) / 100, maks = num(h.maks) / 100;
+      var h = r.h || {}, tarif = num(h.tarif) / 100, maks = num(h.maks) / 100, telat = !!h.telat, raw = 0;
+      var manual = telat && has(h.hariTelat) ? Math.max(0, Math.round(num(h.hariTelat))) : null;
       var rows = (r.items || []).filter(function (it) { return it && (it.d || it.m); }).map(function (it, i) {
         var due = it.due || h.delivery || '', rcv = it.rcv || h.tglTerima || '';
-        var late = due && rcv ? Math.max(0, days(due, rcv)) : null;
+        var calcLate = due && rcv ? Math.max(0, days(due, rcv)) : null;
+        if (calcLate) raw = Math.max(raw, calcLate);
+        // tanpa centang "Material terlambat" → dianggap tepat waktu (tanpa denda & stamp)
+        var late = !telat ? (calcLate == null ? null : 0) : manual != null ? manual : calcLate;
         var price = has(it.price) ? num(it.price) : null;
         var amtPo = price == null ? null : num(it.qpo) * price, amtRc = price == null ? null : num(it.qrc) * price;
         var p = late == null ? null : Math.min(late * tarif, maks);
@@ -147,7 +152,7 @@
         totPo: rows.reduce(function (a, x) { return a + (x.amtPo || 0); }, 0),
         totRc: rows.reduce(function (a, x) { return a + (x.amtRc || 0); }, 0),
         totDenda: rows.reduce(function (a, x) { return a + x.denda; }, 0),
-        lateDays: lateDays, late: lateDays > 0, status: rows.length ? (lateDays > 0 ? 'terlambat' : 'tidak terlambat') : '',
+        lateDays: lateDays, late: telat && lateDays > 0, telat: telat, rawLate: raw, status: rows.length ? (telat && lateDays > 0 ? 'terlambat' : 'tidak terlambat') : '',
         lengkap: rows.length ? rows.every(function (x) { return num(x.qrc) >= num(x.qpo); }) : null,
         rejected: rows.filter(function (x) { return x.rej; }),
         kesimpulan: !rows.length ? '' : !nRej ? 'Diterima' : !nOk ? 'Tidak Diterima' : 'Sebagian Diterima'
@@ -252,7 +257,9 @@
       try { await load(); } catch (e) { v.innerHTML = '<div class="card card-pad"><b>Gagal memuat</b><div class="small muted">' + esc(e.message) + '</div></div>'; return; }
       if (ctx.route() !== 'terima') return;
       setTimeout(function () { window.scrollTo(0, sy); if (main) main.scrollTop = my; }, 0);
-      var d = loadDraft(), h = d.h, c = calc(d);
+      var d = loadDraft(), h = d.h;
+      if (!h.seqManual) h.seq = R.data.seq || FIRST_SEQ;
+      var c = calc(d);
       var edit = R.editId ? find(R.editId) : null;
       if (R.editId && (!edit || edit.status !== ST.pending)) { R.editId = null; edit = null; }
       var hasRej = c.rejected.length > 0;
@@ -286,7 +293,8 @@
         fld('Tanggal BAST', inp('h.tglBast', h.tglBast, { type: 'date' })) +
         fld('Ref. Nomor Surat Jalan', inp('h.sj', h.sj)) +
         fld('Tanggal Pengiriman (Surat Jalan)', inp('h.tglKirim', h.tglKirim, { type: 'date' })) +
-        '</div><p class="small muted" style="margin:8px 0 0">Nomor BASTB / LHPB / SPB / Form Denda dibuat otomatis saat di-approve (urut, mis. <span class="mono">' + esc(numbers(R.data.seq || FIRST_SEQ, h.tglBast).bastb) + '</span>).</p></div>' +
+        fld('No. urut BASTB / LHPB', inp('h.seq', h.seq, { type: 'number', num: 1, step: '1', cls: 'mono' })) +
+        '</div><p class="small muted" style="margin:8px 0 0" id="rcvNoForm">' + noFormHtml(d) + '</p></div>' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">C. Data Material <span class="small muted">(maks. ' + MAX_ITEMS + ' item per dokumen — KIMAP terisi otomatis dari data SAP)</span></h4>' +
         '<div class="table-wrap"><table class="grid rcv-items"><thead><tr><th>No</th><th>Line No.</th><th>KIMAP</th><th>Deskripsi Material</th><th>Satuan</th><th>Qty PO/RO</th><th>Qty Diterima</th><th>Harga Satuan (IDR)</th><th>% TKDN</th><th>Tgl Jatuh Tempo<div class="small muted">kosong = Delivery Date</div></th><th>Tgl Penerimaan<div class="small muted">kosong = Tgl Terima</div></th><th>Status</th><th>Catatan</th><th></th></tr></thead><tbody>' +
         d.items.map(itemRow).join('') + '</tbody></table></div><datalist id="rcvUom">' + UOMS.map(function (u) { return '<option value="' + u + '">'; }).join('') + '</datalist>' +
@@ -313,10 +321,15 @@
           fld('Catatan lainnya (Jumlah Koli, No. Kendaraan, dll)', '<textarea class="input" rows="2" data-k="spb.lain">' + esc(d.spb.lain || '') + '</textarea>', 'full') +
           fld('Status Material', sel('spb.stMat', d.spb.stMat, ['Disimpan Sementara di Gudang', 'Dikembalikan ke Vendor'])) +
           fld('Status Dokumen (Surat Jalan, Sertifikat, dll)', sel('spb.stDok', d.spb.stDok, ['Disimpan Sementara di Gudang', 'Dikembalikan ke Vendor'])) + '</div>' : '') + '</div>' +
-        '<div class="card card-pad rcv-sec"><h4 class="section-title">F. Denda Keterlambatan &amp; Stamp</h4><div class="rcv-grid">' +
-        fld('Tarif denda per hari (%)', inp('h.tarif', h.tarif, { type: 'number', num: 1, step: 'any', rr: 1 })) +
-        fld('Batas maksimum denda (%)', inp('h.maks', h.maks, { type: 'number', num: 1, step: 'any', rr: 1 })) +
-        '</div><p class="small muted" style="margin:6px 0 0">Nilai awal 0,1%/hari &amp; maks. 5% — sesuaikan dengan klausul denda OA/RO/PO. Hari terlambat = Tgl Penerimaan − Tgl Jatuh Tempo (hari kalender).</p></div>' +
+        '<div class="card card-pad rcv-sec' + (h.telat ? '' : ' rcv-off') + '"><h4 class="section-title">F. Keterlambatan Pengiriman — Form Denda &amp; Stamp</h4>' +
+        '<label class="rcv-telat"><input type="checkbox" data-k="h.telat" data-rr' + (h.telat ? ' checked' : '') + '> <b>Material terlambat</b> <span class="small muted">— centang bila vendor terlambat mengirim ke titik penyerahan sesuai delivery date (TKO B7-084 VII.C.2). Bila tidak dicentang, dokumen hanya BASTB &amp; LHPB (+ SPB bila ada yang ditolak).</span></label>' +
+        (!h.telat ? (c.rawLate ? '<div class="remind-card card-pad" style="margin-top:10px">Tanggal penerimaan melewati delivery date <b>' + c.rawLate + ' hari</b>. Centang <b>Material terlambat</b> bila memang terlambat sesuai PO/RO.</div>' : '')
+          : '<div class="rcv-grid" style="margin-top:10px">' +
+          fld('Jumlah hari terlambat', inp('h.hariTelat', h.hariTelat, { type: 'number', num: 1, step: '1', rr: 1, ph: 'otomatis: ' + c.rawLate + ' hari dari tanggal' })) +
+          fld('Tarif denda per hari (%)', inp('h.tarif', h.tarif, { type: 'number', num: 1, step: 'any', rr: 1 })) +
+          fld('Batas maksimum denda (%)', inp('h.maks', h.maks, { type: 'number', num: 1, step: 'any', rr: 1 })) +
+          fld('Hasil', '<div class="rcv-auto">' + (c.late ? 'Terlambat ' + c.lateDays + ' hari · denda Rp ' + idr(c.totDenda) : 'Belum ada hari terlambat') + '</div>') +
+          '</div><p class="small muted" style="margin:6px 0 0">Jumlah hari kosong = dihitung otomatis (Tgl Penerimaan − Tgl Jatuh Tempo/Delivery Date, hari kalender). Tarif awal 0,1%/hari &amp; maks. 5% — sesuaikan dengan klausul denda OA/RO/PO. Form Denda &amp; Stamp ikut ter-export.</p>') + '</div>' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">G. Penandatangan</h4>' +
         '<p class="small muted" style="margin-top:0">Pilih dari profil Owner/Co-Owner — tanda tangannya tertempel otomatis setelah orang tersebut approve / ikut tanda tangan. Pilih "Kosong" untuk tanda tangan basah.</p>' +
         ['BASTB', 'LHPB', 'SPB', 'Denda'].map(function (g) {
@@ -327,17 +340,23 @@
         '<div class="card card-pad toolbar rcv-actions"><button class="btn" data-ra="reset">Kosongkan form</button><span class="spacer"></span>' +
         '<button class="btn" data-ra="preview">Preview PDF</button><button class="btn primary" data-ra="submit">' + (edit ? 'Simpan perubahan' : 'Ajukan (Approval Owner / Co-Owner)') + '</button></div></form>';
     }
+    function noFormHtml(d) {
+      var nb = numbers(num(d.h.seq) || R.data.seq || FIRST_SEQ, d.h.tglBast || d.h.tglTerima);
+      return 'Nomor otomatis (urut berikutnya, bisa diedit): BASTB <b class="mono">' + esc(nb.bastb) + '</b> · LHPB <b class="mono">' + esc(nb.lhpb) + '</b>' +
+        ' <span class="muted">(SPB &amp; Form Denda memakai nomor urut yang sama). Nomor yang sudah dipakai lalu dihapus tidak dipakai ulang.</span>';
+    }
     function sumHtml(d, c) {
       var kv = function (k, v, cls) { return '<div><span>' + k + '</span><b' + (cls ? ' class="' + cls + '"' : '') + '>' + v + '</b></div>'; };
       return '<h4 class="section-title" style="margin-top:0">Ringkasan otomatis</h4><div class="kv">' +
         kv('Jumlah item', c.n || '—') + kv('Total (Qty Diterima)', 'Rp ' + idr(c.totRc)) + kv('Total PO/RO', 'Rp ' + idr(c.totPo)) +
         kv('Status penyerahan', c.status ? (c.late ? 'Terlambat ' + c.lateDays + ' hari' : 'Tidak terlambat') : '—', c.late ? 'txt-bad' : '') +
         kv('Total denda', 'Rp ' + idr(c.totDenda), c.totDenda ? 'txt-bad' : '') + kv('Kesimpulan LHPB', c.kesimpulan || '—') +
-        kv('Dokumen', ['BASTB', 'LHPB'].concat(c.rejected.length ? ['SPB'] : []).concat(c.late ? ['Form Denda', 'Stamp'] : ['Form Denda']).join(' · ')) + '</div>';
+        kv('Dokumen', ['BASTB', 'LHPB'].concat(c.rejected.length ? ['SPB'] : []).concat(c.telat ? ['Form Denda'] : []).concat(c.late ? ['Stamp'] : []).join(' · ')) + '</div>';
     }
     function refreshSum() {
       var d = R.draft, c = calc(d), box = document.getElementById('rcvSum');
       if (box) box.innerHTML = sumHtml(d, c);
+      var nf = document.getElementById('rcvNoForm'); if (nf) nf.innerHTML = noFormHtml(d);
       ['jumlah', 'waktu'].forEach(function (k) { var el = document.getElementById('rcvAuto_' + k); if (el) el.innerHTML = esc(hasil(d, c, k) || '—') + ' <span class="small muted">(otomatis)</span>'; });
     }
     // isi otomatis dari data SAP
@@ -388,10 +407,22 @@
       if (c.rejected.length && !d.spb.alasan) { toast('Isi Alasan Penolakan untuk SPB', true); return; }
       var body = clone(d);
       body.items = body.items.filter(function (it) { return it.d || it.m; });
-      var editId = R.editId, id = editId || ('T' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)), at = new Date().toISOString(), lost = false;
+      var editId = R.editId, id = editId || ('T' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5)), at = new Date().toISOString(), lost = false, dupNo = '';
+      if (d.h.seqManual && !(num(d.h.seq) > 0)) { toast('Isi No. urut dokumen', true); return; }
       loading(editId ? 'Menyimpan perubahan…' : 'Mengajukan penerimaan barang…');
       try {
         await save(function (D) {
+          // nomor urut: otomatis = nomor berikutnya terbaru (aman bila 2 orang mengajukan bersamaan); manual = sesuai isian
+          var dt = body.h.tglBast || body.h.tglTerima, prev = editId ? (D.list.filter(function (x) { return x.id === editId; })[0] || {}).no : null;
+          var used = function (n) { var b = numbers(n, dt).bastb; return D.list.some(function (x) { return x.id !== id && x.no && x.no.bastb === b; }); };
+          var seq;
+          if (body.h.seqManual) seq = Math.round(num(body.h.seq));
+          else { seq = D.seq || FIRST_SEQ; while (used(seq)) seq++; }
+          var nb = numbers(seq, dt);
+          if (used(seq)) { dupNo = nb.bastb; throw new Error('Nomor ' + nb.bastb + ' sudah dipakai penerimaan lain — ganti No. urut'); }
+          body.no = nb; body.h.seq = seq;
+          // nomor diisi manual (mis. mulai 0001) → urutan otomatis berikutnya melanjutkan dari nomor itu; nomor terhapus tidak dipakai ulang
+          D.seq = body.h.seqManual && !(prev && prev.seq === seq) ? seq + 1 : Math.max(D.seq || FIRST_SEQ, seq + 1);
           var vkey = body.h.vendorId || ('N:' + String(body.h.vendor).toUpperCase());
           D.vendors[vkey] = { vendor: body.h.vendor, vendorId: body.h.vendorId || '', npwp: body.h.npwp || '', email: body.h.email || '', telp: body.h.telp || '' };
           if (editId) {
@@ -407,11 +438,12 @@
           }
           return D;
         }, editId ? 'Penerimaan barang: ubah ' + body.h.po + ' (' + me() + ')' : 'Penerimaan barang: pengajuan PO ' + body.h.po + ' ' + body.h.vendor + ' (' + me() + ')');
+        if (dupNo) { toast('Nomor ' + dupNo + ' sudah dipakai penerimaan lain — ganti No. urut', true); return; }
         if (lost) { toast('Pengajuan sudah diproses orang lain — tidak bisa diubah lagi', true); }
         else toast(editId ? 'Perubahan disimpan' : 'Diajukan — menunggu approval Owner / Co-Owner');
         clearDraft();
         location.hash = '#/terima-riwayat';
-      } catch (e) { toast('Gagal menyimpan: ' + e.message, true); }
+      } catch (e) { toast(dupNo ? e.message : 'Gagal menyimpan: ' + e.message, true); }
       finally { loading(false); }
     }
 
@@ -450,7 +482,7 @@
       var myUid = S.user.id, mine = R.signs.users[myUid];
       acts.push('<button class="btn sm" data-ra="export" data-id="' + esc(r.id) + '">' + (r.status === ST.ok ? 'Export' : 'Preview') + '</button>');
       if (r.status === ST.pending && canApprove()) acts.unshift('<button class="btn sm primary" data-ra="approve" data-id="' + esc(r.id) + '">Approve</button><button class="btn sm" data-ra="reject" data-id="' + esc(r.id) + '">Tolak</button>');
-      if (r.status === ST.pending && (r.createdById === myUid || canApprove())) acts.push('<button class="btn sm" data-ra="edit" data-id="' + esc(r.id) + '">Edit</button><button class="btn sm" data-ra="cancel" data-id="' + esc(r.id) + '">Batalkan</button>');
+      if (r.status === ST.pending && (r.createdById === myUid || canApprove() || isWh())) acts.push('<button class="btn sm" data-ra="edit" data-id="' + esc(r.id) + '">Edit</button><button class="btn sm" data-ra="cancel" data-id="' + esc(r.id) + '">Batalkan</button>');
       if (r.status === ST.ok && mine && mine.img && slotUids(r).indexOf(myUid) >= 0 && !(r.signed || {})[myUid]) acts.unshift('<button class="btn sm primary" data-ra="cosign" data-id="' + esc(r.id) + '">Tanda tangani</button>');
       if (r.status !== ST.pending && ctx.isMainOwner()) acts.push('<button class="btn sm danger" data-ra="delete" data-id="' + esc(r.id) + '" title="Hapus permanen (khusus Owner Utama)">Hapus</button>');
       var signedNames = Object.keys(r.signed || {}).map(function (u) { var p = profile(u); return p ? p.short || p.name : ''; }).filter(Boolean);
@@ -474,7 +506,7 @@
       var r = find(id), sg = R.signs.users[S.user.id];
       if (!r) return;
       if (!sg || !sg.img) { toast('Atur tanda tangan & profil Anda dulu di Pengaturan', true); location.hash = '#/pengaturan'; return; }
-      var c = calc(r), seq = R.data.seq || FIRST_SEQ, nb = numbers(seq, r.h.tglBast || r.h.tglTerima);
+      var c = calc(r), seq = r.no && r.no.seq ? r.no.seq : (R.data.seq || FIRST_SEQ), nb = numbers(seq, r.h.tglBast || r.h.tglTerima);
       var mySlots = SLOTS.filter(function (s) { return ((r.sign || {})[s.k] || {}).uid === S.user.id; }).map(function (s) { return s.doc + ' ' + s.t; });
       drawerOpen('<div class="drawer-head"><div style="flex:1"><div class="mono muted">Approval Penerimaan Barang</div><h2>' + esc(r.h.vendor) + '</h2></div><button class="icon-btn" data-act="close-drawer">✕</button></div>' +
         '<div class="drawer-body">' +
@@ -556,13 +588,14 @@
       if (!r || r.status !== ST.pending) return;
       var d = newDraft();
       ['h', 'items', 'lhpb', 'spb', 'sign'].forEach(function (k) { if (r[k]) d[k] = clone(r[k]); });
+      if (r.no && r.no.seq) { d.h.seq = r.no.seq; d.h.seqManual = true; }
       if (!d.items.length) d.items = [{ line: '1', st: 'Diterima' }];
       R.draft = d; R.editId = id; storeDraft();
       location.hash = '#/terima';
     }
 
     // ---------- Export: pilih dokumen & format ----------
-    function avail(r, c) { return { bastb: true, spb: c.rejected.length > 0, lhpb: true, denda: true, stamp: c.late }; }
+    function avail(r, c) { return { bastb: true, spb: c.rejected.length > 0, lhpb: true, denda: c.telat, stamp: c.late }; }
     function openExport(id) {
       var r = find(id) || (id === 'draft' ? R.previewRec : null);
       if (!r) return;
@@ -572,7 +605,7 @@
         '<div class="rcv-docs">' + DOCS.map(function (x) {
           var on = av[x.k];
           return '<label class="rcv-doc' + (on ? '' : ' off') + '"><input type="checkbox" data-doc="' + x.k + '"' + (on ? ' checked' : ' disabled') + '><b>' + esc(x.t) + '</b><span class="small muted">' + esc(x.full) +
-            (!on ? (x.k === 'spb' ? ' — tidak ada barang ditolak' : ' — tidak ada keterlambatan') : '') + '</span></label>';
+            (!on ? (x.k === 'spb' ? ' — tidak ada barang ditolak' : ' — "Material terlambat" tidak dicentang') : '') + '</span></label>';
         }).join('') + '</div>' +
         '<div class="toolbar"><button class="btn primary" data-ra="pdf" data-id="' + esc(r.id) + '">Download PDF</button><button class="btn" data-ra="xlsx" data-id="' + esc(r.id) + '">Download Excel</button></div></div>');
     }
@@ -1190,8 +1223,9 @@
         t.parentNode.classList.toggle('on', t.checked); storeDraft(); return;
       }
       var path = t.getAttribute('data-k'); if (!path) return;
-      var val = t.hasAttribute('data-num') ? (t.value === '' ? '' : num(t.value)) : t.value;
+      var val = t.type === 'checkbox' ? t.checked : t.hasAttribute('data-num') ? (t.value === '' ? '' : num(t.value)) : t.value;
       setPath(d, path, val);
+      if (path === 'h.seq') d.h.seqManual = t.value !== '';
       storeDraft();
       if (!final) { refreshSum(); return; }
       var m = /^items\.(\d+)\.m$/.exec(path);
