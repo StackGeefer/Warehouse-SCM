@@ -39,5 +39,15 @@ window.MW_USERS = [
   "wk": "Ch+z8NcfNb4S0R6+J4WiP+w7XbxOGXIxLNIJzz6XJvsQzzQiwfZHDF5WqSnfIW2t",
   "aiv": "wqMX7rVQffH0F4mg",
   "ak": "XRudp7waYP+x8fCcYLz41eU+SEcBTv1qhOSOxcV2BMi+7IiwPQ7kNR5J6PYT2Ma8"
+ },
+ {
+  "id": "389a331fc38e25e55e9b13fd8261730b1050980b890f8a243e4e3aac384110e5",
+  "name": "Receiving",
+  "role": "viewer",
+  "salt": "0wYKrq3z3NrazuCzoRGbdQ==",
+  "iv": "mh3/rhcZ/m76sgdM",
+  "wk": "DC5G9EmRcrXBkflUjFsU20NdoONxPpjyUjKhXO5kJxJUYKXVjfNN9dLqC9VpdZ6w",
+  "aiv": "pbjwNqhyZGktfjlf",
+  "ak": "E0dH8UaB9PmKmK+vk+8PCi6lAdK0u9Bicmai6DyDrRvGjxnDVj3vGZcgkmO6c0IM"
  }
 ];
