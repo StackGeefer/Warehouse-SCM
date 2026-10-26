@@ -125,6 +125,14 @@ vendor/               SheetJS, ExcelJS, PDF.js
 - Nama & tanda tangan diatur sendiri oleh tiap Owner / Co-Owner di **Pengaturan → Tanda tangan Pass Keluar** (latar polos otomatis dibuat transparan). Disimpan terenkripsi di `data/signs.js`.
 - Data pass: `data/pass.js` (terenkripsi). Akun **Warehouse** perlu diatur password-nya oleh Owner Utama (Pengaturan → Pengguna) agar bisa mengajukan.
 
+## Register Receiving (sebelum BASTB & LHPB)
+
+- **Penerimaan Barang** dimulai dengan **memilih Register Receiving** (atau membuat register baru). Setelah dipilih, form BASTB/LHPB terbuka dan PO, delivery date, tanggal tiba, GR, vendor, deskripsi & tipe (STOCK = Persediaan, DIRECT CHARGE = Non Persediaan) terisi otomatis.
+- Format kolom mengikuti Excel REGISTER_RECEIVING (Detail-2026, kolom A–Y). Nomor register: No. urut per tahun + Register `26 R`. Lead Time GR (103→105) & Keterlambatan dihitung otomatis.
+- **Riwayat Penerimaan**: atas = tabel Register (tahun 2009–sekarang, filter bulan, cari), bawah = BASTB & LHPB.
+- Download Excel Register **per bulan / per tahun / seluruh tahun** dengan format asli (`assets/terima/register-template.xlsx`); Rekap BASTB & LHPB juga per bulan / tahun / seluruh tahun.
+- Data: `data/register/<tahun>.js` + `data/register/index.js` (terenkripsi). Data lama diimpor dari REGISTER_RECEIVING.xls (file Excel mentah tidak disimpan di repo).
+
 ## Penerimaan Barang (barang masuk — TKO B7-084 Lampiran 3–7)
 
 - **Penerimaan Barang** (Section 1): satu form — default **BASTB + LHPB**; **SPB** otomatis bila ada item *Ditolak*; **Form Denda + Stamp** hanya bila bagian F **"Material terlambat"** dicentang (jumlah hari otomatis dari tanggal, bisa diisi manual).

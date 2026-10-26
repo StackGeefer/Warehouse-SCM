@@ -57,7 +57,57 @@
 
   root.ReceiveModule = function (ctx) {
     var S = ctx.S, esc = ctx.esc, toast = ctx.toast, loading = ctx.loading, Vault = ctx.Vault;
-    var R = S.terima = { data: null, signs: null, draft: null, editId: null, filt: 'Semua', month: '', q: '', img: {} };
+    var R = S.terima = { data: null, signs: null, draft: null, editId: null, filt: 'Semua', month: '', q: '', img: {}, regQ: '' };
+    // Register Receiving: wajib dipilih sebelum mengisi BASTB & LHPB
+    var Reg = root.RegisterModule({
+      S: S, esc: esc, toast: toast, loading: loading, route: ctx.route, isOwner: ctx.isOwner, closeDrawer: ctx.closeDrawer,
+      loadExcelJS: ctx.loadExcelJS, pass: ctx.pass, links: regLinks, onPick: pickReg, rerender: function () { renderHistory(); }
+    });
+    // register → nomor BASTB yang memakainya (pengajuan yang tidak dibatalkan/ditolak)
+    function regLinks() {
+      var o = {};
+      ((R.data || {}).list || []).forEach(function (r) {
+        if (!r.reg || r.status === ST.cancel || r.status === ST.no) return;
+        (o[r.reg.id] = o[r.reg.id] || []).push(docNo(r, 'bastb') || 'Draft');
+      });
+      return o;
+    }
+    // isi data penerimaan dari register (PO, tanggal, GR, vendor, deskripsi, tipe)
+    function applyReg(d, y, o) {
+      var h = d.h;
+      d.reg = { y: y, id: o.id, no: o.no, reg: o.reg || '' };
+      if (o.po) h.po = o.po;
+      if (o.del) h.delivery = o.del;
+      if (o.tiba) { h.tglTerima = o.tiba; h.tglPeriksa = o.tiba; h.tglBast = o.tiba; }
+      if (o.gr105 || o.gr103) h.gr = o.gr105 || o.gr103;
+      if (o.tgl105 || o.tgl103) h.tglGr = o.tgl105 || o.tgl103;
+      if (o.vid) h.vendorId = o.vid;
+      if (o.vendor) h.vendor = o.vendor;
+      if (o.desc) h.perihal = o.desc;
+      if (o.fungsi) h.tipe = /direct|dc\b/i.test(o.fungsi) ? 'Non Persediaan' : 'Persediaan';
+      lookupVendor(d);
+    }
+    function pickReg(y, o, fromHistory) {
+      if (!o) return;
+      if (fromHistory && R.draft && R.draft.reg && !R.editId) R.draft = null;
+      var d = loadDraft();
+      applyReg(d, y, o); storeDraft();
+      toast('Register ' + Reg.regLabel(o) + ' dipilih — data PO, tanggal, GR & vendor terisi otomatis');
+      if (ctx.route() !== 'terima') location.hash = '#/terima'; else rerender();
+    }
+    function regCard(d) {
+      if (d.reg) {
+        var o = Reg.get(d.reg.y, d.reg.id) || {};
+        return '<div class="card card-pad rcv-sec reg-picked"><div class="reg-picked-row"><span class="reg-step">1</span><div style="flex:1"><div class="small muted">Register Receiving</div>' +
+          '<b class="mono">' + esc(Reg.regLabel(o.id ? o : d.reg)) + '</b> <span class="small muted">' + d.reg.y + '</span>' +
+          (o.id ? '<div class="small">PO ' + esc(o.po || '') + ' · tiba ' + esc(Reg.dot(o.tiba)) + ' · ' + esc(o.vendor || '') + (o.rp ? ' · Rp ' + idr(o.rp) : '') + '</div>' : '') + '</div>' +
+          '<div class="toolbar">' + (o.id ? '<button class="btn sm" data-ra="reg-edit">Edit register</button>' : '') + (R.editId ? '' : '<button class="btn sm" data-ra="reg-change">Ganti register</button>') + '</div></div></div>';
+      }
+      return '<div class="card card-pad rcv-sec reg-gate"><h4 class="section-title"><span class="reg-step">1</span> Pilih Register Receiving dulu</h4>' +
+        '<p class="small muted" style="margin-top:0">Register wajib diisi sebelum BASTB &amp; LHPB. Pilih register yang belum dipakai, atau buat register baru — setelah dipilih, form BASTB/LHPB terbuka dan data PO, tanggal tiba, GR &amp; vendor terisi otomatis.</p>' +
+        '<div class="toolbar" style="margin-bottom:8px"><input class="input" id="rcvRegQ" style="flex:1;min-width:220px" placeholder="Cari no. register, PO, vendor…" value="' + esc(R.regQ) + '"><button class="btn primary" data-rga="new">+ Register baru</button></div>' +
+        '<div id="rcvRegList"><div class="muted small">Memuat register…</div></div></div>';
+    }
 
     function $(s) { return document.querySelector(s); }
     function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -294,7 +344,13 @@
       var edit = R.editId ? find(R.editId) : null;
       if (R.editId && (!edit || edit.status !== ST.pending)) { R.editId = null; edit = null; }
       var hasRej = c.rejected.length > 0;
-      v.innerHTML =
+      try { if (d.reg) await Reg.loadYear(d.reg.y); } catch (e) { /* tetap tampil */ }
+      if (!d.reg && !R.editId) {
+        v.innerHTML = regCard(d);
+        Reg.pickerHtml(R.regQ).then(function (html) { var el = document.getElementById('rcvRegList'); if (el) el.innerHTML = html; }, function (e) { var el = document.getElementById('rcvRegList'); if (el) el.textContent = 'Gagal memuat register: ' + e.message; });
+        return;
+      }
+      v.innerHTML = regCard(d) +
         (edit ? '<div class="card card-pad remind-card"><b>Mengedit pengajuan</b> — ' + esc(h.po || '') + ' · ' + esc(h.vendor || '') + '. <a href="#" data-ra="edit-cancel">Batal edit</a></div>' : '') +
         (!profiles().length ? '<div class="card card-pad remind-card">Belum ada profil penandatangan. Owner / Co-Owner atur di <a href="#/pengaturan">Pengaturan → Tanda tangan &amp; profil penyetuju</a> (nama lengkap, No. ID, jabatan).</div>' : '') +
         '<form id="rcvForm" autocomplete="off" onsubmit="return false">' +
@@ -426,6 +482,7 @@
 
     function validate(d, c) {
       var miss = [];
+      if (!d.reg && !R.editId) miss.push('Register Receiving');
       if (!d.h.po) miss.push('Nomor PO/RO');
       if (!d.h.vendor) miss.push('Nama Vendor');
       if (!d.h.perihal) miss.push('Perihal');
@@ -498,12 +555,15 @@
       var tabs = ['Semua', ST.pending, ST.ok, 'Terlambat', ST.no, ST.cancel];
       var cnt = function (t) { return base.filter(function (r) { return t === 'Semua' || (t === 'Terlambat' ? calc(r).late && r.status !== ST.cancel : r.status === t); }).length; };
       var list = base.filter(function (r) { return R.filt === 'Semua' || (R.filt === 'Terlambat' ? calc(r).late && r.status !== ST.cancel : r.status === R.filt); });
-      var mySign = R.signs.users[S.user.id];
-      v.innerHTML = (canApprove() && (!mySign || !mySign.full) ? '<div class="card card-pad remind-card">Lengkapi <b>nama lengkap, No. ID, jabatan &amp; tanda tangan</b> Anda di <a href="#/pengaturan">Pengaturan → Tanda tangan &amp; profil penyetuju</a> agar tertempel di BASTB/LHPB/SPB/Form Denda.</div>' : '') +
+      var mySign = R.signs.users[S.user.id], regHtml = await Reg.sectionHtml();
+      if (ctx.route() !== 'terima-riwayat') return;
+      v.innerHTML = regHtml + '<h3 class="rcv-h2">BASTB &amp; LHPB</h3>' + (canApprove() && (!mySign || !mySign.full) ? '<div class="card card-pad remind-card">Lengkapi <b>nama lengkap, No. ID, jabatan &amp; tanda tangan</b> Anda di <a href="#/pengaturan">Pengaturan → Tanda tangan &amp; profil penyetuju</a> agar tertempel di BASTB/LHPB/SPB/Form Denda.</div>' : '') +
         '<div class="card card-pad toolbar" style="margin-bottom:14px">' +
         '<select class="select" id="rcvMonth"><option value="">Semua bulan</option>' + Object.keys(months).filter(Boolean).sort().reverse().map(function (m) { return '<option value="' + m + '"' + (R.month === m ? ' selected' : '') + '>' + BLN[+m.slice(5) - 1] + ' ' + m.slice(0, 4) + '</option>'; }).join('') + '</select>' +
         '<input class="input" id="rcvQ" style="flex:1;min-width:200px" placeholder="Cari PO, OA, vendor, KIMAP, nomor BASTB…" value="' + esc(R.q) + '">' +
-        '<button class="btn" data-ra="refresh">Muat ulang</button><a class="btn primary" href="#/terima">+ Penerimaan baru</a></div>' +
+        '<button class="btn" data-ra="refresh">Muat ulang</button><a class="btn primary" href="#/terima">+ Penerimaan baru</a>' +
+        '<span class="reg-dl"><span class="small muted">Rekap Excel:</span><button class="btn sm" data-ra="rekap" data-v="month"' + (R.month ? '' : ' disabled title="Pilih bulan dulu"') + '>Bulan</button>' +
+        '<button class="btn sm" data-ra="rekap" data-v="year">Tahun ' + rekapYear() + '</button><button class="btn sm" data-ra="rekap" data-v="all">Seluruh tahun</button></span></div>' +
         '<div class="card"><div class="card-pad fleet-statbar"><div class="chips">' + tabs.map(function (t) {
           return '<button class="chip-toggle' + (R.filt === t ? ' on' : '') + '" data-ra="tab" data-v="' + esc(t) + '">' + esc(t === 'Semua' ? 'Semua' : t) + ' <span class="chip-n">' + cnt(t) + '</span></button>';
         }).join('') + '<span class="small muted" style="margin-left:auto">Menampilkan <b>' + list.length + '</b> dari ' + all.length + ' penerimaan</span></div></div>' +
@@ -520,7 +580,7 @@
       if (r.status === ST.ok && mine && mine.img && slotUids(r).indexOf(myUid) >= 0 && !(r.signed || {})[myUid]) acts.unshift('<button class="btn sm primary" data-ra="cosign" data-id="' + esc(r.id) + '">' + (((r.sign || {}).bastb || {}).uid === myUid ? 'Approve BASTB &amp; tanda tangani' : 'Tanda tangani') + '</button>');
       if (r.status !== ST.pending && ctx.isMainOwner()) acts.push('<button class="btn sm danger" data-ra="delete" data-id="' + esc(r.id) + '" title="Hapus permanen (khusus Owner Utama)">Hapus</button>');
       var signedNames = Object.keys(r.signed || {}).map(function (u) { var p = profile(u); return p ? p.short || p.name : ''; }).filter(Boolean);
-      return '<tr><td><b class="mono">' + esc(docNo(r, 'bastb') || '—') + '</b><div class="small">' + esc(dot(r.h.tglTerima)) + '</div></td>' +
+      return '<tr><td><b class="mono">' + esc(docNo(r, 'bastb') || '—') + '</b><div class="small">' + esc(dot(r.h.tglTerima)) + '</div>' + (r.reg ? '<div class="small muted mono">Reg ' + esc(Reg.regLabel(r.reg)) + '</div>' : '') + '</td>' +
         '<td class="mono">' + esc(r.h.po) + (r.h.oa ? '<div class="small muted">OA ' + esc(r.h.oa) + '</div>' : '') + '</td>' +
         '<td>' + esc(r.h.vendor) + '<div class="small muted">' + esc(r.h.perihal || '') + '</div></td>' +
         '<td><b>' + c.n + '</b> item<div class="small muted">' + esc(qty(first.qrc) + ' ' + (first.u || '') + ' ' + (first.d || '')) + (c.n > 1 ? ' …' : '') + '</div>' +
@@ -623,7 +683,7 @@
       var r = find(id);
       if (!r || r.status !== ST.pending) return;
       var d = newDraft();
-      ['h', 'items', 'lhpb', 'spb', 'sign'].forEach(function (k) { if (r[k]) d[k] = clone(r[k]); });
+      ['h', 'items', 'lhpb', 'spb', 'sign', 'reg'].forEach(function (k) { if (r[k]) d[k] = clone(r[k]); });
       if (r.no && r.no.seq) { d.h.seq = r.no.seq; d.h.seqManual = true; }
       if (!d.items.length) d.items = [{ line: '1', st: 'Diterima' }];
       R.draft = d; R.editId = id; storeDraft();
@@ -1291,6 +1351,12 @@
       if (inForm(t)) onField(t, true);
       else if (t.id === 'rcvMonth') { R.month = t.value; renderHistory(); }
     });
+    var rqTimer;
+    document.addEventListener('input', function (e) {
+      if (e.target.id !== 'rcvRegQ') return;
+      R.regQ = e.target.value; clearTimeout(rqTimer);
+      rqTimer = setTimeout(function () { Reg.pickerHtml(R.regQ).then(function (html) { var el = document.getElementById('rcvRegList'); if (el) el.innerHTML = html; }); }, 200);
+    });
     var qTimer;
     document.addEventListener('input', function (e) {
       if (e.target.id !== 'rcvQ') return;
@@ -1306,6 +1372,8 @@
       else if (act === 'row-del' && d) { d.items.splice(+a.getAttribute('data-i'), 1); if (!d.items.length) d.items.push({ line: '1', st: 'Diterima' }); storeDraft(); rerender(); }
       else if (act === 'chk-add' && d) { d.lhpb.check.push({ doc: '', ok: 'Yes', note: '' }); storeDraft(); rerender(); }
       else if (act === 'chk-del' && d) { d.lhpb.check.splice(+a.getAttribute('data-i'), 1); storeDraft(); rerender(); }
+      else if (act === 'reg-change' && d) { d.reg = null; storeDraft(); rerender(); }
+      else if (act === 'reg-edit' && d && d.reg) Reg.openForm(d.reg.y, d.reg.id, pickReg);
       else if (act === 'reset') { if (confirm('Kosongkan seluruh isian form?')) { clearDraft(); rerender(); } }
       else if (act === 'edit-cancel') { clearDraft(); rerender(); }
       else if (act === 'submit') submit();
@@ -1315,6 +1383,7 @@
         R.previewRec = Object.assign({ id: 'draft', status: '' }, clone(d)); openExport('draft');
       }
       else if (act === 'tab') { R.filt = a.getAttribute('data-v'); renderHistory(); }
+      else if (act === 'rekap') exportRekap(a.getAttribute('data-v'));
       else if (act === 'refresh') renderHistory(true);
       else if (act === 'approve') openApprove(id);
       else if (act === 'approve-do') approve(id);
@@ -1340,7 +1409,69 @@
     });
 
     function pendingCount() { return R.data ? R.data.list.filter(function (r) { return r.status === ST.pending; }).length : 0; }
-    function reset() { R.data = null; R.signs = null; R.filt = 'Semua'; }
+    function reset() { R.data = null; R.signs = null; R.filt = 'Semua'; Reg.reset(); }
+
+    // ---------- Rekap BASTB & LHPB (Excel) per bulan / tahun / seluruh tahun ----------
+    function rekapYear() { return R.month ? +R.month.slice(0, 4) : new Date().getFullYear(); }
+    async function exportRekap(kind) {
+      loading('Membuat rekap Excel…');
+      try {
+        var ExcelJS = await ctx.loadExcelJS(), wb = new ExcelJS.Workbook();
+        var list = R.data.list.filter(function (r) { return r.status !== ST.cancel; });
+        var dateOf = function (r) { return r.h.tglBast || r.h.tglTerima || ''; };
+        var groups = {};
+        list.forEach(function (r) {
+          var dt = dateOf(r), y = dt.slice(0, 4);
+          if (kind === 'month' && dt.slice(0, 7) !== R.month) return;
+          if (kind === 'year' && +y !== rekapYear()) return;
+          (groups[y] = groups[y] || []).push(r);
+        });
+        var ys = Object.keys(groups).sort();
+        if (!ys.length) ys = [String(rekapYear())];
+        var thin = { style: 'thin', color: { argb: 'FF000000' } }, border = { top: thin, left: thin, bottom: thin, right: thin };
+        var cols = [['No.', 5], ['No. BASTB', 20], ['No. LHPB', 20], ['Tanggal BAST', 13], ['Register', 14], ['PO / RO', 14], ['Kontrak / OA', 14], ['Vendor', 32], ['Perihal', 50], ['Tipe', 15],
+          ['Item', 6], ['Nilai Diterima (Rp.)', 18], ['Penyerahan', 15], ['Hari Terlambat', 10], ['Denda (Rp.)', 15], ['Kesimpulan LHPB', 17], ['Status', 17], ['Approve oleh', 26]];
+        ys.forEach(function (y) {
+          var rows = (groups[y] || []).sort(function (a, b) { return (dateOf(a) + docNo(a, 'bastb')).localeCompare(dateOf(b) + docNo(b, 'bastb')); });
+          var title = kind === 'month' ? 'Rekap BASTB & LHPB Bulan ' + BLN[+R.month.slice(5) - 1] + ' ' + y : 'Rekap BASTB & LHPB Tahun ' + y;
+          var ws = wb.addWorksheet(kind === 'month' ? 'Rekap-' + R.month : 'Rekap-' + y, { views: [{ state: 'frozen', ySplit: 3 }], pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+          ws.columns = cols.map(function (c) { return { width: c[1] }; });
+          ws.mergeCells(1, 1, 1, cols.length);
+          ws.getCell(1, 1).value = title; ws.getCell(1, 1).font = { name: 'Baskerville Old Face', size: 18, bold: true }; ws.getCell(1, 1).alignment = { horizontal: 'center' };
+          ws.getRow(1).height = 26;
+          var hr = ws.getRow(3);
+          cols.forEach(function (c, i) {
+            var cl = hr.getCell(i + 1); cl.value = c[0]; cl.font = { name: 'Arial', size: 10, bold: true }; cl.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; cl.border = border;
+            cl.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } };
+          });
+          hr.height = 30;
+          rows.forEach(function (r, i) {
+            var c = calc(r), signed = Object.keys(r.signed || {}).map(function (u) { var p = profile(u); return p ? p.name : ''; }).filter(Boolean).join(', ');
+            var row = ws.getRow(4 + i);
+            [i + 1, docNo(r, 'bastb'), docNo(r, 'lhpb'), dateOf(r) ? new Date(Date.UTC(+dateOf(r).slice(0, 4), +dateOf(r).slice(5, 7) - 1, +dateOf(r).slice(8, 10))) : '',
+              r.reg ? Reg.regLabel(r.reg) : '', r.h.po || '', r.h.oa || '', r.h.vendor || '', r.h.perihal || '', r.h.tipe || '', c.n, c.totRc, c.late ? 'Terlambat' : 'Tepat waktu', c.late ? c.lateDays : 0,
+              c.totDenda, c.kesimpulan, r.status, signed].forEach(function (v, j) {
+              var cl = row.getCell(j + 1); cl.value = v; cl.font = { name: 'Arial', size: 10 }; cl.border = border;
+              cl.alignment = { vertical: 'top', wrapText: j === 7 || j === 8, horizontal: [0, 3, 4, 10, 12, 13].indexOf(j) >= 0 ? 'center' : undefined };
+              if (j === 3) cl.numFmt = 'dd.mm.yyyy';
+              if (j === 11 || j === 14) cl.numFmt = '_(* #,##0_);_(* (#,##0);_(* "-"??_);_(@_)';
+            });
+          });
+          var tr = ws.getRow(4 + rows.length);
+          tr.getCell(9).value = 'Total'; tr.getCell(9).font = { name: 'Arial', size: 10, bold: true }; tr.getCell(9).alignment = { horizontal: 'right' };
+          [12, 15].forEach(function (cn) {
+            var L = String.fromCharCode(64 + cn), cl = tr.getCell(cn);
+            cl.value = rows.length ? { formula: 'SUM(' + L + '4:' + L + (3 + rows.length) + ')', result: rows.reduce(function (a, r) { var c = calc(r); return a + (cn === 12 ? c.totRc : c.totDenda); }, 0) } : 0;
+            cl.numFmt = '_(* #,##0_);_(* (#,##0);_(* "-"??_);_(@_)'; cl.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF008000' } }; cl.border = border;
+          });
+        });
+        var name = kind === 'month' ? 'REKAP_BASTB_LHPB_' + R.month : kind === 'year' ? 'REKAP_BASTB_LHPB_' + rekapYear() : 'REKAP_BASTB_LHPB_SEMUA_TAHUN';
+        var buf = await wb.xlsx.writeBuffer(), url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        var a = document.createElement('a'); a.href = url; a.download = name + '.xlsx'; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      } catch (e) { toast('Gagal membuat rekap: ' + e.message, true); }
+      finally { loading(false); }
+    }
     return { renderForm: renderForm, renderHistory: renderHistory, load: load, pendingCount: pendingCount, reset: reset,
       _test: { calc: calc, buildPdf: buildPdf, buildXlsx: buildXlsx, numbers: numbers } };
   };
