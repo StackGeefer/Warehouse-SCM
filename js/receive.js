@@ -61,7 +61,8 @@
     // Register Receiving: wajib dipilih sebelum mengisi BASTB & LHPB
     var Reg = root.RegisterModule({
       S: S, esc: esc, toast: toast, loading: loading, route: ctx.route, isOwner: ctx.isOwner, closeDrawer: ctx.closeDrawer,
-      loadExcelJS: ctx.loadExcelJS, pass: ctx.pass, links: regLinks, onPick: pickReg, rerender: function () { renderHistory(); }
+      loadExcelJS: ctx.loadExcelJS, pass: ctx.pass, links: regLinks, onPick: pickReg, rerender: function () { renderHistory(); },
+      canReceiving: function () { return canRcv(); }, audit: ctx.audit
     });
     // register → nomor BASTB yang memakainya (pengajuan yang tidak dibatalkan/ditolak)
     function regLinks() {
@@ -101,7 +102,7 @@
         return '<div class="card card-pad rcv-sec reg-picked"><div class="reg-picked-row"><span class="reg-step">1</span><div style="flex:1"><div class="small muted">Register Receiving</div>' +
           '<b class="mono">' + esc(Reg.regLabel(o.id ? o : d.reg)) + '</b> <span class="small muted">' + d.reg.y + '</span>' +
           (o.id ? '<div class="small">PO ' + esc(o.po || '') + ' · tiba ' + esc(Reg.dot(o.tiba)) + ' · ' + esc(o.vendor || '') + (o.rp ? ' · Rp ' + idr(o.rp) : '') + '</div>' : '') + '</div>' +
-          '<div class="toolbar">' + (o.id ? '<button class="btn sm" data-ra="reg-edit">Edit register</button>' : '') + (R.editId ? '' : '<button class="btn sm" data-ra="reg-change">Ganti register</button>') + '</div></div></div>';
+          '<div class="toolbar">' + (o.id && canRcv() ? '<button class="btn sm" data-ra="reg-edit">Edit register</button>' : '') + (R.editId ? '' : '<button class="btn sm" data-ra="reg-change">Ganti register</button>') + '</div></div></div>';
       }
       return '<div class="card card-pad rcv-sec reg-gate"><h4 class="section-title"><span class="reg-step">1</span> Pilih Register Receiving dulu</h4>' +
         '<p class="small muted" style="margin-top:0">Register wajib diisi sebelum BASTB &amp; LHPB. Pilih register yang belum dipakai, atau buat register baru — setelah dipilih, form BASTB/LHPB terbuka dan data PO, tanggal tiba, GR &amp; vendor terisi otomatis.</p>' +
@@ -123,7 +124,8 @@
     function pct(p) { return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(p * 100) + '%'; }
     function me() { return S.user ? S.user.name : ''; }
     function canApprove() { return ctx.isOwner(); }
-    function isWh() { return !!(S.user && (ctx.isOwner() || S.user.role === 'viewer')); }
+    // Receiving (dan Owner/Co-Owner): edit & hapus. Warehouse hanya mengisi & mengajukan.
+    function canRcv() { return !!(S.user && ctx.canReceiving && ctx.canReceiving()); }
     function badge(st) { return '<span class="badge ' + (ST_CLS[st] || '') + '">' + esc(st) + '</span>'; }
     function clone(o) { return JSON.parse(JSON.stringify(o)); }
     function getPath(o, p) { return p.split('.').reduce(function (a, k) { return a == null ? a : a[k]; }, o); }
@@ -576,9 +578,10 @@
       var myUid = S.user.id, mine = R.signs.users[myUid];
       acts.push('<button class="btn sm" data-ra="export" data-id="' + esc(r.id) + '">' + (r.status === ST.ok ? 'Export' : 'Preview') + '</button>');
       if (r.status === ST.pending && canApprove()) acts.unshift('<button class="btn sm primary" data-ra="approve" data-id="' + esc(r.id) + '">Approve</button><button class="btn sm" data-ra="reject" data-id="' + esc(r.id) + '">Tolak</button>');
-      if (r.status === ST.pending && (r.createdById === myUid || canApprove() || isWh())) acts.push('<button class="btn sm" data-ra="edit" data-id="' + esc(r.id) + '">Edit</button><button class="btn sm" data-ra="cancel" data-id="' + esc(r.id) + '">Batalkan</button>');
+      if (r.status === ST.pending && canRcv()) acts.push('<button class="btn sm" data-ra="edit" data-id="' + esc(r.id) + '">Edit</button>');
+      if (r.status === ST.pending && (r.createdById === myUid || canRcv())) acts.push('<button class="btn sm" data-ra="cancel" data-id="' + esc(r.id) + '">Batalkan</button>');
       if (r.status === ST.ok && mine && mine.img && slotUids(r).indexOf(myUid) >= 0 && !(r.signed || {})[myUid]) acts.unshift('<button class="btn sm primary" data-ra="cosign" data-id="' + esc(r.id) + '">' + (((r.sign || {}).bastb || {}).uid === myUid ? 'Approve BASTB &amp; tanda tangani' : 'Tanda tangani') + '</button>');
-      if (r.status !== ST.pending && ctx.isMainOwner()) acts.push('<button class="btn sm danger" data-ra="delete" data-id="' + esc(r.id) + '" title="Hapus permanen (khusus Owner Utama)">Hapus</button>');
+      if (canRcv()) acts.push('<button class="btn sm danger" data-ra="delete" data-id="' + esc(r.id) + '" title="Hapus permanen (Receiving / Owner / Co-Owner)">Hapus</button>');
       var signedNames = Object.keys(r.signed || {}).map(function (u) { var p = profile(u); return p ? p.short || p.name : ''; }).filter(Boolean);
       return '<tr><td><b class="mono">' + esc(docNo(r, 'bastb') || '—') + '</b><div class="small">' + esc(dot(r.h.tglTerima)) + '</div>' + (r.reg ? '<div class="small muted mono">Reg ' + esc(Reg.regLabel(r.reg)) + '</div>' : '') + '</td>' +
         '<td class="mono">' + esc(r.h.po) + (r.h.oa ? '<div class="small muted">OA ' + esc(r.h.oa) + '</div>' : '') + '</td>' +
@@ -587,7 +590,7 @@
         (c.rejected.length ? '<span class="badge bad">' + c.rejected.length + ' ditolak</span>' : '') + '</td>' +
         '<td class="num">' + idr(c.totRc) + '</td>' +
         '<td>' + (c.late ? '<span class="badge bad">Terlambat ' + c.lateDays + ' hr</span><div class="small muted">Denda Rp ' + idr(c.totDenda) + '</div>' : '<span class="badge ok">Tepat waktu</span>') + '</td>' +
-        '<td>' + badge(r.status) + (r.status === ST.ok && !bastbOk(r) ? '<div><span class="badge warn">BASTB menunggu ' + esc(who(r, 'bastb').name) + '</span></div>' : '') + '<div class="small muted">' + esc(r.status === ST.ok ? 'Approve: ' + signedNames.join(', ') : r.status === ST.no ? (r.rejectBy || '') + (r.rejectNote ? ': ' + r.rejectNote : '') : 'oleh ' + (r.createdBy || '') + ' · ' + fmtTime(r.createdAt)) + '</div></td>' +
+        '<td>' + badge(r.status) + (r.updatedBy ? '<div class="small muted">Last edit: ' + esc(r.updatedBy) + ' · ' + esc(fmtTime(r.updatedAt)) + '</div>' : '') + (r.status === ST.ok && !bastbOk(r) ? '<div><span class="badge warn">BASTB menunggu ' + esc(who(r, 'bastb').name) + '</span></div>' : '') + '<div class="small muted">' + esc(r.status === ST.ok ? 'Approve: ' + signedNames.join(', ') : r.status === ST.no ? (r.rejectBy || '') + (r.rejectNote ? ': ' + r.rejectNote : '') : 'oleh ' + (r.createdBy || '') + ' · ' + fmtTime(r.createdAt)) + '</div></td>' +
         '<td><div class="fleet-acts">' + acts.join('') + '</div></td></tr>';
     }
 
@@ -670,12 +673,13 @@
       finally { loading(false); renderHistory(); }
     }
     async function remove(r) {
-      if (!ctx.isMainOwner()) return;
+      if (!canRcv()) return;
       if (!confirm('Hapus permanen penerimaan ' + (docNo(r, 'bastb') || r.h.po) + ' (' + r.h.vendor + ')?')) return;
       loading('Menghapus…');
       try {
         await save(function (D) { D.list = D.list.filter(function (x) { return x.id !== r.id; }); return D; }, 'Penerimaan barang: hapus ' + (docNo(r, 'bastb') || r.id) + ' (' + me() + ')');
         toast('Dihapus');
+        if (ctx.audit) ctx.audit('Penerimaan Barang', (docNo(r, 'bastb') || 'Draft') + ' · PO ' + (r.h.po || '') + ' · ' + (r.h.vendor || '') + ' · ' + r.status, r);
       } catch (e) { toast('Gagal menghapus: ' + e.message, true); }
       finally { loading(false); renderHistory(); }
     }
@@ -1373,7 +1377,7 @@
       else if (act === 'chk-add' && d) { d.lhpb.check.push({ doc: '', ok: 'Yes', note: '' }); storeDraft(); rerender(); }
       else if (act === 'chk-del' && d) { d.lhpb.check.splice(+a.getAttribute('data-i'), 1); storeDraft(); rerender(); }
       else if (act === 'reg-change' && d) { d.reg = null; storeDraft(); rerender(); }
-      else if (act === 'reg-edit' && d && d.reg) Reg.openForm(d.reg.y, d.reg.id, pickReg);
+      else if (act === 'reg-edit' && d && d.reg && canRcv()) Reg.openForm(d.reg.y, d.reg.id, pickReg);
       else if (act === 'reset') { if (confirm('Kosongkan seluruh isian form?')) { clearDraft(); rerender(); } }
       else if (act === 'edit-cancel') { clearDraft(); rerender(); }
       else if (act === 'submit') submit();
@@ -1391,7 +1395,7 @@
       else if (act === 'reject') { var why = prompt('Alasan menolak (opsional):', ''); if (why !== null) setStatus(id, ST.no, { rejectBy: me(), rejectNote: why }, 'Pengajuan ditolak'); }
       else if (act === 'cancel') { if (confirm('Batalkan pengajuan ini?')) setStatus(id, ST.cancel, null, 'Pengajuan dibatalkan'); }
       else if (act === 'delete') { var rd = find(id); if (rd) remove(rd); }
-      else if (act === 'edit') startEdit(id);
+      else if (act === 'edit' && canRcv()) startEdit(id);
       else if (act === 'export') openExport(id);
       else if (act === 'pdf' || act === 'xlsx') {
         var r = id === 'draft' ? R.previewRec : find(id), docs = chosenDocs();

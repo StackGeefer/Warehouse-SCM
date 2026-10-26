@@ -727,3 +727,16 @@ tr.oa-other td{opacity:.72}
 @media (max-width: 760px) { .reg-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .reg-head { flex-wrap: wrap; } }
 .reg-vendor { min-width: 230px; }
 .reg-table .fleet-acts { flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 6px; }
+
+/* Pengaturan ringkas (buka-tutup) */
+.set-sec { margin-top: 12px; padding: 0; }
+.set-sec > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 14px 20px; font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); user-select: none; }
+.set-sec > summary::-webkit-details-marker { display: none; }
+.set-sec > summary:hover { background: var(--surface-2); border-radius: inherit; }
+.set-t { flex: 1; }
+.set-chev { width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .2s; margin-right: 4px; }
+.set-sec[open] > summary .set-chev { transform: rotate(-135deg); }
+.set-sec[open] > summary { border-bottom: 1px solid var(--line); }
+.set-body { padding: 14px 20px 18px; }
+.set-body > .card { box-shadow: none; }
+.audit-table td { vertical-align: top; font-size: 12.5px; }

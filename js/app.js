@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261026d'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261026e'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1269,27 +1269,64 @@
   // Owner Utama & Co-Owner boleh mengubah data; hanya Owner Utama yang mengatur token & pengguna
   function isOwner() { return !!(S.user && Vault.isEditor(S.user.role)); }
   function isMainOwner() { return !!(S.user && S.user.role === 'owner'); }
-  var ROLE_LABEL = { owner: 'Owner Utama', coowner: 'Co-Owner', viewer: 'Warehouse', angkutan: 'Angkutan', admin_angkutan: 'Angkutan' };
+  var ROLE_LABEL = { owner: 'Owner Utama', coowner: 'Co-Owner', viewer: 'Warehouse', receiving: 'Receiving', angkutan: 'Angkutan', admin_angkutan: 'Angkutan' };
   function roleLabel(r) { return ROLE_LABEL[r] || 'Warehouse'; }
-  function roleBadge(r) { return '<span class="badge ' + ({ owner: 'ok', coowner: 'ro', admin_angkutan: 'bau', angkutan: 'bau' }[r] || '') + '">' + roleLabel(r) + '</span>'; }
+  function roleBadge(r) { return '<span class="badge ' + ({ owner: 'ok', coowner: 'ro', receiving: 'warn', admin_angkutan: 'bau', angkutan: 'bau' }[r] || '') + '">' + roleLabel(r) + '</span>'; }
   // Akses menu: Warehouse = material & order; Angkutan = angkutan berat; Owner/Co-Owner = semua
   function role() { return S.user ? S.user.role : ''; }
-  function canWarehouse() { return ['owner', 'coowner', 'viewer'].indexOf(role()) >= 0 || !ROLE_LABEL[role()]; }
+  function canWarehouse() { return ['owner', 'coowner', 'viewer', 'receiving'].indexOf(role()) >= 0 || !ROLE_LABEL[role()]; }
+  // Receiving: boleh edit & hapus data Register / Penerimaan Barang (Warehouse hanya mengisi & mengajukan)
+  function canReceiving() { return isOwner() || role() === 'receiving'; }
   function canFleet() { return ['owner', 'coowner', 'angkutan', 'admin_angkutan'].indexOf(role()) >= 0; }
   function canAdminFleet() { return canFleet(); } // satu peran Angkutan: isi, edit & master armada
   var FLEET_ROUTES = { angber: 1, 'angber-riwayat': 1 };
   // Akun Warehouse juga boleh membuat Reservasi Armada (tanpa Riwayat/edit)
   function routeAllowed(name) {
     if (name === 'pengaturan') return true;
-    if (name === 'angber') return canFleet() || role() === 'viewer';
+    if (name === 'angber') return canFleet() || role() === 'viewer' || role() === 'receiving';
     return FLEET_ROUTES[name] ? canFleet() : canWarehouse();
+  }
+  // ---------- History hapus: setiap data yang dihapus dicatat (siapa, kapan, apa) di data/audit.js (terenkripsi) ----------
+  var AUDIT_MAX = 1500;
+  function logDelete(modul, label, data) {
+    var e = { at: new Date().toISOString(), by: S.user ? S.user.name : '', role: S.user ? S.user.role : '', modul: modul, label: label, data: data || null };
+    return passMod().atomic('data/audit.js', 'MW_AUDIT', 'History hapus data', function (cur) {
+      cur = cur || { list: [] };
+      cur.list.unshift(e);
+      if (cur.list.length > AUDIT_MAX) cur.list.length = AUDIT_MAX;
+      return cur;
+    }, 'History hapus: ' + modul + ' (' + e.by + ')').catch(function (err) { console.warn('history hapus gagal dicatat', err); });
+  }
+  async function openAudit() {
+    var d = $('#drawer');
+    d.innerHTML = '<div class="drawer-head"><div style="flex:1"><div class="mono muted">Pengaturan</div><h2>History hapus data</h2></div><button class="icon-btn" data-act="close-drawer">✕</button></div><div class="drawer-body"><div class="muted">Memuat…</div></div>';
+    d.classList.add('open', 'wide'); d.setAttribute('aria-hidden', 'false'); $('#scrim').classList.add('open');
+    var A;
+    try { A = (await passMod().readJSON('data/audit.js')) || { list: [] }; } catch (e) { d.querySelector('.drawer-body').innerHTML = '<b>Gagal memuat</b> ' + esc(e.message); return; }
+    S.audit = A.list;
+    drawAudit('', '');
+  }
+  function drawAudit(mod, q) {
+    var list = S.audit || [], mods = {};
+    list.forEach(function (x) { mods[x.modul] = 1; });
+    var ql = q.trim().toLowerCase();
+    var rows = list.filter(function (x) { return (!mod || x.modul === mod) && (!ql || [x.by, x.modul, x.label].join(' ').toLowerCase().indexOf(ql) >= 0); });
+    var body = $('#drawer .drawer-body');
+    if (!body) return;
+    body.innerHTML = '<div class="toolbar"><select class="select sm" id="audMod"><option value="">Semua modul</option>' + Object.keys(mods).sort().map(function (m) { return '<option' + (m === mod ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select>' +
+      '<input class="input sm" id="audQ" style="flex:1" placeholder="Cari pengguna / data…" value="' + esc(q) + '"><span class="small muted">' + rows.length + ' catatan</span></div>' +
+      (rows.length ? '<div class="table-wrap"><table class="grid audit-table"><thead><tr><th>Waktu</th><th>Dihapus oleh</th><th>Modul</th><th>Data yang dihapus</th></tr></thead><tbody>' +
+        rows.slice(0, 400).map(function (x) {
+          return '<tr><td class="nowrap">' + esc(fmtDateTime(x.at)) + '</td><td><b>' + esc(x.by) + '</b><div class="small">' + roleBadge(x.role) + '</div></td><td>' + esc(x.modul) + '</td><td>' + esc(x.label) + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '<div class="muted">Belum ada data yang dihapus.</div>') +
+      '<div class="small muted">Dicatat otomatis setiap ada data yang dihapus (Register, Penerimaan Barang, Pass Keluar, Reservasi Armada, Riwayat Order, Dokumen TKO, Foto login, Pengguna). Menyimpan ' + AUDIT_MAX + ' catatan terakhir.</div>';
   }
   var Pass = null;
   function passMod() {
     if (!Pass) Pass = window.PassModule({
       S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, gh: gh, ghToken: ghToken, branch: GH_BRANCH,
       route: function () { return currentRoute().name; }, isOwner: isOwner, isMainOwner: isMainOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav,
-      addManualOut: addManualOut, manualCount: function () { return manualOut().length; }, ensureToken: ensureToken
+      addManualOut: addManualOut, manualCount: function () { return manualOut().length; }, ensureToken: ensureToken, audit: logDelete
     });
     return Pass;
   }
@@ -1307,7 +1344,7 @@
     if (!Recv) Recv = window.ReceiveModule({
       S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, route: function () { return currentRoute().name; },
       isOwner: isOwner, isMainOwner: isMainOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav,
-      loadExcelJS: Exporter.loadExcelJS, pass: passMod
+      loadExcelJS: Exporter.loadExcelJS, pass: passMod, canReceiving: canReceiving, audit: logDelete
     });
     return Recv;
   }
@@ -1316,7 +1353,7 @@
     if (!Fleet) Fleet = window.FleetModule({
       S: S, esc: esc, toast: toast, loading: loading, Vault: Vault, gh: gh, ghToken: ghToken, branch: GH_BRANCH,
       route: function () { return currentRoute().name; }, canAdminFleet: canAdminFleet, closeDrawer: closeDrawer,
-      loadExcelJS: Exporter.loadExcelJS, refreshSide: function () { if (S.user) renderSide(); }, ensureToken: ensureToken
+      loadExcelJS: Exporter.loadExcelJS, refreshSide: function () { if (S.user) renderSide(); }, ensureToken: ensureToken, audit: logDelete
     });
     return Fleet;
   }
@@ -1591,8 +1628,8 @@
       var me = u.id === S.user.id;
       var warn = Vault.hasAdminKey(u.role) && u.role !== 'owner' && !u.ak ? ' <span class="badge warn" title="Atur ulang dengan password agar bisa publikasi">belum bisa publikasi</span>' : '';
       var ctl = me || u.role === 'owner' ? '' :
-        '<select class="select sm" data-role>' + ['viewer', 'coowner', 'angkutan'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
-        '<input class="input sm" data-rpw type="password" placeholder="Password (wajib utk Co-Owner)" autocomplete="new-password" style="width:200px">' +
+        '<select class="select sm" data-role>' + ['viewer', 'receiving', 'coowner', 'angkutan'].map(function (r) { return '<option value="' + r + '"' + (u.role === r ? ' selected' : '') + '>' + roleLabel(r) + '</option>'; }).join('') + '</select>' +
+        '<input class="input sm" data-rpw type="password" placeholder="Password orang tsb (wajib)" autocomplete="new-password" style="width:200px">' +
         '<button class="btn sm" data-act="set-role" data-id="' + esc(u.id) + '">Simpan</button>' +
         '<button class="btn sm danger" data-act="del-user" data-id="' + esc(u.id) + '">' + ICON.trash + '</button>';
       return '<tr><td><b>' + esc(u.name) + '</b>' + (me ? ' <span class="badge ro">Anda</span>' : '') + '</td><td>' + roleBadge(u.role) + warn + '</td>' +
@@ -1611,14 +1648,14 @@
       '<div><div style="font-weight:700;margin-bottom:6px">Tambah pengguna</div><div class="toolbar">' +
       '<input class="input sm" id="nuName" placeholder="Username" autocomplete="off">' +
       '<input class="input sm" id="nuPw" type="password" placeholder="Password" autocomplete="new-password">' +
-      '<select class="select sm" id="nuRole"><option value="viewer">Warehouse (material &amp; Call Order)</option><option value="coowner">Co-Owner (semua menu, upload &amp; ubah data)</option><option value="angkutan">Angkutan (reservasi &amp; riwayat armada)</option></select>' +
+      '<select class="select sm" id="nuRole"><option value="viewer">Warehouse (material &amp; Call Order)</option><option value="receiving">Receiving (register, BASTB/LHPB — edit &amp; hapus)</option><option value="coowner">Co-Owner (semua menu, upload &amp; ubah data)</option><option value="angkutan">Angkutan (reservasi &amp; riwayat armada)</option></select>' +
       '<button class="btn sm primary" data-act="add-user">Tambah</button></div></div>' +
       '<div><div style="font-weight:700;margin-bottom:6px">Ganti password saya</div><div class="toolbar">' +
       '<input class="input sm" id="cpPw" type="password" placeholder="Password baru" autocomplete="new-password">' +
       '<input class="input sm" id="cpPw2" type="password" placeholder="Ulangi password baru" autocomplete="new-password">' +
       '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
-      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak, Call Order, ajukan Pass Keluar &amp; Reservasi Armada. <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
-      '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub (agar upload langsung tampil untuk semua pengguna)</h4>' +
+      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak, Call Order, ajukan Pass Keluar, Register &amp; Penerimaan Barang (tanpa edit/hapus), Reservasi Armada. <b>Receiving</b>: seperti Warehouse + edit &amp; hapus Register dan Penerimaan Barang. <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
+      '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub</h4><p class="muted small" style="margin-top:0">Agar upload &amp; perubahan langsung tampil untuk semua pengguna.</p>' +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
       '<li>Isi <b>Token name</b> bebas (mis. "Material Warehouse"), <b>Expiration</b> sesuai kebutuhan (mis. 1 tahun).</li>' +
@@ -1640,12 +1677,33 @@
       '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Centang "Kolom utama" agar field tampil sebagai kolom di Cari Material (default: Lirik, Jambi, Pangkalan Susu). Field lain dicek lewat tombol <b>Cek field lain</b>. Satu field boleh punya beberapa plant, pisahkan dengan koma. Pengaturan ini berlaku di browser ini.</p>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th class="c">Home</th><th class="c">Kolom utama</th><th>Zona</th><th>Nama Field</th><th>Kode Plant</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div class="toolbar" style="margin-top:10px"><button class="btn sm" data-act="add-field">+ Tambah Field</button><span class="small muted">Plant di data saat ini: <span class="mono">' + esc(known) + '</span></span></div></div>' +
-      '<div class="card card-pad" style="margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">' +
+      '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Saran qty &amp; kolom History</h4><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = pemakaian/bulan (60% rata-rata 3 bln terakhir + 40% rata-rata 12 bln) × (cover + lead time) − stok ' + esc(homeName()) + '</div></label>' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Lead time RO (bulan)</div><input class="input" type="number" min="0" max="12" step="0.5" id="setLead" value="' + esc(st.leadMonths != null ? st.leadMonths : 1) + '"><div class="small muted" style="margin-top:4px">Perkiraan waktu dari Call RO sampai barang tiba di gudang</div></label>' +
-      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div>' +
+      '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div></div>' +
+      (canReceiving() ? '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">History hapus data</h4><p class="muted small" style="margin-top:0">Catatan siapa yang menghapus data apa &amp; kapan — Register, Penerimaan Barang, Pass Keluar, Reservasi Armada, Riwayat Order, Dokumen, Foto, Pengguna. Data yang diedit cukup ditandai "Last edit" di masing-masing tabel.</p><button class="btn sm primary" data-act="audit-open">Lihat history hapus</button></div>' : '') +
       '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Kosongkan Call Order &amp; cache browser</button></div>';
+    collapseSettings(view);
     if (isOwner()) passMod().fillSignCard();
+  }
+  // Pengaturan ringkas: setiap kartu (kecuali akun) jadi bagian buka-tutup; status buka diingat di browser
+  function collapseSettings(root) {
+    var open = Store.load('setOpen', {}) || {};
+    Array.prototype.slice.call(root.children).forEach(function (card, i) {
+      if (i === 0 || !card.classList.contains('card')) return;
+      var h = card.querySelector('h4.section-title');
+      if (!h || h.parentNode !== card) return;
+      var key = h.textContent.trim(), d = document.createElement('details'), sm = document.createElement('summary'), body = document.createElement('div');
+      d.className = 'card set-sec'; if (card.id) d.id = card.id;
+      if (open[key]) d.open = true;
+      sm.innerHTML = '<span class="set-t">' + h.innerHTML + '</span><span class="set-chev" aria-hidden="true"></span>';
+      h.remove();
+      body.className = 'set-body';
+      while (card.firstChild) body.appendChild(card.firstChild);
+      d.appendChild(sm); d.appendChild(body);
+      d.addEventListener('toggle', function () { var o = Store.load('setOpen', {}) || {}; o[key] = d.open; Store.save('setOpen', o); });
+      card.replaceWith(d);
+    });
   }
   function heroCard() {
     var list = heroList();
@@ -2209,6 +2267,11 @@
   }
 
   // ================= Event handlers =================
+  // History hapus: filter modul & cari
+  document.addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.id === 'audQ' || t.id === 'audMod') { var q = $('#audQ'), m = $('#audMod'), pos = q.selectionStart; drawAudit(m.value, q.value); if (t.id === 'audQ') { var nq = $('#audQ'); nq.focus(); nq.setSelectionRange(pos, pos); } }
+  });
   document.addEventListener('input', function (e) {
     var t = e.target;
     if (t.id === 'q') {
@@ -2409,6 +2472,7 @@
       }
       else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
       else if (act === 'logout') { logout(); }
+      else if (act === 'audit-open') { openAudit(); }
       else if (act === 'hero-upload') { uploadHero($('#heroFile').files); }
       else if (act === 'hero-del') {
         var hp = a.getAttribute('data-path');
@@ -2416,6 +2480,7 @@
         var hd = Object.assign({}, localVal('heroData') || {}); delete hd[hp];
         loading('Menghapus foto…');
         saveHero(heroList().filter(function (x) { return heroPath(x) !== hp; }), { files: {}, deletes: [hp] }, hd, 'hapus foto login')
+          .then(function () { logDelete('Foto login', hp); })
           .catch(function (err) { toast(err.message, true); }).then(function () { loading(false); render(); });
       }
       else if (act === 'hero-preview') {
@@ -2451,7 +2516,7 @@
         } else {
           if (!confirm('Hapus ' + rid + ' dari riwayat?')) return;
           if (rec.local) { Store.save('localOrders', (Store.load('localOrders', []) || []).filter(function (r) { return r.id !== rid; })); renderOrders(); }
-          else saveOrders(S.orders.filter(function (r) { return r.id !== rid; }), 'hapus order ' + rid).then(renderOrders);
+          else saveOrders(S.orders.filter(function (r) { return r.id !== rid; }), 'hapus order ' + rid).then(function () { logDelete('Riwayat Order', 'Order ' + rid + (rec.date ? ' · ' + rec.date : ''), rec); renderOrders(); });
         }
       }
       else if (act === 'doc-upload') { uploadDoc(); }
@@ -2468,7 +2533,7 @@
         if (!dm || !confirm('Hapus dokumen "' + dm.title + '"?')) return;
         loading('Menghapus dokumen…');
         saveDocs(S.docs.filter(function (x) { return x.id !== did1; }), { files: {}, deletes: [Vault.docPath(did1)], payloads: {} }, 'hapus dokumen ' + dm.title)
-          .then(function () { toast('Dokumen dihapus'); }).catch(function (err) { toast(err.message, true); }).then(function () { loading(false); render(); });
+          .then(function () { toast('Dokumen dihapus'); logDelete('Dokumen TKO', dm.title, { id: dm.id, title: dm.title, fileName: dm.fileName }); }).catch(function (err) { toast(err.message, true); }).then(function () { loading(false); render(); });
       }
       else if (act === 'viewer-close') { $('#viewer').classList.add('hidden'); $('#viewer').innerHTML = ''; }
       else if (act === 'publish') { publish(); }
@@ -2532,7 +2597,7 @@
         var did = a.getAttribute('data-id');
         var du = S.users.filter(function (x) { return x.id === did; })[0];
         if (!du || !confirm('Hapus pengguna ' + du.name + '?')) return;
-        saveUsers(S.users.filter(function (x) { return x.id !== did; }), 'pengguna ' + du.name + ' dihapus');
+        Promise.resolve(saveUsers(S.users.filter(function (x) { return x.id !== did; }), 'pengguna ' + du.name + ' dihapus')).then(function () { logDelete('Pengguna', du.name + ' (' + roleLabel(du.role) + ')'); });
       }
       else if (act === 'change-pw') {
         var c1 = $('#cpPw').value, c2 = $('#cpPw2').value;

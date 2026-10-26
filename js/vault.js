@@ -54,7 +54,7 @@
 
   function isEditor(role) { return role === 'owner' || role === 'coowner'; }
   // Peran yang boleh publikasi (memegang kunci admin): Owner, Co-Owner, Warehouse (ajukan Pass Keluar) & Angkutan
-  function hasAdminKey(role) { return isEditor(role) || role === 'viewer' || role === 'angkutan' || role === 'admin_angkutan'; }
+  function hasAdminKey(role) { return isEditor(role) || role === 'viewer' || role === 'receiving' || role === 'angkutan' || role === 'admin_angkutan'; }
 
   // Bungkus kunci data (dan kunci admin untuk Owner/Co-Owner) dengan password pengguna -> entri users
   function makeUser(username, password, role, dataKey, displayName, adminKey) {

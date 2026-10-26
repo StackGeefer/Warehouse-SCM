@@ -35,9 +35,12 @@
     function num(v) { var n = typeof v === 'number' ? v : parseFloat(String(v == null ? '' : v).replace(/\./g, '').replace(',', '.')); return isFinite(n) ? n : null; }
     function idr(n) { return n == null || n === '' ? '' : new Intl.NumberFormat('id-ID', { maximumFractionDigits: 2 }).format(n); }
     function me() { return S.user ? S.user.name : ''; }
-    function canEdit() { return !!(S.user && (ctx.isOwner() || S.user.role === 'viewer')); }
-    function canDelete() { return ctx.isOwner(); }
+    // Warehouse & Receiving bisa membuat register; edit & hapus hanya Receiving / Owner / Co-Owner
+    function canCreate() { return !!(S.user && (ctx.isOwner() || S.user.role === 'viewer' || S.user.role === 'receiving')); }
+    function canEdit() { return !!(ctx.canReceiving && ctx.canReceiving()); }
+    function canDelete() { return canEdit(); }
     function yy(y) { return String(y).slice(2); }
+    function fmtTime(iso) { if (!iso) return ''; var d = new Date(iso); return pad(d.getDate()) + '-' + pad(d.getMonth() + 1) + '-' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
     function regLabel(o) { return 'No. ' + (o.no != null ? o.no : '—') + ' · ' + (o.reg || ''); }
 
     // Lead time & keterlambatan otomatis bila kosong
@@ -165,6 +168,7 @@
       try {
         await saveYear(y, function (D) { D.list = D.list.filter(function (x) { return x.id !== id; }); return D; }, 'Register receiving: hapus ' + regLabel(o) + ' ' + y + ' (' + me() + ')');
         toast('Register dihapus');
+        if (ctx.audit) ctx.audit('Register Receiving', regLabel(o) + ' ' + y + ' · PO ' + (o.po || '') + ' · ' + (o.vendor || ''), o);
       } catch (e) { toast('Gagal menghapus: ' + e.message, true); }
       finally { loading(false); ctx.rerender(); }
     }
@@ -185,7 +189,7 @@
       var nLate = list.filter(function (o) { return late(o) > 0; }).length, nNo = list.filter(function (o) { return o.src !== 'excel' && !ln[o.id]; }).length;
       var per = G.month ? BLN[+G.month - 1] + ' ' + G.year : 'Tahun ' + G.year;
       return '<div class="card reg-card" id="regSection"><div class="card-pad reg-head"><div><h3 class="reg-title">Register Receiving</h3><div class="small muted">Buku register barang masuk — diisi sebelum BASTB &amp; LHPB</div></div>' +
-        '<div class="toolbar" style="margin-left:auto">' + (canEdit() ? '<button class="btn primary" data-rga="new">+ Register baru</button>' : '') + '</div></div>' +
+        '<div class="toolbar" style="margin-left:auto">' + (canCreate() ? '<button class="btn primary" data-rga="new">+ Register baru</button>' : '') + '</div></div>' +
         '<div class="card-pad toolbar reg-tools">' +
         '<select class="select" id="regYear">' + years().map(function (y) { return '<option' + (y === G.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
         '<select class="select" id="regMonth"><option value="">Semua bulan</option>' + BLN.map(function (b, i) { var m = pad(i + 1); return '<option value="' + m + '"' + (G.month === m ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select>' +
@@ -201,13 +205,13 @@
           '<th>Vendor / Perusahaan</th><th>Description</th><th class="num">Qty</th><th class="num">Nilai (Rp)</th><th class="num">Denda (Rp)</th><th>PR</th><th>Cost Center</th><th>Fungsi</th><th>DT</th><th>Masa Simpan</th><th>BASTB / LHPB</th><th></th></tr></thead><tbody>' +
           list.map(function (o) { return rowHtml(o, ln); }).join('') +
           '</tbody><tfoot><tr><td colspan="12" class="num"><b>Total ' + esc(per) + '</b></td><td class="num"><b>' + idr(tot) + '</b>' + (totUs ? '<div class="small muted">US$ ' + idr(totUs) + '</div>' : '') + '</td><td colspan="8"></td></tr></tfoot></table></div>'
-          : '<div class="empty" style="padding:24px"><h3>Belum ada register ' + esc(per) + '</h3>' + (canEdit() ? '<p><a href="#" data-rga="new">+ Buat register baru</a></p>' : '') + '</div>') + '</div>';
+          : '<div class="empty" style="padding:24px"><h3>Belum ada register ' + esc(per) + '</h3>' + (canCreate() ? '<p><a href="#" data-rga="new">+ Buat register baru</a></p>' : '') + '</div>') + '</div>';
     }
     function kpi(k, v, s) { return '<div class="kpi"><div class="k">' + esc(k) + '</div><div class="v">' + esc(String(v)) + '</div><div class="s">' + esc(s || '') + '</div></div>'; }
     function rowHtml(o, ln) {
       var L = lead(o), T = late(o), docs = ln[o.id];
       var acts = (canEdit() ? '<button class="btn sm" data-rga="edit" data-id="' + esc(o.id) + '">Edit</button>' : '') +
-        (!docs && canEdit() ? '<a class="btn sm primary" href="#/terima" data-rga="use" data-id="' + esc(o.id) + '">BASTB/LHPB</a>' : '') +
+        (!docs && canCreate() ? '<a class="btn sm primary" href="#/terima" data-rga="use" data-id="' + esc(o.id) + '">BASTB/LHPB</a>' : '') +
         (canDelete() ? '<button class="btn sm danger" data-rga="del" data-id="' + esc(o.id) + '">Hapus</button>' : '');
       return '<tr><td class="mono">' + esc(o.no != null ? o.no : '') + (o.bantek ? '<div class="small muted">B. ' + esc(o.bantek) + '</div>' : '') + '</td>' +
         '<td class="mono nowrap">' + esc(o.reg || '') + '</td><td class="mono">' + esc(o.po || '') + '</td><td class="nowrap">' + esc(dot(o.del)) + '</td><td class="nowrap">' + esc(dot(o.tiba)) + '</td>' +
@@ -218,7 +222,7 @@
         '<td class="num">' + idr(o.drp) + (o.dus ? '<div class="small muted">US$ ' + idr(o.dus) + '</div>' : '') + '</td>' +
         '<td class="mono">' + esc(o.pr || '') + '</td><td>' + esc(o.cc || '') + '</td><td>' + esc(o.fungsi || '') + '</td><td>' + esc(o.dt || '') + '</td><td class="nowrap">' + esc(o.masa || '') + '</td>' +
         '<td>' + (docs ? docs.map(function (x) { return '<span class="badge ok mono">' + esc(x) + '</span>'; }).join(' ') : '<span class="small muted">—</span>') + '</td>' +
-        '<td><div class="fleet-acts">' + acts + '</div></td></tr>';
+        '<td>' + (o.updatedBy ? '<div class="small muted nowrap" style="margin-bottom:4px">Last edit: ' + esc(o.updatedBy) + ' · ' + esc(fmtTime(o.updatedAt)) + '</div>' : '') + '<div class="fleet-acts">' + acts + '</div></td></tr>';
     }
     async function refreshSection() {
       var el = document.getElementById('regSection');
@@ -328,9 +332,9 @@
       var act = a.getAttribute('data-rga'), id = a.getAttribute('data-id');
       if (act !== 'use') e.preventDefault();
       if (act === 'new') { if (ctx.route() === 'terima' && ctx.onPick) openForm(G.year, null, ctx.onPick); else openForm(G.year, null); }
-      else if (act === 'edit') openForm(G.year, id, ctx.route() === 'terima' && ctx.onPick ? ctx.onPick : null);
+      else if (act === 'edit' && canEdit()) openForm(G.year, id, ctx.route() === 'terima' && ctx.onPick ? ctx.onPick : null);
       else if (act === 'save') saveForm();
-      else if (act === 'del') remove(G.year, id);
+      else if (act === 'del' && canDelete()) remove(G.year, id);
       else if (act === 'use') { if (ctx.onPick) ctx.onPick(G.year, find(G.year, id), true); }
       else if (act === 'pick') { var y = +a.getAttribute('data-y'); if (ctx.onPick) ctx.onPick(y, find(y, id)); }
       else if (act === 'xls-month') { if (G.month) exportXlsx('month'); }

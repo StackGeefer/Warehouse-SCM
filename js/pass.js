@@ -129,6 +129,7 @@
         '<td>' + esc(r.vehicle) + '<div class="small muted">' + esc(r.driver) + '</div></td>' +
         '<td>' + esc(r.requester) + ' → ' + esc(r.receiver) + '<div class="small muted">diajukan ' + esc(r.createdBy) + ' · ' + esc(fmtTime(r.createdAt)) + '</div></td>' +
         '<td>' + badge(r.status) + (r.status === ST.ok ? '<div class="small muted">' + esc(r.senderName) + ' · ' + esc(fmtTime(r.approvedAt)) + '</div>' : '') +
+        (r.updatedBy ? '<div class="small muted">Last edit: ' + esc(r.updatedBy) + ' · ' + esc(fmtTime(r.updatedAt)) + '</div>' : '') +
         (r.status === ST.no ? '<div class="small muted">' + esc((r.rejectBy || '') + (r.rejectNote ? ': ' + r.rejectNote : '')) + '</div>' : '') + '</td>' +
         '<td><div class="fleet-acts">' + acts.join('') + '</div></td></tr>';
     }
@@ -288,6 +289,7 @@
       loading('Menghapus pass…');
       try {
         await savePass(function (D) { D.list = D.list.filter(function (x) { return x.id !== r.id; }); return D; }, 'Pass keluar: hapus ' + (r.no || r.id) + ' (' + me() + ')');
+        if (ctx.audit) ctx.audit('Pass Keluar', (r.no || r.id) + ' · ke ' + (r.to || '') + ' · ' + r.items.length + ' item', r);
         toast('Pass ' + (r.no || '') + ' dihapus');
       } catch (e) { toast('Gagal menghapus: ' + e.message, true); }
       finally { loading(false); render(); }

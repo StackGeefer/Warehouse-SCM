@@ -125,6 +125,12 @@ vendor/               SheetJS, ExcelJS, PDF.js
 - Nama & tanda tangan diatur sendiri oleh tiap Owner / Co-Owner di **Pengaturan → Tanda tangan Pass Keluar** (latar polos otomatis dibuat transparan). Disimpan terenkripsi di `data/signs.js`.
 - Data pass: `data/pass.js` (terenkripsi). Akun **Warehouse** perlu diatur password-nya oleh Owner Utama (Pengaturan → Pengguna) agar bisa mengajukan.
 
+## Peran Receiving & History hapus
+
+- **Receiving**: seperti Warehouse + **edit & hapus** Register dan Penerimaan Barang. **Warehouse** hanya membuat register & mengajukan (tanpa edit/hapus). Owner/Co-Owner tetap bisa semua.
+- Setiap data yang **dihapus** (Register, Penerimaan Barang, Pass Keluar, Reservasi Armada, Riwayat Order, Dokumen TKO, Foto login, Pengguna) dicatat di `data/audit.js` (terenkripsi): siapa, kapan, data apa. Lihat di **Pengaturan → History hapus data**. Data yang diedit ditandai "Last edit: nama · waktu" di tabelnya.
+- Pengaturan dibuat ringkas: setiap bagian bisa dibuka-tutup (status diingat di browser).
+
 ## Register Receiving (sebelum BASTB & LHPB)
 
 - **Penerimaan Barang** dimulai dengan **memilih Register Receiving** (atau membuat register baru). Setelah dipilih, form BASTB/LHPB terbuka dan PO, delivery date, tanggal tiba, GR, vendor, deskripsi & tipe (STOCK = Persediaan, DIRECT CHARGE = Non Persediaan) terisi otomatis.

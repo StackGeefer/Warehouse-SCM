@@ -475,7 +475,7 @@
         '<td class="num">' + nf(r.tonase) + (r.boom != null ? '<div class="small muted">boom ' + nf(r.boom) + ' m</div>' : '') + '</td>' +
         '<td>' + esc(r.barang) + (r.note ? '<div class="small muted">' + esc(r.note) + '</div>' : '') + '</td>' +
         '<td>' + esc(r.lokasi) + ' → ' + esc(r.tujuan) + '</td>' +
-        '<td>' + badge(r.status) + '<div class="small muted" title="' + esc('Dibuat ' + fmtTime(r.createdAt) + (r.updatedBy ? ' · diubah ' + r.updatedBy + ' ' + fmtTime(r.updatedAt) : '')) + '">' + esc(r.createdBy || '') + '</div></td>' +
+        '<td>' + badge(r.status) + '<div class="small muted" title="' + esc('Dibuat ' + fmtTime(r.createdAt) + (r.updatedBy ? ' · diubah ' + r.updatedBy + ' ' + fmtTime(r.updatedAt) : '')) + '">' + esc(r.createdBy || '') + '</div>' + (r.updatedBy ? '<div class="small muted">Last edit: ' + esc(r.updatedBy) + ' · ' + esc(fmtTime(r.updatedAt)) + '</div>' : '') + '</td>' +
         '<td><div class="fleet-acts">' + acts.join('') + '</div></td></tr>';
     }
     function daysIn(m) { return new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate(); }
@@ -567,12 +567,14 @@
       if (!r || !confirm('Hapus permanen reservasi ' + r.no + '?')) return;
       var ms = {};
       ms[F.sel] = function (list) { return list.filter(function (x) { return x.id !== id; }); };
-      await doCommit({ months: ms }, 'Angkutan berat: hapus ' + r.no + ' (' + me() + ')', r.no + ' dihapus');
+      await doCommit({ months: ms }, 'Angkutan berat: hapus ' + r.no + ' (' + me() + ')', r.no + ' dihapus', function () {
+        if (ctx.audit) ctx.audit('Reservasi Armada', r.no + ' · ' + r.unit + ' · ' + r.date + ' · ' + (r.tujuan || ''), r);
+      });
       ctx.closeDrawer();
     }
-    async function doCommit(ch, msg, ok) {
+    async function doCommit(ch, msg, ok, after) {
       loading('Menyimpan…');
-      try { await commit(ch, msg); toast(ok); }
+      try { await commit(ch, msg); toast(ok); if (after) after(); }
       catch (e) { toast('Gagal menyimpan: ' + e.message, true); }
       finally { loading(false); rerender(); }
     }
