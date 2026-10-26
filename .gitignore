@@ -6,3 +6,6 @@
 *.csv
 .DS_Store
 Thumbs.db
+
+# Template Excel kosong (tanpa data) untuk export dokumen
+!assets/terima/*.xlsx
