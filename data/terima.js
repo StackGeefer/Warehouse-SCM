@@ -1,2 +1,2 @@
 /* Penerimaan Barang (BASTB/SPB/LHPB/Denda) — TERENKRIPSI */
-window.MW_TERIMA = "MWK1.uvNYEQy6FMJxDlfQIa06SoTyemIzlrrLfuXlKr8ZR6O/iX6tvYrvJZX3FxJA8GwMuz+BsN8Q9+SwvhQ5TbPuJGcysdVXK+qu/0ki+qw4LskKYe3tVllI+lUGEgmP8NwKY+/IvhnP85N9ySUe+S09nOMs9DDEydmCwy7PcXE0y3cxmihBv0VXVHKr+DGu/T87Xksd7wipfHmmuw==";
+window.MW_TERIMA = "MWK1.gMD+PMGrcL4xPdLRuPLas8mj2lTy2ABvnCLultIuWAzgviZnim97H4AZGF7kpZl2QSkV8k+GcqntuJ9WwirNCoA+A2lDfhyub4Gxr/l6L2gZIJ5wSN10dGKFmPqnwSrNZ0G5CwfM83Yg9gctAq3+Aa3yzYEXw1SpHWM40cgMl7Lz0IrRpPsFyd4ul2dYnLoslnIYFseMSEOHhQ==";

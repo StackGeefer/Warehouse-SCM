@@ -208,12 +208,30 @@
         opts.map(function (x) { return '<option' + (x === v ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>';
     }
     function fld(label, html, cls) { return '<label class="fleet-fld' + (cls ? ' ' + cls : '') + '"><span>' + label + '</span>' + html + '</label>'; }
+    // Nilai diterima > Rp 1 Miliar: LHPB diperiksa Gerald & Devy, BASTB (Persediaan) ditandatangani Devy + Vendor
+    var BIG_LIMIT = 1e9;
+    var DEVY = { manual: true, name: 'Devy Andriany', jab: 'Asst Manager Warehouse Opt Zona 1A', nid: '', fungsi: 'SCM' };
+    function syncBig(d) {
+      var big = calc(d).totRc > BIG_LIMIT;
+      if (!!d.sign.big === big) return false;
+      d.sign.big = big;
+      var ger = profiles().filter(function (p) { return /gerald/i.test(p.name); })[0];
+      if (big) {
+        d.sign.lhpb1 = ger ? { uid: ger.uid } : defaultSlot('other');
+        d.sign.lhpb2 = clone(DEVY);
+        if (!nonPers(d)) d.sign.bastb = clone(DEVY);
+      } else {
+        d.sign.lhpb1 = defaultSlot('other'); d.sign.lhpb2 = defaultSlot('recv');
+        if (!nonPers(d)) d.sign.bastb = defaultSlot('recv');
+      }
+      return true;
+    }
     function nonPers(d) { return (d.h || {}).tipe === 'Non Persediaan'; }
     // Non Persediaan: BASTB ditandatangani User (Fungsi Pengguna) — TKO Tabel 2; Persediaan: profil Receiving
     function syncBastbSlot(d) {
       var v = d.sign.bastb || {};
       if (nonPers(d) && !v.user) d.sign.bastb = { manual: true, user: true, name: '', jab: '', fungsi: '' };
-      if (!nonPers(d) && v.user) d.sign.bastb = defaultSlot('recv');
+      if (!nonPers(d) && v.user) d.sign.bastb = d.sign.big ? clone(DEVY) : defaultSlot('recv');
     }
     function slotHtml(d, s) {
       if (s.k === 'bastb' && nonPers(d)) {
@@ -270,7 +288,7 @@
       if (ctx.route() !== 'terima') return;
       setTimeout(function () { window.scrollTo(0, sy); if (main) main.scrollTop = my; }, 0);
       var d = loadDraft(), h = d.h;
-      syncBastbSlot(d);
+      syncBastbSlot(d); syncBig(d);
       if (!h.seqManual) h.seq = R.data.seq || FIRST_SEQ;
       var c = calc(d);
       var edit = R.editId ? find(R.editId) : null;
@@ -344,6 +362,7 @@
           fld('Hasil', '<div class="rcv-auto">' + (c.late ? 'Terlambat ' + c.lateDays + ' hari · denda Rp ' + idr(c.totDenda) : 'Belum ada hari terlambat') + '</div>') +
           '</div><p class="small muted" style="margin:6px 0 0">Jumlah hari kosong = dihitung otomatis (Tgl Penerimaan − Tgl Jatuh Tempo/Delivery Date, hari kalender). Tarif awal 0,1%/hari &amp; maks. 5% — sesuaikan dengan klausul denda OA/RO/PO. Form Denda &amp; Stamp ikut ter-export.</p>') + '</div>' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">G. Penandatangan</h4>' +
+        (d.sign.big ? '<div class="remind-card card-pad" style="margin-bottom:8px">Nilai diterima <b>&gt; Rp 1 Miliar</b> — LHPB diperiksa <b>Gerald &amp; Devy Andriany</b>' + (nonPers(d) ? '' : ', BASTB ditandatangani <b>Devy Andriany</b> &amp; Vendor') + ' (otomatis, masih bisa diubah).</div>' : '') +
         '<p class="small muted" style="margin-top:0">Pilih dari profil Owner/Co-Owner — tanda tangannya tertempel otomatis setelah orang tersebut approve / ikut tanda tangan. Pilih "Kosong" untuk tanda tangan basah.</p>' +
         ['BASTB', 'LHPB', 'SPB', 'Denda'].map(function (g) {
           return '<div class="rcv-sign-g"><b>' + (g === 'Denda' ? 'Form Denda' : g) + '</b><div class="rcv-slots">' + SLOTS.filter(function (s) { return s.doc === g; }).map(function (s) { return slotHtml(d, s); }).join('') +
@@ -367,7 +386,9 @@
         kv('Dokumen', ['BASTB', 'LHPB'].concat(c.rejected.length ? ['SPB'] : []).concat(c.telat ? ['Form Denda'] : []).concat(c.late ? ['Stamp'] : []).join(' · ')) + '</div>';
     }
     function refreshSum() {
-      var d = R.draft, c = calc(d), box = document.getElementById('rcvSum');
+      var d = R.draft;
+      if (syncBig(d)) { storeDraft(); rerender(); toast(d.sign.big ? 'Nilai diterima > Rp 1 M — penandatangan BASTB & LHPB diganti ke Devy Andriany' : 'Nilai diterima ≤ Rp 1 M — penandatangan BASTB & LHPB kembali normal'); return; }
+      var c = calc(d), box = document.getElementById('rcvSum');
       if (box) box.innerHTML = sumHtml(d, c);
       var nf = document.getElementById('rcvNoForm'); if (nf) nf.innerHTML = noFormHtml(d);
       ['jumlah', 'waktu'].forEach(function (k) { var el = document.getElementById('rcvAuto_' + k); if (el) el.innerHTML = esc(hasil(d, c, k) || '—') + ' <span class="small muted">(otomatis)</span>'; });
