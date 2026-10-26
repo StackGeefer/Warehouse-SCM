@@ -691,3 +691,4 @@ tr.oa-other td{opacity:.72}
 .rcv-telat input { transform: scale(1.25); }
 .rcv-slot-m.rcv-slot-3 { grid-template-columns: 1.3fr 1fr 1fr; }
 .rcv-slot.wide { grid-column: span 2; }
+.pass-edit-items td { padding: 4px; } .pass-edit-items .input { width: 100%; }

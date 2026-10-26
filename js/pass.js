@@ -118,6 +118,7 @@
     function rowHtml(r) {
       var acts = ['<button class="btn sm" data-pa="pdf" data-id="' + esc(r.id) + '">' + (r.status === ST.ok ? 'Download PDF' : 'Preview') + '</button>'];
       if (r.status === ST.pending && canApprove()) acts.unshift('<button class="btn sm primary" data-pa="approve" data-id="' + esc(r.id) + '">Approve</button><button class="btn sm" data-pa="reject" data-id="' + esc(r.id) + '">Tolak</button>');
+      if (canEdit(r)) acts.push('<button class="btn sm" data-pa="edit" data-id="' + esc(r.id) + '">Edit</button>');
       if (r.status === ST.pending && (r.createdById === S.user.id || canApprove())) acts.push('<button class="btn sm" data-pa="cancel" data-id="' + esc(r.id) + '">Batalkan</button>');
       // Hapus pass yang sudah di-approve: khusus Owner Utama
       if (r.status === ST.ok && ctx.isMainOwner()) acts.push('<button class="btn sm danger" data-pa="delete" data-id="' + esc(r.id) + '" title="Hapus permanen (khusus Owner Utama)">Hapus</button>');
@@ -132,6 +133,76 @@
         '<td><div class="fleet-acts">' + acts.join('') + '</div></td></tr>';
     }
     function find(id) { return P.data.list.filter(function (r) { return r.id === id; })[0]; }
+
+    // ---------- Edit pass: Owner & Co-Owner (semua status); pengaju selama masih menunggu approval ----------
+    function canEdit(r) { return canApprove() || (r.status === ST.pending && r.createdById === S.user.id); }
+    var HEAD = [['from', 'Dari', 1], ['to', 'Dikirim ke', 1], ['ref', 'Referensi'], ['date', 'Tanggal', 1, 'date'], ['vehicle', 'Kendaraan (No. Polisi)', 1], ['driver', 'Driver', 1], ['requester', 'Pemohon', 1], ['receiver', 'Penerima', 1]];
+    function openEdit(id) {
+      var r = find(id);
+      if (!r || !canEdit(r)) return;
+      P.edit = JSON.parse(JSON.stringify(r));
+      var d = $('#drawer');
+      d.classList.add('open'); d.setAttribute('aria-hidden', 'false'); $('#scrim').classList.add('open');
+      drawEdit();
+    }
+    function drawEdit() {
+      var r = P.edit, d = $('#drawer');
+      d.innerHTML = '<div class="drawer-head"><div style="flex:1"><div class="mono muted">Edit Pass Keluar · ' + esc(r.status) + '</div><h2>' + esc(r.no || r.to || '') + '</h2></div><button class="icon-btn" data-act="close-drawer">✕</button></div>' +
+        '<div class="drawer-body" id="passEdit">' +
+        (r.status === ST.ok ? '<label class="fleet-fld"><span>No. Pass</span><input class="input mono" data-pe="no" value="' + esc(r.no || '') + '"></label>' : '') +
+        '<div class="pass-grid">' + HEAD.map(function (h) {
+          return '<label class="fleet-fld"><span>' + esc(h[1]) + (h[2] ? ' *' : '') + '</span><input class="input" data-pe="' + h[0] + '"' + (h[3] ? ' type="' + h[3] + '"' : '') + ' value="' + esc(r[h[0]] || '') + '"></label>';
+        }).join('') + '</div>' +
+        '<table class="grid pass-edit-items" style="margin-top:12px"><thead><tr><th>No</th><th class="num">Jumlah</th><th>UOM</th><th>Deskripsi</th><th>Keterangan</th><th>No Material</th><th></th></tr></thead><tbody>' +
+        r.items.map(function (x, i) {
+          return '<tr><td class="c muted">' + (i + 1) + '</td>' +
+            '<td><input class="input sm num" type="number" min="0" step="any" data-pi="' + i + '.qty" value="' + (x.qty == null ? '' : x.qty) + '"></td>' +
+            '<td><input class="input sm" data-pi="' + i + '.u" value="' + esc(x.u || '') + '" style="width:64px"></td>' +
+            '<td><input class="input sm" data-pi="' + i + '.d" value="' + esc(x.d || '') + '"></td>' +
+            '<td><input class="input sm" data-pi="' + i + '.note" value="' + esc(x.note || '') + '"></td>' +
+            '<td><input class="input sm mono" data-pi="' + i + '.m" value="' + esc(x.m || '') + '" style="width:120px"></td>' +
+            '<td><button class="icon-btn" data-pa="edit-del" data-i="' + i + '" title="Hapus baris">✕</button></td></tr>';
+        }).join('') + '</tbody></table>' +
+        '<div class="toolbar" style="margin-top:8px"><button class="btn sm" data-pa="edit-add">+ Tambah baris</button></div>' +
+        (r.status === ST.ok ? '<p class="small muted">Pass sudah disetujui — nama &amp; tanda tangan pengirim (' + esc(r.senderName || '') + ') tetap; PDF ikut berubah sesuai isian baru.</p>' : '') +
+        '<div class="toolbar"><button class="btn primary" data-pa="edit-save">Simpan perubahan</button><button class="btn" data-pa="edit-pdf">Preview PDF</button><button class="btn" data-act="close-drawer">Batal</button></div></div>';
+    }
+    function syncEdit() {
+      var r = P.edit; if (!r) return;
+      Array.prototype.forEach.call(document.querySelectorAll('#passEdit [data-pe]'), function (el) { r[el.getAttribute('data-pe')] = el.value.trim(); });
+      Array.prototype.forEach.call(document.querySelectorAll('#passEdit [data-pi]'), function (el) {
+        var k = el.getAttribute('data-pi').split('.'), it = r.items[+k[0]];
+        if (it) it[k[1]] = k[1] === 'qty' ? (el.value === '' ? null : +el.value) : k[1] === 'd' || k[1] === 'note' ? el.value : el.value.trim().toUpperCase();
+      });
+    }
+    async function saveEdit() {
+      syncEdit();
+      var r = P.edit, miss = HEAD.filter(function (h) { return h[2] && !r[h[0]]; }).map(function (h) { return h[1]; });
+      r.items = r.items.filter(function (x) { return x.d || x.m; });
+      if (miss.length) { toast('Lengkapi: ' + miss.join(', '), true); return; }
+      if (!r.items.length) { toast('Minimal 1 material', true); return; }
+      if (r.items.some(function (x) { return !(x.qty > 0) || !x.u; })) { toast('Isi jumlah & UOM tiap material', true); return; }
+      if (r.status === ST.ok && !r.no) { toast('Isi nomor pass', true); return; }
+      var at = new Date().toISOString(), dup = false, gone = false, m = /^RTU-(\d+)\//.exec(r.no || '');
+      loading('Menyimpan perubahan pass…');
+      try {
+        await savePass(function (D) {
+          var cur = D.list.filter(function (x) { return x.id === r.id; })[0];
+          if (!cur) { gone = true; return D; }
+          dup = !!r.no && D.list.some(function (x) { return x.id !== r.id && x.no === r.no; });
+          if (dup) return D;
+          var patch = { items: r.items, updatedBy: me(), updatedAt: at };
+          HEAD.forEach(function (h) { patch[h[0]] = r[h[0]]; });
+          if (cur.status === ST.ok && r.no) { patch.no = r.no; if (m) D.seq = Math.max(D.seq || FIRST_SEQ, +m[1] + 1); }
+          D.list = D.list.map(function (x) { return x.id === r.id ? Object.assign({}, x, patch) : x; });
+          return D;
+        }, 'Pass keluar: edit ' + (r.no || r.id) + ' (' + me() + ')');
+        if (gone) { toast('Pass sudah dihapus orang lain', true); return; }
+        if (dup) { toast('Nomor ' + r.no + ' sudah dipakai pass lain', true); return; }
+        P.edit = null; ctx.closeDrawer(); toast('Perubahan pass disimpan');
+      } catch (e) { toast('Gagal menyimpan: ' + e.message, true); }
+      finally { loading(false); render(); }
+    }
 
     // ---------- Material manual (Non Stock): KIMAP & deskripsi diketik sendiri → masuk Call Order ----------
     var UOMS = ['PCS', 'EA', 'SET', 'UNIT', 'KG', 'L', 'M', 'M2', 'M3', 'ROLL', 'BOX', 'PAA', 'JT', 'LOT', 'TIN', 'DRUM', 'BTL', 'LBR', 'BAG', 'CYL'];
@@ -425,6 +496,11 @@
       else if (act === 'approve-do') approve(id);
       else if (act === 'reject') { var why = prompt('Alasan menolak (opsional):', ''); if (why !== null) setStatus(id, ST.no, { rejectBy: me(), rejectNote: why }, 'Pass ditolak'); }
       else if (act === 'delete' && r) remove(r);
+      else if (act === 'edit') openEdit(id);
+      else if (act === 'edit-add' && P.edit) { syncEdit(); P.edit.items.push({ m: '', d: '', u: 'PCS', qty: null, note: '' }); drawEdit(); }
+      else if (act === 'edit-del' && P.edit) { syncEdit(); P.edit.items.splice(+a.getAttribute('data-i'), 1); drawEdit(); }
+      else if (act === 'edit-save') saveEdit();
+      else if (act === 'edit-pdf' && P.edit) { syncEdit(); downloadPdf(P.edit); }
       else if (act === 'cancel') { if (confirm('Batalkan pengajuan pass ini?')) setStatus(id, ST.cancel, null, 'Pengajuan dibatalkan'); }
       else if (act === 'sign-save') saveSign();
       else if (act === 'manual-add') addManual();
