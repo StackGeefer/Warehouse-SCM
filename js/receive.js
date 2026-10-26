@@ -553,7 +553,7 @@
           });
           D.seq = Math.max(D.seq || FIRST_SEQ, seq + 1);
           return D;
-        }, 'Penerimaan barang: approve ' + nb.bastb + ' (' + me() + ')');
+        }, 'Penerimaan barang: approve ' + nb.bastb + (((r.sign || {}).bastb || {}).uid && r.sign.bastb.uid !== uid ? ' [BASTB menunggu]' : '') + ' (' + me() + ')');
         if (dup) { toast('Nomor ' + nb.bastb + ' sudah dipakai', true); return; }
         ctx.closeDrawer();
         toast('Disetujui — ' + nb.bastb);

@@ -1,0 +1,32 @@
+# Notifikasi WhatsApp (Fonnte) untuk Owner & Co-Owner:
+# pengajuan Pass Keluar / Penerimaan Barang baru, dan BASTB yang menunggu approval Seto.
+# Secrets (Settings → Secrets and variables → Actions):
+#   FONNTE_TOKEN  token device Fonnte
+#   WA_OWNERS     nomor Owner & Co-Owner, pisahkan koma (mis. 0812xxxx,0813xxxx)
+#   WA_SETO       (opsional) nomor Seto — pengingat BASTB menunggu approval
+name: Notifikasi WhatsApp
+
+on:
+  push:
+    branches: [main]
+    paths: ['data/pass.js', 'data/terima.js']
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Kirim WhatsApp
+        env:
+          COMMITS: ${{ toJSON(github.event.commits) }}
+          FONNTE_TOKEN: ${{ secrets.FONNTE_TOKEN }}
+          WA_OWNERS: ${{ secrets.WA_OWNERS }}
+          WA_SETO: ${{ secrets.WA_SETO }}
+          SITE: https://stackgeefer.github.io/Warehouse-SCM/
+        run: node .github/scripts/notify-wa.js
