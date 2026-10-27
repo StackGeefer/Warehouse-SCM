@@ -89,8 +89,15 @@
       return '<label class="fleet-fld' + (opt.cls ? ' ' + opt.cls : '') + '"><span>' + esc(label) + (opt.req ? ' *' : '') + '</span><input class="input' + (opt.mono ? ' mono' : '') + '" data-rg="' + k + '"' + t +
         (opt.list ? ' list="' + opt.list + '"' : '') + ' value="' + esc(v == null ? '' : v) + '" placeholder="' + esc(opt.ph || '') + '"></label>';
     }
+    // draft register baru tersimpan otomatis per akun (aman bila refresh / mati lampu)
+    function draftKey() { return 'mw:reg-draft:' + (S.user ? S.user.id : 'anon'); }
+    function saveDraft(o) { try { localStorage.setItem(draftKey(), JSON.stringify(o)); } catch (e) { /* abaikan */ } }
+    function takeDraft() { try { var v = localStorage.getItem(draftKey()); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+    function dropDraft() { try { localStorage.removeItem(draftKey()); } catch (e) { /* abaikan */ } }
     function openForm(y, id, onSaved) {
-      var cur = id ? find(y, id) : null, o = cur ? JSON.parse(JSON.stringify(cur)) : { tiba: today(), fungsi: 'STOCK', masa: '10 TAHUN' };
+      var cur = id ? find(y, id) : null, dr = !id ? takeDraft() : null;
+      var o = cur ? JSON.parse(JSON.stringify(cur)) : dr && (dr.po || dr.vendor || dr.desc) ? dr : { tiba: today(), fungsi: 'STOCK', masa: '10 TAHUN' };
+      if (!cur && o === dr) { if (isIso(o.tiba)) y = +o.tiba.slice(0, 4); toast('Draft register terakhir dipulihkan (tersimpan otomatis)'); }
       G.form = { y: y, id: id || null, o: o, onSaved: onSaved || null };
       var d = $('#drawer');
       d.classList.add('open', 'wide'); d.setAttribute('aria-hidden', 'false'); $('#scrim').classList.add('open');
@@ -153,6 +160,7 @@
           return D;
         }, (F.id ? 'Register receiving: ubah ' : 'Register receiving: baru ') + regLabel(o) + ' (' + me() + ')');
         if (dup) toast(dup);
+        if (!F.id) dropDraft();
         var cb = F.onSaved, saved = find(y, id);
         G.form = null; ctx.closeDrawer();
         toast(F.id ? 'Register disimpan' : 'Register ' + regLabel(saved) + ' tersimpan');
@@ -353,6 +361,7 @@
       else if (t.closest && t.closest('#regForm') && G.form) {
         syncForm();
         var o = G.form.o, k = t.getAttribute('data-rg');
+        if (!G.form.id) saveDraft(o);
         if (k === 'no') o.noManual = true; if (k === 'reg') o.regManual = true;
         if (k === 'vid' && !o.vendor) { var vn = vendorName(o.vid); if (vn) { o.vendor = vn; var ve = document.querySelector('#regForm [data-rg="vendor"]'); if (ve) ve.value = vn; } }
         var L = lead(o), T = late(o), l1 = document.getElementById('regLead'), l2 = document.getElementById('regLate');

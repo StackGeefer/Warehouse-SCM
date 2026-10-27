@@ -145,6 +145,7 @@ vendor/               SheetJS, ExcelJS, PDF.js
   Nomor BASTB/LHPB (`0043/BASTB/10/2026`) terisi otomatis saat mengisi form & bisa diedit; nomor yang dihapus tidak dipakai ulang, nomor manual (mis. 0001) melanjutkan urutan berikutnya (0002). Akun Warehouse bisa mengisi, mengajukan, mengedit pengajuan, preview & download.
   Isi Nomor Kontrak/OA → vendor, ID vendor & harga terisi dari data ME3N; isi KIMAP → deskripsi & satuan dari data stok. Kontak vendor (NPWP, email, telp) diingat untuk pengisian berikutnya.
   Hari terlambat = Tgl Penerimaan − Tgl Jatuh Tempo (default Delivery Date); denda = Jumlah Harga PO/RO × min(hari × tarif, maksimum).
+- Baris material **tanpa batas** (bisa tempel banyak baris dari Excel); export Excel menambah baris template otomatis, PDF berlanjut ke halaman berikutnya dengan kepala tabel diulang. Isian form & draft register **tersimpan otomatis per akun** di browser (aman bila refresh / mati lampu).
 - **Riwayat Penerimaan** (Section 2): filter bulan/status/terlambat, Approve/Tolak (Owner & Co-Owner), Edit/Batalkan selama menunggu approval, Hapus (khusus Owner Utama).
 - Saat approve (Owner Utama atau Co-Owner, siapa pun duluan): tanda tangan penyetuju tertempel di slot miliknya. Penandatangan lain yang tercantum bisa **Tanda tangani** setelahnya.
 - Export: pilih dokumen → **PDF** (A4, format Lampiran) atau **Excel** (template BASTB/LHPB/Denda + sheet SPB & Stamp).

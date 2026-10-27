@@ -14,7 +14,7 @@
   var ST = { pending: 'Menunggu Approval', ok: 'Disetujui', no: 'Ditolak', cancel: 'Dibatalkan' };
   var ST_CLS = { 'Menunggu Approval': 'warn', 'Disetujui': 'ok', 'Ditolak': 'bad', 'Dibatalkan': '' };
   var FIRST_SEQ = 42; // contoh terakhir: 0041/BASTB/10/2026
-  var MAX_ITEMS = 10; // sesuai form TKO (maksimal 10 item per dokumen)
+  var TPL_ROWS = 10; // baris material di template Excel; lebih dari itu baris ditambah otomatis saat export
   var TKO = 'TKO No. B7-084/PHE52000/2025-S9';
   var BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
   var DOCS = [
@@ -237,16 +237,33 @@
     }
     function loadDraft() {
       if (R.draft) return R.draft;
-      try { var v = localStorage.getItem(DRAFT_KEY); if (v) { var o = JSON.parse(v); R.draft = o.d; R.editId = o.edit || null; } } catch (e) { /* abaikan */ }
+      try {
+        var v = localStorage.getItem(draftKey());
+        if (!v && localStorage.getItem(DRAFT_KEY)) { v = localStorage.getItem(DRAFT_KEY); localStorage.removeItem(DRAFT_KEY); } // draft lama (sebelum per akun)
+        if (v) { var o = JSON.parse(v); R.draft = o.d; R.editId = o.edit || null; R.savedAt = o.at || null; }
+      } catch (e) { /* abaikan */ }
       if (!R.draft) R.draft = newDraft();
       return R.draft;
     }
+    // Draft tersimpan otomatis di browser, terpisah per akun (aman bila refresh / mati lampu)
+    function draftKey() { return DRAFT_KEY + ':' + (S.user ? S.user.id : 'anon'); }
     var saveTimer;
-    function storeDraft() {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(function () { try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ d: R.draft, edit: R.editId })); } catch (e) { /* abaikan */ } }, 300);
+    function flushDraft() {
+      clearTimeout(saveTimer); saveTimer = null;
+      if (!R.draft || !S.user) return;
+      R.savedAt = new Date().toISOString();
+      try { localStorage.setItem(draftKey(), JSON.stringify({ d: R.draft, edit: R.editId, at: R.savedAt })); } catch (e) { /* abaikan */ }
+      var el = document.getElementById('rcvSaved'); if (el) el.innerHTML = savedHtml();
     }
-    function clearDraft() { R.draft = null; R.editId = null; try { localStorage.removeItem(DRAFT_KEY); } catch (e) { /* abaikan */ } }
+    function storeDraft() { clearTimeout(saveTimer); saveTimer = setTimeout(flushDraft, 300); }
+    function savedHtml() {
+      if (!R.savedAt) return '';
+      var d = new Date(R.savedAt);
+      return '✓ Tersimpan otomatis ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+    window.addEventListener('beforeunload', function () { if (saveTimer) flushDraft(); });
+    document.addEventListener('visibilitychange', function () { if (document.hidden && saveTimer) flushDraft(); });
+    function clearDraft() { R.draft = null; R.editId = null; R.savedAt = null; try { localStorage.removeItem(draftKey()); } catch (e) { /* abaikan */ } }
 
     function inp(k, v, o) {
       o = o || {};
@@ -384,10 +401,11 @@
         fld('Tanggal Pengiriman (Surat Jalan)', inp('h.tglKirim', h.tglKirim, { type: 'date' })) +
         fld('No. urut BASTB / LHPB', inp('h.seq', h.seq, { type: 'number', num: 1, step: '1', cls: 'mono' })) +
         '</div><p class="small muted" style="margin:8px 0 0" id="rcvNoForm">' + noFormHtml(d) + '</p></div>' +
-        '<div class="card card-pad rcv-sec"><h4 class="section-title">C. Data Material <span class="small muted">(maks. ' + MAX_ITEMS + ' item per dokumen — KIMAP terisi otomatis dari data SAP)</span></h4>' +
+        '<div class="card card-pad rcv-sec"><h4 class="section-title">C. Data Material <span class="small muted">(' + d.items.length + ' baris — tanpa batas; KIMAP terisi otomatis dari data SAP; bisa tempel/paste banyak baris dari Excel)</span></h4>' +
         '<div class="table-wrap"><table class="grid rcv-items"><thead><tr><th>No</th><th>Line No.</th><th>KIMAP</th><th>Deskripsi Material</th><th>Satuan</th><th>Qty PO/RO</th><th>Qty Diterima</th><th>Harga Satuan (IDR)</th><th>% TKDN</th><th>Tgl Jatuh Tempo<div class="small muted">kosong = Delivery Date</div></th><th>Tgl Penerimaan<div class="small muted">kosong = Tgl Terima</div></th><th>Status</th><th>Catatan</th><th></th></tr></thead><tbody>' +
         d.items.map(itemRow).join('') + '</tbody></table></div><datalist id="rcvUom">' + UOMS.map(function (u) { return '<option value="' + u + '">'; }).join('') + '</datalist>' +
-        (d.items.length < MAX_ITEMS ? '<div class="toolbar" style="margin-top:8px"><button class="btn sm" data-ra="row-add">+ Tambah baris</button></div>' : '') + '</div>' +
+        '<div class="toolbar" style="margin-top:8px"><button class="btn sm" data-ra="row-add">+ Tambah baris</button><button class="btn sm" data-ra="row-add" data-n="5">+ 5 baris</button>' +
+        '<span class="small muted">Tip: salin kolom dari Excel (Line, KIMAP, Deskripsi, Satuan, Qty PO, Qty Diterima, Harga, % TKDN) lalu tempel di sel pertama.</span></div></div>' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">D. LHPB — Hasil Pemeriksaan Barang Keseluruhan</h4><div class="rcv-grid">' +
         HASIL.map(function (x) {
           if (x[3] === 'auto') return fld(esc(x[1]), '<div class="rcv-auto" id="rcvAuto_' + x[0] + '">' + esc(hasil(d, c, x[0]) || '—') + ' <span class="small muted">(otomatis)</span></div>');
@@ -427,7 +445,7 @@
             (g === 'BASTB' ? '<div class="rcv-slot"><span class="rcv-slot-t">Vendor (Pejabat Berwenang) — juga "Diterima Oleh" di SPB</span><div class="rcv-slot-m">' + inp('sign.vendor.name', (d.sign.vendor || {}).name, { ph: 'Nama pejabat vendor' }) + inp('sign.vendor.jab', (d.sign.vendor || {}).jab, { ph: 'Jabatan' }) + '</div></div>' : '') + '</div></div>';
         }).join('') + '</div>' +
         '<div class="card card-pad rcv-sum" id="rcvSum">' + sumHtml(d, c) + '</div>' +
-        '<div class="card card-pad toolbar rcv-actions"><button class="btn" data-ra="reset">Kosongkan form</button><span class="spacer"></span>' +
+        '<div class="card card-pad toolbar rcv-actions"><button class="btn" data-ra="reset">Kosongkan form</button><span class="small muted rcv-saved" id="rcvSaved">' + savedHtml() + '</span><span class="spacer"></span>' +
         '<button class="btn" data-ra="preview">Preview PDF</button><button class="btn primary" data-ra="submit">' + (edit ? 'Simpan perubahan' : 'Ajukan (Approval Owner / Co-Owner)') + '</button></div></form>';
     }
     function noFormHtml(d) {
@@ -772,7 +790,9 @@
       };
       K.need = function (h) {
         if (K.y + h <= BOT) return;
+        var f = doc.getFont(), fs = doc.getFontSize(), lw = doc.getLineWidth();
         doc.addPage('a4', 'portrait'); K.page++; K.footer(K.lamp); K.y = 40;
+        doc.setFont(f.fontName, f.fontStyle); doc.setFontSize(fs); doc.setTextColor(0); doc.setLineWidth(lw);
       };
       K.para = function (t, o) {
         o = o || {};
@@ -811,25 +831,29 @@
         var hl = cols.map(function (c, i) { K.font(hs, 'bold'); return K.wrap(c.t, ws[i] - 4); });
         var hh = Math.max(14, Math.max.apply(null, hl.map(function (l) { return l.length; })) * hs * 1.15 + 5);
         K.need(gh + hh + 14 * Math.min(3, rows.length + 1));
-        var y0 = K.y;
-        groups.forEach(function (g) {
-          doc.rect(xs[g.from], y0, xs[g.to + 1] - xs[g.from], gh);
-          K.font(hs, 'bold'); doc.text(g.t, (xs[g.from] + xs[g.to + 1]) / 2, y0 + hs + 2, { align: 'center' });
-        });
-        cols.forEach(function (c, i) {
-          var inG = groups.some(function (g) { return i >= g.from && i <= g.to; });
-          var yy = inG ? y0 + gh : y0, hh2 = inG ? hh : hh + gh;
-          doc.rect(xs[i], yy, ws[i], hh2);
-          K.font(hs, 'bold');
-          var ty = yy + hh2 / 2 - (hl[i].length - 1) * hs * 0.575 + hs * 0.35;
-          hl[i].forEach(function (ln, j) { doc.text(ln, xs[i] + ws[i] / 2, ty + j * hs * 1.15, { align: 'center' }); });
-        });
-        K.y = y0 + gh + hh;
+        // kepala tabel (diulang di halaman berikutnya bila tabel panjang)
+        var drawHead = function () {
+          var y0 = K.y;
+          groups.forEach(function (g) {
+            doc.rect(xs[g.from], y0, xs[g.to + 1] - xs[g.from], gh);
+            K.font(hs, 'bold'); doc.text(g.t, (xs[g.from] + xs[g.to + 1]) / 2, y0 + hs + 2, { align: 'center' });
+          });
+          cols.forEach(function (c, i) {
+            var inG = groups.some(function (g) { return i >= g.from && i <= g.to; });
+            var yy = inG ? y0 + gh : y0, hh2 = inG ? hh : hh + gh;
+            doc.rect(xs[i], yy, ws[i], hh2);
+            K.font(hs, 'bold');
+            var ty = yy + hh2 / 2 - (hl[i].length - 1) * hs * 0.575 + hs * 0.35;
+            hl[i].forEach(function (ln, j) { doc.text(ln, xs[i] + ws[i] / 2, ty + j * hs * 1.15, { align: 'center' }); });
+          });
+          K.y = y0 + gh + hh;
+        };
+        drawHead();
         rows.forEach(function (row) {
           var cells = row.map(function (v) { return v != null && typeof v === 'object' ? v : { t: v }; });
           var ls = cells.map(function (cl, i) { K.font(sz, cl.b ? 'bold' : 'normal'); return cl.chk != null ? [''] : K.wrap(cl.t == null ? '' : cl.t, ws[i] - 4); });
           var rh = Math.max(o.rowH || 12.5, Math.max.apply(null, ls.map(function (l) { return l.length; })) * sz * 1.18 + 4);
-          K.need(rh);
+          var pg0 = K.page; K.need(rh); if (K.page !== pg0) drawHead();
           cells.forEach(function (cl, i) {
             if (cl.span) { return; }
             var w = ws[i], j = i;
@@ -1108,6 +1132,41 @@
       await xlImg(wb, ws, lg, 1, c1, 2, 3, { padX: 8, padY: 4 });
     }
     function setv(ws, addr, v) { ws.getCell(addr).value = v == null ? '' : v; }
+    // Sisipkan baris setelah baris item terakhir tiap blok (gaya, tinggi & sel gabungan ikut); kembalikan pemetaan nomor baris template → baris baru
+    function growBlocks(ws, lasts, n) {
+      var extra = Math.max(0, n - TPL_ROWS);
+      var map = function (r) { return r + extra * lasts.filter(function (l) { return l < r; }).length; };
+      if (!extra) return map;
+      var re = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/, nc = ws.columnCount;
+      lasts.slice().sort(function (a, b) { return b - a; }).forEach(function (last) {
+        var merges = (ws.model.merges || []).slice();
+        merges.forEach(function (m) { ws.unMergeCells(m); });
+        var tpl = ws.getRow(last), h = tpl.height, styles = [];
+        for (var c = 1; c <= nc; c++) styles.push(JSON.stringify(tpl.getCell(c).style || {}));
+        var blank = []; for (var i = 0; i < extra; i++) blank.push([]);
+        ws.spliceRows.apply(ws, [last + 1, 0].concat(blank));
+        for (var rr = last + 1; rr <= last + extra; rr++) {
+          var row = ws.getRow(rr); if (h) row.height = h;
+          for (var c2 = 1; c2 <= nc; c2++) row.getCell(c2).style = JSON.parse(styles[c2 - 1]);
+        }
+        merges.forEach(function (m) {
+          var p = re.exec(m); if (!p) return;
+          var r1 = +p[2], r2 = +p[4];
+          if (r1 > last) { r1 += extra; r2 += extra; } else if (r2 > last) r2 += extra;
+          ws.mergeCells(p[1] + r1 + ':' + p[3] + r2);
+          if (+p[2] === last && +p[4] === last) for (var k = 1; k <= extra; k++) ws.mergeCells(p[1] + (last + k) + ':' + p[3] + (last + k));
+        });
+        var dv = ws.dataValidations && ws.dataValidations.model;
+        if (dv) {
+          var nm = {};
+          Object.keys(dv).forEach(function (a) { var q = /^([A-Z]+)(\d+)$/.exec(a); nm[q && +q[2] > last ? q[1] + (+q[2] + extra) : a] = dv[a]; });
+          ws.dataValidations.model = nm;
+        }
+        var pa = ws.pageSetup.printArea, q2 = pa && /^(.*[A-Z]+)(\d+)$/.exec(pa);
+        if (q2) ws.pageSetup.printArea = q2[1] + (+q2[2] + extra);
+      });
+      return map;
+    }
     function fillInput(ws, r, c) {
       var h = r.h;
       [['D5', h.po], ['D6', h.oa], ['D7', h.jangka], ['D8', dateVal(h.delivery)], ['D9', h.tipe], ['D10', h.partial], ['D11', h.commit], ['D12', h.vendorId], ['D13', h.vendor],
@@ -1115,62 +1174,64 @@
         ['J5', h.perihal], ['J6', h.wh], ['J7', dateVal(h.tglTerima)], ['J8', dateVal(h.tglPeriksa)], ['J9', h.pengawas], ['J10', h.gr], ['J11', dateVal(h.tglGr)],
         ['J12', docNo(r, 'bastb')], ['J13', dateVal(h.tglBast)], ['J14', docNo(r, 'lhpb')], ['J15', docNo(r, 'denda')], ['J18', c.n || ''], ['J19', c.status], ['J20', c.totDenda]].forEach(function (x) { setv(ws, x[0], x[1]); });
       ['D8', 'J7', 'J8', 'J11', 'J13'].forEach(function (a) { ws.getCell(a).numFmt = 'dd.mm.yyyy'; });
-      for (var i = 0; i < MAX_ITEMS; i++) {
+      var n = Math.max(TPL_ROWS, c.rows.length), R0 = growBlocks(ws, [32], n);
+      for (var i = 0; i < n; i++) {
         var x = c.rows[i], row = 23 + i;
         var vals = x ? [x.line, x.m || '', x.d, x.u || '', num(x.qpo), num(x.qrc), x.amtPo == null ? '' : num(x.price), x.amtPo == null ? '' : x.amtPo, x.tkdn || '', x.due ? dateVal(x.due) : '', x.rcv ? dateVal(x.rcv) : '', x.late == null ? '' : x.late, x.st || '', x.note || '']
           : ['', '', '', '', '', '', '', '', '', '', '', '', '', ''];
         'BCDEFGHIJKLMNO'.split('').forEach(function (col, j) { setv(ws, col + row, vals[j]); });
         ws.getCell('K' + row).numFmt = 'dd.mm.yyyy'; ws.getCell('L' + row).numFmt = 'dd.mm.yyyy';
       }
-      setv(ws, 'I33', c.totPo);
+      setv(ws, 'I' + R0(33), c.totPo);
     }
     async function fillBastb(wb, ws, r, c) {
       var h = r.h, po = h.po || '________', V = vendorName(r), B = buyer(r);
       [['C5', docNo(r, 'bastb')], ['C6', dot(h.tglBast)], ['C7', h.oa], ['C8', h.jangka], ['C9', h.po], ['C10', h.npwp], ['C11', h.vendor], ['C12', h.email], ['C13', h.telp], ['C14', h.buyer], ['C15', h.perihal]].forEach(function (x) { setv(ws, x[0], x[1]); });
       setv(ws, 'A18', '1. Pada tanggal ' + (longDate(h.tglTerima) || '[...]') + ' telah dilakukan penyerahan pekerjaan sebagai berikut:');
-      var br = bastbRows(c);
-      for (var i = 0; i < MAX_ITEMS; i++) {
+      var br = bastbRows(c), n = Math.max(TPL_ROWS, br.length), M = growBlocks(ws, [29], n);
+      for (var i = 0; i < n; i++) {
         var x = br[i], row = 20 + i;
         var vals = x ? [i + 1, x.d, num(x.qrc), x.m || '', x.amtRc == null ? '' : num(x.price), x.amtRc == null ? '' : x.amtRc] : ['', '', '', '', '', ''];
         'ABCDEF'.split('').forEach(function (col, j) { setv(ws, col + row, vals[j]); });
       }
-      setv(ws, 'F30', c.totRc);
-      setv(ws, 'A31', 'Dimana jumlah barang tersebut telah sesuai dengan persyaratan yang ada pada Release Order (RO) dan/atau Purchase Order (PO) No. ' + po);
-      setv(ws, 'A32', '2. Telah dilakukan pemeriksaan di ' + (h.wh || 'Warehouse ________') + ' pada tanggal ' + (longDate(h.tglPeriksa) || '[...]') + ', dimana dinyatakan bahwa barang tersebut telah diserahterimakan dalam kondisi sesuai dengan persyaratan yang ada pada Release Order (RO) dan/atau Purchase Order (PO) No. ' + po + '.');
-      setv(ws, 'A33', '3. Berdasarkan tanggal penyerahan yang dinyatakan di poin 1 diatas, kami menyatakan penyerahan barang tersebut ' + (c.status || 'terlambat/tidak terlambat') + ' dengan persyaratan yang ada pada Release Order (RO) dan/atau Purchase Order (PO) No. ' + po + '. Dengan didukung oleh dokumen pendukung pelaksanaan pekerjaan sebagaimana disyaratkan dalam kontrak.');
-      setv(ws, 'A34', '4. Dengan menandatangani BAST ini, maka ' + V + ' dan ' + B + ' menyatakan bahwa:');
-      setv(ws, 'A35', 'a. Dokumen ini menjadi acuan utama bagi ' + V + ' dalam melakukan penagihan kepada ' + B + ' dan diakui oleh masing-masing pihak keabsahannya tanpa memerlukan tandatangan basah di dokumen ini oleh masing-masing pihak.');
-      setv(ws, 'A36', 'b. Segala kewajiban ' + V + ' atas pekerjaan dengan nomor PO ' + po + ', BAST sudah selesai dilakukan sepenuhnya dan diterima baik oleh ' + B + '.');
-      setv(ws, 'A37', 'c. ' + V + ' selaku Penyedia Barang/Jasa telah menyampaikan seluruh dokumen pendukung terkait pelaksanaan pekerjaan sebagaimana dipersyaratkan dalam kontrak.');
-      setv(ws, 'A38', 'd. ' + B + ' telah melakukan pemeriksaan atas seluruh dokumen pendukung yang telah disampaikan oleh ' + V + '.');
-      setv(ws, 'A39', 'e. Dokumen Berita Acara ini menjadi salah satu dasar pembayaran tagihan Penyedia Barang/Jasa oleh ' + B + '.');
-      setv(ws, 'A41', B); setv(ws, 'D41', V);
+      setv(ws, 'F' + M(30), c.totRc);
+      setv(ws, 'A' + M(31), 'Dimana jumlah barang tersebut telah sesuai dengan persyaratan yang ada pada Release Order (RO) dan/atau Purchase Order (PO) No. ' + po);
+      setv(ws, 'A' + M(32), '2. Telah dilakukan pemeriksaan di ' + (h.wh || 'Warehouse ________') + ' pada tanggal ' + (longDate(h.tglPeriksa) || '[...]') + ', dimana dinyatakan bahwa barang tersebut telah diserahterimakan dalam kondisi sesuai dengan persyaratan yang ada pada Release Order (RO) dan/atau Purchase Order (PO) No. ' + po + '.');
+      setv(ws, 'A' + M(33), '3. Berdasarkan tanggal penyerahan yang dinyatakan di poin 1 diatas, kami menyatakan penyerahan barang tersebut ' + (c.status || 'terlambat/tidak terlambat') + ' dengan persyaratan yang ada pada Release Order (RO) dan/atau Purchase Order (PO) No. ' + po + '. Dengan didukung oleh dokumen pendukung pelaksanaan pekerjaan sebagaimana disyaratkan dalam kontrak.');
+      setv(ws, 'A' + M(34), '4. Dengan menandatangani BAST ini, maka ' + V + ' dan ' + B + ' menyatakan bahwa:');
+      setv(ws, 'A' + M(35), 'a. Dokumen ini menjadi acuan utama bagi ' + V + ' dalam melakukan penagihan kepada ' + B + ' dan diakui oleh masing-masing pihak keabsahannya tanpa memerlukan tandatangan basah di dokumen ini oleh masing-masing pihak.');
+      setv(ws, 'A' + M(36), 'b. Segala kewajiban ' + V + ' atas pekerjaan dengan nomor PO ' + po + ', BAST sudah selesai dilakukan sepenuhnya dan diterima baik oleh ' + B + '.');
+      setv(ws, 'A' + M(37), 'c. ' + V + ' selaku Penyedia Barang/Jasa telah menyampaikan seluruh dokumen pendukung terkait pelaksanaan pekerjaan sebagaimana dipersyaratkan dalam kontrak.');
+      setv(ws, 'A' + M(38), 'd. ' + B + ' telah melakukan pemeriksaan atas seluruh dokumen pendukung yang telah disampaikan oleh ' + V + '.');
+      setv(ws, 'A' + M(39), 'e. Dokumen Berita Acara ini menjadi salah satu dasar pembayaran tagihan Penyedia Barang/Jasa oleh ' + B + '.');
+      setv(ws, 'A' + M(41), B); setv(ws, 'D' + M(41), V);
       var p = bastbSigner(r), vs = (r.sign || {}).vendor || {};
-      setv(ws, 'A47', p.name); setv(ws, 'A48', p.jab); setv(ws, 'D47', vs.name || ''); setv(ws, 'D48', vs.jab || '');
-      if (p.img) await xlImg(wb, ws, p.img, 1, 3, 42, 46, { padX: 120, padY: 4 });
+      setv(ws, 'A' + M(47), p.name); setv(ws, 'A' + M(48), p.jab); setv(ws, 'D' + M(47), vs.name || ''); setv(ws, 'D' + M(48), vs.jab || '');
+      if (p.img) await xlImg(wb, ws, p.img, 1, 3, M(42), M(46), { padX: 120, padY: 4 });
       await xlLogo(wb, ws, 2);
     }
     async function fillLhpb(wb, ws, r, c) {
       var h = r.h, ck = function (b) { return b ? '✓' : ''; };
       [['D5', docNo(r, 'lhpb')], ['D6', dot(h.tglPeriksa)], ['D7', h.wh], ['D8', h.pengawas], ['D9', h.perihal], ['D10', c.n + ' item'], ['D13', h.po], ['D14', h.oa], ['D15', dot(h.delivery)],
         ['D16', ck(h.tipe === 'Persediaan')], ['G16', ck(h.tipe === 'Non Persediaan')], ['I16', ck(h.partial === 'Ya')], ['D17', ck(h.commit === 'Full Delivery')], ['G17', ck(h.commit === 'Partial Delivery')]].forEach(function (x) { setv(ws, x[0], x[1]); });
-      for (var i = 0; i < MAX_ITEMS; i++) {
+      var n = Math.max(TPL_ROWS, c.rows.length), M = growBlocks(ws, [32], n);
+      for (var i = 0; i < n; i++) {
         var x = c.rows[i], row = 23 + i;
         var vals = x ? [x.no, x.m || '', x.d, num(x.qpo), x.u || '', num(x.qrc), x.tkdn || '', ck(!x.rej), ck(x.rej), x.note || ''] : ['', '', '', '', '', '', '', '', '', ''];
         'ABCDEFGHIJ'.split('').forEach(function (col, j) { setv(ws, col + row, vals[j]); });
       }
       HASIL.forEach(function (x, i) {
-        var row = 35 + i, v = hasil(r, c, x[0]);
+        var row = M(35 + i), v = hasil(r, c, x[0]);
         ['D', 'G', 'I'].forEach(function (col, j) { if (x[2][j]) setv(ws, col + row, ck(v === x[2][j])); });
       });
       var chk = ((r.lhpb || {}).check || []).filter(function (x) { return x.doc; });
       for (var k = 0; k < 8; k++) {
-        var cx = chk[k], rw = 48 + k;
+        var cx = chk[k], rw = M(48 + k);
         setv(ws, 'B' + rw, cx ? cx.doc : ''); setv(ws, 'G' + rw, cx ? ck(cx.ok === 'Yes') : ''); setv(ws, 'H' + rw, cx ? ck(cx.ok === 'No') : ''); setv(ws, 'I' + rw, cx ? cx.note : '');
       }
-      setv(ws, 'D57', ck(c.kesimpulan === 'Diterima')); setv(ws, 'G57', ck(c.kesimpulan === 'Tidak Diterima')); setv(ws, 'I57', ck(c.kesimpulan === 'Sebagian Diterima'));
-      setv(ws, 'A60', (r.lhpb || {}).catatan || '');
-      var rowsP = [[68, 'lhpb1'], [69, 'lhpb2'], [71, 'lhpbM1'], [72, 'lhpbM2']];
+      setv(ws, 'D' + M(57), ck(c.kesimpulan === 'Diterima')); setv(ws, 'G' + M(57), ck(c.kesimpulan === 'Tidak Diterima')); setv(ws, 'I' + M(57), ck(c.kesimpulan === 'Sebagian Diterima'));
+      setv(ws, 'A' + M(60), (r.lhpb || {}).catatan || '');
+      var rowsP = [[M(68), 'lhpb1'], [M(69), 'lhpb2'], [M(71), 'lhpbM1'], [M(72), 'lhpbM2']];
       for (var j = 0; j < rowsP.length; j++) {
         var p = who(r, rowsP[j][1]), rr = rowsP[j][0];
         setv(ws, 'B' + rr, p.name); setv(ws, 'D' + rr, p.nid); setv(ws, 'F' + rr, p.jab); setv(ws, 'H' + rr, p.fungsi); setv(ws, 'J' + rr, '');
@@ -1181,22 +1242,24 @@
     async function fillDenda(wb, ws, r, c) {
       var h = r.h;
       [['E5', docNo(r, 'denda')], ['C6', h.gr], ['C7', dot(h.tglGr)], ['C8', h.oa], ['C9', h.po], ['C10', h.vendorId], ['C11', h.vendor], ['C12', h.email], ['C13', h.telp], ['C14', h.buyer],
-        ['C15', 'Denda Keterlambatan Pengiriman Barang' + (h.perihal ? ' – ' + h.perihal : '')], ['C46', c.tarif], ['H46', c.maks]].forEach(function (x) { setv(ws, x[0], x[1]); });
-      for (var i = 0; i < MAX_ITEMS; i++) {
+        ['C15', 'Denda Keterlambatan Pengiriman Barang' + (h.perihal ? ' – ' + h.perihal : '')]].forEach(function (x) { setv(ws, x[0], x[1]); });
+      var n = Math.max(TPL_ROWS, c.rows.length), M = growBlocks(ws, [27, 42, 58], n);
+      setv(ws, 'C' + M(46), c.tarif); setv(ws, 'H' + M(46), c.maks);
+      for (var i = 0; i < n; i++) {
         var x = c.rows[i];
         var v1 = x ? [x.line, x.d, num(x.qpo), x.u || '', x.m || '', x.amtPo == null ? '' : num(x.price), x.amtPo == null ? '' : x.amtPo] : ['', '', '', '', '', '', ''];
-        ['A', 'B', 'C', 'D', 'E', 'G', 'I'].forEach(function (col, j) { setv(ws, col + (18 + i), v1[j]); });
+        ['A', 'B', 'C', 'D', 'E', 'G', 'I'].forEach(function (col, j) { setv(ws, col + (M(18) + i), v1[j]); });
         var v2 = x ? [x.line, x.d, num(x.qpo), x.u || '', dot(x.dueEff), num(x.qrc), x.u || '', dot(x.rcvEff), x.late == null ? '' : x.late > 0 ? 'Terlambat ' + x.late + ' hari' : 'Tepat waktu'] : ['', '', '', '', '', '', '', '', ''];
-        'ABCDEFGHI'.split('').forEach(function (col, j) { setv(ws, col + (33 + i), v2[j]); });
+        'ABCDEFGHI'.split('').forEach(function (col, j) { setv(ws, col + (M(33) + i), v2[j]); });
         var v3 = x ? [x.line, x.d, num(x.qpo), x.amtPo == null ? '' : num(x.price), x.amtPo == null ? '' : x.amtPo, x.late == null ? '' : x.late, x.pct == null ? '' : x.pct, x.denda] : ['', '', '', '', '', '', '', ''];
-        ['A', 'B', 'C', 'D', 'F', 'H', 'I', 'J'].forEach(function (col, j) { setv(ws, col + (49 + i), v3[j]); });
+        ['A', 'B', 'C', 'D', 'F', 'H', 'I', 'J'].forEach(function (col, j) { setv(ws, col + (M(49) + i), v3[j]); });
       }
-      setv(ws, 'I28', c.totPo); setv(ws, 'J59', c.totDenda);
+      setv(ws, 'I' + M(28), c.totPo); setv(ws, 'J' + M(59), c.totDenda);
       var sl = [['A', 1, 2, 'dendaPrep'], ['C', 3, 6, 'dendaVer'], ['G', 7, 10, 'dendaAppr']];
       for (var k = 0; k < sl.length; k++) {
         var p = who(r, sl[k][3]);
-        setv(ws, sl[k][0] + '69', p.name || ''); setv(ws, sl[k][0] + '70', p.jab || '');
-        if (p.img) await xlImg(wb, ws, p.img, sl[k][1], sl[k][2], 64, 68, { padX: 40, padY: 4 });
+        setv(ws, sl[k][0] + M(69), p.name || ''); setv(ws, sl[k][0] + M(70), p.jab || '');
+        if (p.img) await xlImg(wb, ws, p.img, sl[k][1], sl[k][2], M(64), M(68), { padX: 40, padY: 4 });
       }
       if (c.late) await xlImg(wb, ws, await stampImg(c.lateDays), 9, 10, 6, 13, { padX: 6, padY: 2, top: true });
       await xlLogo(wb, ws, 2);
@@ -1350,6 +1413,28 @@
       refreshSum();
     }
     document.addEventListener('input', function (e) { if (inForm(e.target)) onField(e.target, false); });
+    var PASTE_COLS = ['line', 'm', 'd', 'u', 'qpo', 'qrc', 'price', 'tkdn', 'due', 'rcv', 'st', 'note'];
+    document.addEventListener('paste', function (e) {
+      var t = e.target, k = t.getAttribute && t.getAttribute('data-k'), m = k && /^items\.(\d+)\.(\w+)$/.exec(k);
+      if (!m || !R.draft) return;
+      var txt = (e.clipboardData || window.clipboardData).getData('text');
+      if (!/[\t\n]/.test(txt.replace(/\n$/, ''))) return; // satu nilai biasa
+      e.preventDefault();
+      var lines = txt.replace(/\r/g, '').replace(/\n+$/, '').split('\n'), r0 = +m[1], c0 = PASTE_COLS.indexOf(m[2]);
+      if (c0 < 0) return;
+      var toNum = function (v) { v = String(v).trim(); if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(v)) v = v.replace(/\./g, '').replace(',', '.'); else v = v.replace(/,/g, '.'); var n = parseFloat(v); return isFinite(n) ? n : ''; };
+      lines.forEach(function (ln, i) {
+        var it = R.draft.items[r0 + i] || (R.draft.items[r0 + i] = { line: String(r0 + i + 1), st: 'Diterima' });
+        ln.split('\t').forEach(function (v, j) {
+          var f = PASTE_COLS[c0 + j]; if (!f) return;
+          v = v.trim();
+          it[f] = /^(qpo|qrc|price)$/.test(f) ? toNum(v) : f === 'st' ? (/tolak/i.test(v) ? 'Ditolak' : 'Diterima') : f === 'm' || f === 'u' ? v.toUpperCase() : v;
+        });
+        if (it.m && !it.d) lookupMat(R.draft, it);
+      });
+      storeDraft(); rerender();
+      toast(lines.length + ' baris ditempel dari Excel');
+    });
     document.addEventListener('change', function (e) {
       var t = e.target;
       if (inForm(t)) onField(t, true);
@@ -1372,7 +1457,7 @@
       if (!a) return;
       e.preventDefault();
       var act = a.getAttribute('data-ra'), id = a.getAttribute('data-id'), d = R.draft;
-      if (act === 'row-add' && d) { if (d.items.length < MAX_ITEMS) d.items.push({ line: String(d.items.length + 1), st: 'Diterima' }); storeDraft(); rerender(); }
+      if (act === 'row-add' && d) { for (var ni = +(a.getAttribute('data-n') || 1); ni > 0; ni--) d.items.push({ line: String(d.items.length + 1), st: 'Diterima' }); storeDraft(); rerender(); }
       else if (act === 'row-del' && d) { d.items.splice(+a.getAttribute('data-i'), 1); if (!d.items.length) d.items.push({ line: '1', st: 'Diterima' }); storeDraft(); rerender(); }
       else if (act === 'chk-add' && d) { d.lhpb.check.push({ doc: '', ok: 'Yes', note: '' }); storeDraft(); rerender(); }
       else if (act === 'chk-del' && d) { d.lhpb.check.splice(+a.getAttribute('data-i'), 1); storeDraft(); rerender(); }
