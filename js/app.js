@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261027b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261027c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1336,7 +1336,7 @@
     var n = Pass && isOwner() ? Pass.pendingCount() : 0;
     b.textContent = n; b.classList.toggle('hidden', !n);
     var t = $('#navTerima');
-    if (t) { var m = Recv && isOwner() ? Recv.pendingCount() : 0; t.textContent = m; t.classList.toggle('hidden', !m); }
+    if (t) { var m = Recv && canReceiving() ? Recv.pendingCount() : 0; t.textContent = m; t.classList.toggle('hidden', !m); }
   }
   // Penerimaan Barang (BASTB / SPB / LHPB / Denda) — memakai penyimpanan, PDF & tanda tangan modul Pass Keluar
   var Recv = null;
@@ -2263,7 +2263,7 @@
     render();
     if (canFleet()) fleet().preload().then(function () { if (S.user) renderSide(); });
     if (isOwner()) passMod().load().then(refreshPassNav, function () {});
-    if (isOwner()) recvMod().load().then(refreshPassNav, function () {});
+    if (canReceiving()) recvMod().load().then(refreshPassNav, function () {});
   }
 
   // ================= Event handlers =================

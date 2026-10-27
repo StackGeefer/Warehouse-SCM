@@ -11,8 +11,8 @@
  */
 (function (root) {
   'use strict';
-  var ST = { pending: 'Menunggu Approval', ok: 'Disetujui', no: 'Ditolak', cancel: 'Dibatalkan' };
-  var ST_CLS = { 'Menunggu Approval': 'warn', 'Disetujui': 'ok', 'Ditolak': 'bad', 'Dibatalkan': '' };
+  var ST = { pending: 'Menunggu Approval', ok: 'Disetujui', rev: 'Perlu Revisi', no: 'Ditolak', cancel: 'Dibatalkan' };
+  var ST_CLS = { 'Menunggu Approval': 'warn', 'Disetujui': 'ok', 'Perlu Revisi': 'bad', 'Ditolak': 'bad', 'Dibatalkan': '' };
   var FIRST_SEQ = 42; // contoh terakhir: 0041/BASTB/10/2026
   var TPL_ROWS = 10; // baris material di template Excel; lebih dari itu baris ditambah otomatis saat export
   var TKO = 'TKO No. B7-084/PHE52000/2025-S9';
@@ -287,9 +287,9 @@
     //  Non Persediaan      : BASTB Seto + Vendor; LHPB User (ketik manual) + Seto; cukup Seto yang approve & tanda tangan
     function modeOf(d) { return nonPers(d) ? 'np' : calc(d).totRc > BIG_LIMIT ? 'big' : 'p'; }
     function syncMode(d) {
-      var m = modeOf(d);
-      if (d.sign.mode === m) return false;
-      if (d.sign.mode == null && d.sign.big != null) { d.sign.mode = d.sign.big ? 'big' : 'p'; delete d.sign.big; if (d.sign.mode === m) return false; }
+      var m = modeOf(d), mig = migrateNp(d);
+      if (d.sign.mode === m) return mig;
+      if (d.sign.mode == null && d.sign.big != null) { d.sign.mode = d.sign.big ? 'big' : 'p'; delete d.sign.big; if (d.sign.mode === m) return mig; }
       d.sign.mode = m;
       var ger = profiles().filter(function (p) { return /gerald/i.test(p.name); })[0], G = ger ? { uid: ger.uid } : defaultSlot('other');
       SLOTS.forEach(function (sl) { d.sign[sl.k] = defaultSlot(sl.def); });
@@ -299,6 +299,22 @@
         d.sign.spbAppr = {}; d.sign.dendaVer = {}; d.sign.dendaAppr = {};
       }
       return true;
+    }
+    // Data lama Non Persediaan (BASTB diisi User): BASTB → Seto, User pindah ke LHPB Pemeriksa 1, slot Gerald dikosongkan
+    function migrateNp(d) {
+      if (!nonPers(d)) return false;
+      var sg = d.sign, ch = false, ger = profiles().filter(function (p) { return /gerald/i.test(p.name); })[0];
+      if ((sg.bastb || {}).user) {
+        var u = sg.bastb;
+        sg.bastb = defaultSlot('recv');
+        if (!(sg.lhpb1 || {}).user) sg.lhpb1 = { manual: true, user: true, name: u.name || '', jab: u.jab || '', nid: '', fungsi: u.fungsi || '' };
+        ch = true;
+      }
+      if (!(sg.lhpb1 || {}).user) { sg.lhpb1 = { manual: true, user: true, name: '', jab: '', nid: '', fungsi: '' }; ch = true; }
+      var rc = defaultSlot('recv');
+      if (rc.uid && (sg.lhpb2 || {}).uid !== rc.uid && !(sg.lhpb2 || {}).manual) { sg.lhpb2 = rc; ch = true; }
+      if (ger) ['spbAppr', 'dendaVer'].forEach(function (k) { if ((sg[k] || {}).uid === ger.uid) { sg[k] = {}; ch = true; } });
+      return ch;
     }
     // Non Persediaan wajib di-approve pejabat BASTB (Seto Agustian / profil Receiving)
     function reqApprover(r) {
@@ -558,6 +574,7 @@
                 reapp = true;
                 nx.status = ST.pending; nx.signed = {}; nx.reapprove = true; nx.reapproveFrom = x.status;
                 delete nx.approvedBy; delete nx.approvedById; delete nx.approvedAt; delete nx.rejectBy; delete nx.rejectNote;
+                if (x.status === ST.rev) nx.revFixedBy = me();
               }
               return nx;
             });
@@ -590,7 +607,7 @@
         if (q && [r.h.po, r.h.oa, r.h.vendor, r.h.perihal, r.h.gr, r.no && r.no.bastb, r.createdBy].concat((r.items || []).map(function (x) { return x.m + ' ' + x.d; })).join(' ').toLowerCase().indexOf(q) < 0) return false;
         return true;
       });
-      var tabs = ['Semua', ST.pending, ST.ok, 'Terlambat', ST.no, ST.cancel];
+      var tabs = ['Semua', ST.pending, ST.rev, ST.ok, 'Terlambat', ST.no, ST.cancel];
       var cnt = function (t) { return base.filter(function (r) { return t === 'Semua' || (t === 'Terlambat' ? calc(r).late && r.status !== ST.cancel : r.status === t); }).length; };
       var list = base.filter(function (r) { return R.filt === 'Semua' || (R.filt === 'Terlambat' ? calc(r).late && r.status !== ST.cancel : r.status === R.filt); });
       var mySign = R.signs.users[S.user.id], regHtml = await Reg.sectionHtml();
@@ -616,6 +633,7 @@
       if (r.status === ST.pending && canApproveRec(r)) acts.unshift('<button class="btn sm primary" data-ra="approve" data-id="' + esc(r.id) + '">Approve</button><button class="btn sm" data-ra="reject" data-id="' + esc(r.id) + '">Tolak</button>');
       if (canRcv()) acts.push('<button class="btn sm" data-ra="edit" data-id="' + esc(r.id) + '">Edit</button>');
       if (r.status === ST.pending && (r.createdById === myUid || canRcv())) acts.push('<button class="btn sm" data-ra="cancel" data-id="' + esc(r.id) + '">Batalkan</button>');
+      if (r.status === ST.ok && canRcv()) acts.push('<button class="btn sm warn-btn" data-ra="revise" data-id="' + esc(r.id) + '" title="Kembalikan ke Receiving untuk diperbaiki, lalu approve ulang">Ajukan Revisi</button>');
       if (r.status === ST.ok && mine && mine.img && slotUids(r).indexOf(myUid) >= 0 && !(r.signed || {})[myUid]) acts.unshift('<button class="btn sm primary" data-ra="cosign" data-id="' + esc(r.id) + '">' + (((r.sign || {}).bastb || {}).uid === myUid ? 'Approve BASTB &amp; tanda tangani' : 'Tanda tangani') + '</button>');
       if (canRcv()) acts.push('<button class="btn sm danger" data-ra="delete" data-id="' + esc(r.id) + '" title="Hapus permanen (Receiving / Owner / Co-Owner)">Hapus</button>');
       var signedNames = Object.keys(r.signed || {}).map(function (u) { var p = profile(u); return p ? p.short || p.name : ''; }).filter(Boolean);
@@ -626,7 +644,7 @@
         (c.rejected.length ? '<span class="badge bad">' + c.rejected.length + ' ditolak</span>' : '') + '</td>' +
         '<td class="num">' + idr(c.totRc) + '</td>' +
         '<td>' + (c.late ? '<span class="badge bad">Terlambat ' + c.lateDays + ' hr</span><div class="small muted">Denda Rp ' + idr(c.totDenda) + '</div>' : '<span class="badge ok">Tepat waktu</span>') + '</td>' +
-        '<td>' + badge(r.status) + (r.status === ST.pending && r.reapprove ? '<div><span class="badge warn">Diedit — perlu approve ulang</span></div>' : '') +
+        '<td>' + badge(r.status) + (r.status === ST.rev ? '<div class="small txt-bad">Revisi diminta ' + esc(r.revBy || '') + ' · ' + esc(fmtTime(r.revAt)) + (r.revNote ? ': ' + esc(r.revNote) : '') + '</div><div class="small muted">Receiving: klik Edit → perbaiki → Simpan (kembali ke approval)</div>' : '') + (r.status === ST.pending && r.reapprove ? '<div><span class="badge warn">Diedit — perlu approve ulang</span></div>' : '') +
         (r.status === ST.pending && reqApprover(r) ? '<div class="small muted">Approval: ' + esc((profile(reqApprover(r)) || {}).name || '') + ' (Non Persediaan)</div>' : '') + (r.updatedBy ? '<div class="small muted">Last edit: ' + esc(r.updatedBy) + ' · ' + esc(fmtTime(r.updatedAt)) + '</div>' : '') + (r.status === ST.ok && !bastbOk(r) ? '<div><span class="badge warn">BASTB menunggu ' + esc(who(r, 'bastb').name) + '</span></div>' : '') + '<div class="small muted">' + esc(r.status === ST.ok ? 'Approve: ' + signedNames.join(', ') : r.status === ST.no ? (r.rejectBy || '') + (r.rejectNote ? ': ' + r.rejectNote : '') : 'oleh ' + (r.createdBy || '') + ' · ' + fmtTime(r.createdAt)) + '</div></td>' +
         '<td><div class="fleet-acts">' + acts.join('') + '</div></td></tr>';
     }
@@ -719,6 +737,27 @@
         toast('Dihapus');
         if (ctx.audit) ctx.audit('Penerimaan Barang', (docNo(r, 'bastb') || 'Draft') + ' · PO ' + (r.h.po || '') + ' · ' + (r.h.vendor || '') + ' · ' + r.status, r);
       } catch (e) { toast('Gagal menghapus: ' + e.message, true); }
+      finally { loading(false); renderHistory(); }
+    }
+    async function requestRevision(id) {
+      var r = find(id);
+      if (!r || r.status !== ST.ok || !canRcv()) return;
+      var why = prompt('Ajukan revisi ' + (docNo(r, 'bastb') || '') + '\nApa yang perlu diperbaiki? (dokumen kembali ke Receiving, tanda tangan dilepas, lalu approve ulang)', '');
+      if (why === null) return;
+      var at = new Date().toISOString();
+      loading('Mengajukan revisi…');
+      try {
+        await save(function (D) {
+          D.list = D.list.map(function (x) {
+            if (x.id !== id || x.status !== ST.ok) return x;
+            var nx = Object.assign({}, x, { status: ST.rev, signed: {}, revBy: me(), revAt: at, revNote: why, reapprove: true, reapproveFrom: ST.ok });
+            delete nx.approvedBy; delete nx.approvedById; delete nx.approvedAt;
+            return nx;
+          });
+          return D;
+        }, 'Penerimaan barang: ajukan revisi ' + (docNo(r, 'bastb') || id) + ' (' + me() + ')');
+        toast('Revisi diajukan — dokumen kembali ke Receiving untuk diperbaiki');
+      } catch (e) { toast('Gagal: ' + e.message, true); }
       finally { loading(false); renderHistory(); }
     }
     function startEdit(id) {
@@ -1500,6 +1539,7 @@
       else if (act === 'cosign') cosign(id);
       else if (act === 'reject') { var why = prompt('Alasan menolak (opsional):', ''); if (why !== null) setStatus(id, ST.no, { rejectBy: me(), rejectNote: why }, 'Pengajuan ditolak'); }
       else if (act === 'cancel') { if (confirm('Batalkan pengajuan ini?')) setStatus(id, ST.cancel, null, 'Pengajuan dibatalkan'); }
+      else if (act === 'revise') requestRevision(id);
       else if (act === 'delete') { var rd = find(id); if (rd) remove(rd); }
       else if (act === 'edit' && canRcv()) startEdit(id);
       else if (act === 'export') openExport(id);
@@ -1518,7 +1558,11 @@
       }
     });
 
-    function pendingCount() { return R.data ? R.data.list.filter(function (r) { return r.status === ST.pending; }).length : 0; }
+    function pendingCount() {
+      if (!R.data) return 0;
+      var want = ctx.isOwner() ? ST.pending : ST.rev;
+      return R.data.list.filter(function (r) { return r.status === want && (want !== ST.pending || canApproveRec(r)); }).length;
+    }
     function reset() { R.data = null; R.signs = null; R.filt = 'Semua'; Reg.reset(); }
 
     // ---------- Rekap BASTB & LHPB (Excel) per bulan / tahun / seluruh tahun ----------

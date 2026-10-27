@@ -741,3 +741,4 @@ tr.oa-other td{opacity:.72}
 .set-body > .card { box-shadow: none; }
 .audit-table td { vertical-align: top; font-size: 12.5px; }
 .rcv-saved { color: #15803d; font-weight: 600; }
+.btn.warn-btn { color: var(--warn); border-color: #f2c27a; }
