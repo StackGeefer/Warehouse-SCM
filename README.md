@@ -146,6 +146,8 @@ vendor/               SheetJS, ExcelJS, PDF.js
   Isi Nomor Kontrak/OA → vendor, ID vendor & harga terisi dari data ME3N; isi KIMAP → deskripsi & satuan dari data stok. Kontak vendor (NPWP, email, telp) diingat untuk pengisian berikutnya.
   Hari terlambat = Tgl Penerimaan − Tgl Jatuh Tempo (default Delivery Date); denda = Jumlah Harga PO/RO × min(hari × tarif, maksimum).
 - Baris material **tanpa batas** (bisa tempel banyak baris dari Excel); export Excel menambah baris template otomatis, PDF berlanjut ke halaman berikutnya dengan kepala tabel diulang. Isian form & draft register **tersimpan otomatis per akun** di browser (aman bila refresh / mati lampu).
+- Penandatangan otomatis: **Persediaan** BASTB Seto + Vendor, LHPB Gerald + Seto (> Rp 1 M: BASTB Devy, LHPB Gerald + Devy). **Non Persediaan (Direct Charge)**: BASTB Seto + Vendor, LHPB User (ketik manual) + Seto — **approval hanya oleh Seto Agustian**.
+- **Edit di Riwayat** (Owner, Co-Owner, Receiving) untuk semua status. Edit oleh **Receiving** pada dokumen yang sudah disetujui → kembali **Menunggu Approval** (tanda tangan dilepas, perlu approve ulang); edit oleh Owner/Co-Owner tidak mengubah status.
 - **Riwayat Penerimaan** (Section 2): filter bulan/status/terlambat, Approve/Tolak (Owner & Co-Owner), Edit/Batalkan selama menunggu approval, Hapus (khusus Owner Utama).
 - Saat approve (Owner Utama atau Co-Owner, siapa pun duluan): tanda tangan penyetuju tertempel di slot miliknya. Penandatangan lain yang tercantum bisa **Tanda tangani** setelahnya.
 - Export: pilih dokumen → **PDF** (A4, format Lampiran) atau **Excel** (template BASTB/LHPB/Denda + sheet SPB & Stamp).
