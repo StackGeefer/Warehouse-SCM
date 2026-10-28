@@ -43,7 +43,7 @@ window.MW_USERS = [
  {
   "id": "389a331fc38e25e55e9b13fd8261730b1050980b890f8a243e4e3aac384110e5",
   "name": "Receiving",
-  "role": "viewer",
+  "role": "receiving",
   "salt": "0wYKrq3z3NrazuCzoRGbdQ==",
   "iv": "mh3/rhcZ/m76sgdM",
   "wk": "DC5G9EmRcrXBkflUjFsU20NdoONxPpjyUjKhXO5kJxJUYKXVjfNN9dLqC9VpdZ6w",
