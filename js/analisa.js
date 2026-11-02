@@ -28,7 +28,13 @@
     function dmy(s) { return s ? s.slice(8, 10) + '.' + s.slice(5, 7) + '.' + s.slice(0, 4) : ''; }
     function mvtText(t) { return (A.det && A.det.mt && A.det.mt[t]) || MVT[t] || ''; }
     function plantLabel(pl) { return ctx.plantLabel ? ctx.plantLabel(pl) : pl; }
-    function emptyFilter() { return { mvt: {}, plant: '', sloc: '', from: '', to: '', q: '', kind: '' }; }
+    // default plant = Field Home (Rantau) bila material punya transaksi di sana
+    function defPlant() {
+      var hp = (S.idx && S.idx.homePlants) || [];
+      for (var i = 0; i < hp.length; i++) if (A.rows.some(function (r) { return r[1] === hp[i]; })) return hp[i];
+      return '';
+    }
+    function emptyFilter() { return { mvt: {}, plant: defPlant(), sloc: '', year: '', from: '', to: '', q: '', kind: '' }; }
 
     function overlay() {
       var el = document.getElementById('anaOv');
@@ -42,13 +48,14 @@
 
     async function open(m) {
       var o = S.idx && S.idx.mats.get(m);
-      A.m = m; A.o = o; A.f = emptyFilter(); A.limit = 300;
+      A.m = m; A.o = o; A.rows = []; A.f = emptyFilter(); A.limit = 300;
       var el = overlay();
       el.classList.remove('hidden'); document.body.classList.add('ana-lock');
       el.innerHTML = '<div class="ana-box"><div class="ana-head"><div><div class="mat-code">' + esc(m) + '</div><h2>Analisa Material</h2></div><button class="icon-btn" data-ana="close">✕</button></div><div class="ana-body"><div class="muted">Memuat detail transaksi MB51…</div></div></div>';
       try { A.det = await ctx.loadDet(); }
       catch (e) { A.det = null; el.querySelector('.ana-body').innerHTML = '<div class="card card-pad"><b>Gagal memuat detail MB51</b><div class="small muted">' + esc(e.message) + '</div></div>'; return; }
       A.rows = ((A.det && A.det.m[m]) || []).slice().sort(function (a, b) { return a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0; });
+      A.f = emptyFilter();
       render();
     }
 
@@ -58,6 +65,7 @@
         if (useMvt && !f.mvt[r[3]]) return false;
         if (f.plant && r[1] !== f.plant) return false;
         if (f.sloc && r[2] !== f.sloc) return false;
+        if (f.year && r[0].slice(0, 4) !== f.year) return false;
         if (f.from && r[0] < f.from) return false;
         if (f.to && r[0] > f.to) return false;
         if (f.kind === 'in' && !(r[4] > 0)) return false;
@@ -83,10 +91,11 @@
       var tin = 0, tout = 0, vout = 0, gi = 0;
       list.forEach(function (r) { if (r[4] > 0) tin += r[4]; else tout += -r[4]; if (r[5] < 0) vout += -r[5]; if (GI[r[3]]) gi += -r[4]; });
       // chip movement type (dari semua baris, jumlah mengikuti filter lain)
-      var base = A.rows, mv = {};
+      var base = A.rows.filter(function (r) { return (!f.plant || r[1] === f.plant) && (!f.year || r[0].slice(0, 4) === f.year); }), mv = {};
       base.forEach(function (r) { var x = mv[r[3]] || (mv[r[3]] = { n: 0, q: 0 }); x.n++; x.q += r[4]; });
-      var plants = {}, slocs = {};
-      base.forEach(function (r) { plants[r[1]] = 1; if (r[2]) slocs[r[2]] = 1; });
+      var plants = {}, slocs = {}, years = {};
+      A.rows.forEach(function (r) { plants[r[1]] = 1; years[r[0].slice(0, 4)] = 1; });
+      base.forEach(function (r) { if (r[2]) slocs[r[2]] = 1; });
       // per tahun
       var yr = {};
       list.forEach(function (r) { var y = r[0].slice(0, 4), x = yr[y] || (yr[y] = { inq: 0, outq: 0, gi: 0, n: 0 }); x.n++; if (r[4] > 0) x.inq += r[4]; else x.outq += -r[4]; if (GI[r[3]]) x.gi += -r[4]; });
@@ -108,6 +117,7 @@
         }).join('') + '</div>' +
         '<div class="toolbar" style="margin-top:8px">' +
         '<select class="select sm" data-anaf="kind"><option value="">Semua arah</option><option value="out"' + (f.kind === 'out' ? ' selected' : '') + '>Keluar (qty −)</option><option value="in"' + (f.kind === 'in' ? ' selected' : '') + '>Masuk (qty +)</option><option value="gi"' + (f.kind === 'gi' ? ' selected' : '') + '>Pemakaian (GI)</option></select>' +
+        '<select class="select sm" data-anaf="year"><option value="">Semua tahun</option>' + Object.keys(years).sort().reverse().map(function (y) { return '<option' + (f.year === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
         '<select class="select sm" data-anaf="plant"><option value="">Semua plant</option>' + Object.keys(plants).sort().map(function (p) { return '<option value="' + esc(p) + '"' + (f.plant === p ? ' selected' : '') + '>' + esc(p + ' · ' + plantLabel(p)) + '</option>'; }).join('') + '</select>' +
         '<select class="select sm" data-anaf="sloc"><option value="">Semua SLoc</option>' + Object.keys(slocs).sort().map(function (p) { return '<option' + (f.sloc === p ? ' selected' : '') + '>' + esc(p) + '</option>'; }).join('') + '</select>' +
         '<label class="small muted">Dari <input class="input sm" type="date" data-anaf="from" value="' + esc(f.from) + '"></label>' +
