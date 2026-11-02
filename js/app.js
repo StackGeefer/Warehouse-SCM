@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261027c'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261102a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1592,7 +1592,7 @@
           'Display Options: pilih <b>Detail list</b>, Layout <b>dikosongkan</b>.', 'Data Source: <b>Database</b>.', 'Execute → export ke Excel.'] }) +
       card({ rem: R.oa, tc: 'ME3N', title: 'Kontrak OA / RO', freq: 'Setiap ganti bulan', freqCls: 'ro', file: tag + '_ME3N',
         img: 'assets/tutorial/sap-me3n.png',
-        steps: ['Masukkan T-Code <b class="mono">ME3N</b>.', 'Scope of List: <b class="mono">ALV</b>.', 'Document Type (Multiple Selection): <b class="mono">ZFU</b>, <b class="mono">ZKC2</b>, <b class="mono">ZKC3</b>.', 'Purchasing Organization: <b class="mono">2021</b>.', 'Purchasing Group (Multiple Selection): <b class="mono">' + Model.PG_MAIN.join('</b>, <b class="mono">') + '</b>.', 'Validity Key Date: akhir bulan berjalan — contoh <b class="mono">' + monthEnd + '</b>.', 'Execute → export ke Excel.'] }) +
+        steps: ['Masukkan T-Code <b class="mono">ME3N</b>.', 'Scope of List: <b class="mono">ALV</b>.', 'Document Type (Multiple Selection): <b class="mono">ZFU</b>, <b class="mono">ZKC2</b>, <b class="mono">ZKC3</b>.', 'Purchasing Organization: <b class="mono">2021</b>.', 'Purchasing Group (Multiple Selection): <b class="mono">X07</b>, <b class="mono">X02</b>, <b class="mono">X10</b>, <b class="mono">X03</b> — <b>wajib keempatnya</b> (X07 &amp; X02 kontrak utama; X10 &amp; X03 untuk pilihan "Other"). File ME3N menggantikan seluruh data kontrak, jadi PG yang tidak ditarik akan hilang dari website.', 'Validity Key Date: akhir bulan berjalan — contoh <b class="mono">' + monthEnd + '</b>.', 'Execute → export ke Excel.'] }) +
       '</div></div>';
     return guide +
       '<div class="card card-pad" style="margin-top:18px"><h4 class="section-title">Aturan versi data</h4><ol class="steps">' +
@@ -1825,6 +1825,7 @@
           if (x.files.indexOf(p.name) < 0) x.files.push(p.name);
         });
       });
+      if (/⚠/.test(log.join('\n'))) toast('⚠ Ada peringatan pada file yang diupload — baca catatan upload di halaman Data SAP sebelum dipublikasikan', true);
       loading('Mengenkripsi & menyimpan versi data…');
       var man = clone(S.man), changes = { files: {}, deletes: [], payloads: {} }, msgs = [];
       man.updatedAt = new Date().toISOString();
