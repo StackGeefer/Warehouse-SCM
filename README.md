@@ -125,6 +125,11 @@ vendor/               SheetJS, ExcelJS, PDF.js
 - Nama & tanda tangan diatur sendiri oleh tiap Owner / Co-Owner di **Pengaturan → Tanda tangan Pass Keluar** (latar polos otomatis dibuat transparan). Disimpan terenkripsi di `data/signs.js`.
 - Data pass: `data/pass.js` (terenkripsi). Akun **Warehouse** perlu diatur password-nya oleh Owner Utama (Pengaturan → Pengguna) agar bisa mengajukan.
 
+## Analisa Material (MB51)
+
+- Di **Cari Material** → klik material → tombol **Analisa Material (MB51)**: tabel semua transaksi MB51 material itu (semua movement type) dengan filter **movement type**, arah (masuk/keluar/GI), plant, SLoc, periode & cari (dokumen, reservasi, header text, user, PO); ringkasan masuk/keluar/pemakaian, grafik GI 24 bulan, rekap per tahun, export Excel.
+- Detail disimpan terpisah per versi MB51 (`data/<versi>-det.js`, terenkripsi, dimuat saat dibutuhkan). Upload ZMB51 (Detail list) berikutnya otomatis menggabungkan detail per periode & plant.
+
 ## Peran Receiving & History hapus
 
 - **Receiving**: seperti Warehouse + **edit & hapus** Register dan Penerimaan Barang. **Warehouse** hanya membuat register & mengajukan (tanpa edit/hapus). Owner/Co-Owner tetap bisa semua.

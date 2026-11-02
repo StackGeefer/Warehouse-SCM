@@ -142,7 +142,26 @@
             Object.keys(src.p[pl]).forEach(function (k) { dp[k] = (dp[k] || 0) + src.p[pl][k]; });
           });
         });
+        cur51.files = cur51.files.filter(function (f) { return f.name !== parsed.name; });
         cur51.files.push({ name: parsed.name, min: p.min, max: p.max, rows: p.rows });
+        // Detail transaksi (Analisa Material): periode & plant file baru menggantikan detail lama
+        if (p.det && p.det.rows) {
+          var D = ds.mb51det || { m: {}, mt: {}, min: null, max: null, rows: 0 }, dp = {};
+          p.det.plants.forEach(function (pl) { dp[pl] = 1; });
+          var n = 0;
+          Object.keys(D.m).forEach(function (mat) {
+            D.m[mat] = D.m[mat].filter(function (x) { return !(dp[x[1]] && x[0] >= p.det.min && x[0] <= p.det.max); });
+            if (!D.m[mat].length) delete D.m[mat];
+          });
+          Object.keys(p.det.m).forEach(function (mat) { D.m[mat] = (D.m[mat] || []).concat(p.det.m[mat]); });
+          Object.keys(p.det.mt).forEach(function (k) { D.mt[k] = p.det.mt[k]; });
+          Object.keys(D.m).forEach(function (mat) { n += D.m[mat].length; });
+          D.rows = n;
+          if (!D.min || p.det.min < D.min) D.min = p.det.min;
+          if (!D.max || p.det.max > D.max) D.max = p.det.max;
+          ds.mb51det = D;
+          notes.push('Detail transaksi MB51 (semua movement type): ' + p.det.rows.toLocaleString('id-ID') + ' baris ' + p.det.min + ' s/d ' + p.det.max + ' — total ' + n.toLocaleString('id-ID') + ' baris untuk Analisa Material');
+        }
         if (!cur51.min || p.min < cur51.min) cur51.min = p.min;
         if (!cur51.max || p.max > cur51.max) cur51.max = p.max;
         ds.mb51 = cur51;

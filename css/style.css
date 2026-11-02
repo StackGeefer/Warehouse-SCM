@@ -742,3 +742,28 @@ tr.oa-other td{opacity:.72}
 .audit-table td { vertical-align: top; font-size: 12.5px; }
 .rcv-saved { color: #15803d; font-weight: 600; }
 .btn.warn-btn { color: var(--warn); border-color: #f2c27a; }
+
+/* Analisa Material (MB51) */
+.ana-ov { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .45); display: flex; align-items: stretch; justify-content: center; padding: 22px; }
+.ana-ov.hidden { display: none; }
+body.ana-lock { overflow: hidden; }
+.ana-box { background: var(--bg, #f4f6fa); border-radius: 16px; width: min(1400px, 100%); display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-lg); }
+.ana-head { display: flex; gap: 12px; align-items: flex-start; padding: 16px 22px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.ana-head > div { flex: 1; }
+.ana-head h2 { margin: 2px 0 2px; font-size: 18px; }
+.ana-body { padding: 16px 22px 24px; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
+.ana-filters { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.ana-mvt .chip-toggle { font-weight: 600; }
+.ana-mvt .chip-toggle .small { font-weight: 500; opacity: .8; }
+.ana-mvt .chip-toggle.gi { border-color: #f2c27a; }
+.ana-mvt .chip-toggle.inn { border-color: #9fd8b3; }
+.ana-kpis { margin: 0; }
+.ana-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+.ana-wrap { max-height: 60vh; }
+.ana-table { font-size: 12.5px; }
+.ana-table th { position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+.ana-table td { vertical-align: top; padding: 6px 8px; }
+.q-out { color: var(--bad); font-weight: 700; }
+.q-in { color: #15803d; font-weight: 700; }
+.ana-btn { margin-left: 4px; }
+@media (max-width: 900px) { .ana-grid { grid-template-columns: 1fr; } .ana-ov { padding: 0; } .ana-box { border-radius: 0; } }

@@ -15,7 +15,11 @@
       cols: {
         plant: ['plant'], material: ['material'], desc: ['material description'],
         mvt: ['movement type'], qty: ['quantity'], uom: ['base unit of measure', 'unit of entry'],
-        date: ['posting date']
+        date: ['posting date'],
+        // kolom detail untuk Analisa Material (opsional)
+        sloc: ['storage location'], mvtText: ['movement type text'], amount: ['amount in lc', 'amount in local currency'],
+        doc: ['material document'], res: ['reservation'], txt: ['document header text'], user: ['user name'],
+        po: ['purchase order'], ref: ['reference']
       }
     },
     me3n: {
@@ -176,14 +180,24 @@
 
   function extractMB51(rows, hr, c) {
     var agg = {}, plants = {}, min = null, max = null, used = 0;
+    // Detail semua transaksi (semua movement type) per material: [tgl, plant, sloc, mvt, qty, nilai, mat.doc, reservasi, header text, user, PO, reference]
+    var det = {}, mt = {}, dPlants = {}, dmin = null, dmax = null, nDet = 0;
+    var s2 = function (v) { return v == null ? '' : str(v); };
     for (var i = hr + 1; i < rows.length; i++) {
       var r = rows[i];
       if (!r) continue;
       var mvt = parseInt(r[c.mvt], 10);
-      if (!GI_MVT[mvt]) continue;
       var plant = str(r[c.plant]), mat = str(r[c.material]);
       var date = xlDate(r[c.date]);
-      if (!plant || !mat || !date) continue;
+      if (!plant || !mat || !date || !mvt) continue;
+      (det[mat] || (det[mat] = [])).push([date, plant, c.sloc != null ? s2(r[c.sloc]) : '', mvt, num(r[c.qty]), c.amount != null ? num(r[c.amount]) : 0,
+        c.doc != null ? s2(r[c.doc]) : '', c.res != null ? s2(r[c.res]) : '', c.txt != null ? s2(r[c.txt]) : '', c.user != null ? s2(r[c.user]) : '',
+        c.po != null ? s2(r[c.po]) : '', c.ref != null ? s2(r[c.ref]) : '']);
+      if (c.mvtText != null && !mt[mvt] && r[c.mvtText]) mt[mvt] = s2(r[c.mvtText]);
+      dPlants[plant] = 1; nDet++;
+      if (!dmin || date < dmin) dmin = date;
+      if (!dmax || date > dmax) dmax = date;
+      if (!GI_MVT[mvt]) continue;
       if (!min || date < min) min = date;
       if (!max || date > max) max = date;
       plants[plant] = 1;
@@ -193,7 +207,8 @@
       p[date] = (p[date] || 0) - num(r[c.qty]);
       used++;
     }
-    return { type: 'mb51', agg: agg, plants: Object.keys(plants).sort(), min: min, max: max, rows: used };
+    return { type: 'mb51', agg: agg, plants: Object.keys(plants).sort(), min: min, max: max, rows: used,
+      det: { m: det, mt: mt, plants: Object.keys(dPlants).sort(), min: dmin, max: dmax, rows: nDet } };
   }
 
   function parseFile(XLSX, buf, name, lastModified) {

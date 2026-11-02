@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261102b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261102c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -543,7 +543,8 @@
     d.innerHTML =
       '<div class="drawer-head"><div style="flex:1;min-width:0"><div class="mat-code">' + esc(o.m) + (o.u ? ' · ' + esc(o.u) : '') + ' ' + agingBadge(o) + '</div><h2>' + esc(o.d) + '</h2>' +
       '<div class="picks" style="margin-top:12px">' + pick('ro', o.m, it && it.ro.on, !o.oa.length) + pick('bau', o.m, it && it.bau.on, false) + pick('out', o.m, isOut(it), false) +
-      '<button class="btn sm ghost" data-act="copy" data-text="' + esc(o.m) + '">Salin KIMAP</button></div></div>' +
+      '<button class="btn sm ghost" data-act="copy" data-text="' + esc(o.m) + '">Salin KIMAP</button>' +
+      '<button class="btn sm primary ana-btn" data-act="analisa" data-m="' + esc(o.m) + '" title="Tabel transaksi MB51 material ini — filter movement type">Analisa Material (MB51)</button></div></div>' +
       '<button class="icon-btn" data-act="close-drawer" aria-label="Tutup">' + ICON.close + '</button></div>' +
       '<div class="drawer-body">' +
       '<div class="kpis">' +
@@ -1321,6 +1322,14 @@
         }).join('') + '</tbody></table></div>' : '<div class="muted">Belum ada data yang dihapus.</div>') +
       '<div class="small muted">Dicatat otomatis setiap ada data yang dihapus (Register, Penerimaan Barang, Pass Keluar, Reservasi Armada, Riwayat Order, Dokumen TKO, Foto login, Pengguna). Menyimpan ' + AUDIT_MAX + ' catatan terakhir.</div>';
   }
+  var Ana = null;
+  function anaMod() {
+    if (!Ana) Ana = window.AnalisaModule({
+      S: S, esc: esc, toast: toast, loading: loading, loadDet: loadDet, loadExcelJS: Exporter.loadExcelJS,
+      plantLabel: function (pl) { var f = S.idx && S.idx.fieldOfPlant(pl); return f ? fieldLabel(f) : ''; }
+    });
+    return Ana;
+  }
   var Pass = null;
   function passMod() {
     if (!Pass) Pass = window.PassModule({
@@ -1814,6 +1823,10 @@
       if (!parsed.length) { S.lastLog = log.join('\n'); return; }
       parsed.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
       var ds = clone(S.ds), touched = {};
+      // detail transaksi MB51 versi aktif ikut digabung (untuk Analisa Material)
+      if (parsed.some(function (p) { return p.parts.some(function (pt) { return pt.type === 'mb51'; }); })) {
+        try { ds.mb51det = clone((await loadDet()) || { m: {}, mt: {}, min: null, max: null, rows: 0 }); } catch (e) { ds.mb51det = { m: {}, mt: {}, min: null, max: null, rows: 0 }; }
+      }
       parsed.forEach(function (p) {
         var notes = Model.ingest(ds, p, S.settings);
         log.push('✓ ' + p.name + ' (tanggal data ' + p.date + ')\n   ' + notes.join('\n   '));
@@ -1833,14 +1846,25 @@
         if (!ds[t]) continue;
         var id = t + '-' + touched[t].date + '-' + Date.now().toString(36);
         var payload = await Vault.encrypt(S.key, ds[t]);
+        var info = Vault.summary(t, ds[t]), oldVers = (man.versions[t] || []).slice();
+        if (t === 'mb51' && ds.mb51det && ds.mb51det.rows) info.det = ds.mb51det.rows;
         var removed = Vault.addVersion(man, t, {
           id: id, date: touched[t].date, uploadedAt: new Date().toISOString(), by: S.user.name,
-          files: touched[t].files, info: Vault.summary(t, ds[t])
+          files: touched[t].files, info: info
         });
         changes.files[Vault.snapPath(id)] = Vault.snapFile(id, payload);
         changes.payloads[Vault.snapPath(id)] = payload;
+        if (info.det) {
+          var dpay = await Vault.encrypt(S.key, ds.mb51det);
+          changes.files[Vault.snapPath(id + '-det')] = Vault.snapFile(id + '-det', dpay);
+          changes.payloads[Vault.snapPath(id + '-det')] = dpay;
+          S.det = { id: id, data: ds.mb51det };
+          await Store.set('mb51det', S.det);
+        }
         removed.forEach(function (rid) {
           changes.deletes.push(Vault.snapPath(rid));
+          var ov = oldVers.filter(function (v) { return v.id === rid; })[0];
+          if (ov && ov.info && ov.info.det) changes.deletes.push(Vault.snapPath(rid + '-det'));
           log.push('   ↳ versi lama dihapus: ' + rid);
         });
         await Store.set('ds-' + t, { id: id, data: ds[t] });
@@ -1848,6 +1872,7 @@
       }
       if (!msgs.length) { S.lastLog = log.join('\n'); toast('Tidak ada data baru — versi tidak berubah'); return; }
       changes.files['data/manifest.js'] = Vault.manifestFile(man);
+      delete ds.mb51det;
       S.man = man; S.ds = ds;
       rebuild();
       await queuePending(changes, msgs, man);
@@ -2074,6 +2099,26 @@
     S.users = (S.pending && S.pending.users) || (S.recent && S.recent.users) || window.MW_USERS || [];
     if (S.pending) S.pending.stale = !!(S.pending.man && repoMan && repoMan.updatedAt > S.pending.man.updatedAt);
   }
+  // Detail transaksi MB51 (semua movement type) — dimuat saat dibutuhkan (Analisa Material)
+  async function loadDet() {
+    var v = Vault.activeVersion(S.man, 'mb51');
+    if (!v || !v.info || !v.info.det) return null;
+    var id = v.id + '-det';
+    if (S.det && S.det.id === v.id) return S.det.data;
+    var cached = await Store.get('mb51det');
+    if (cached && cached.id === v.id) { S.det = cached; return cached.data; }
+    var payload = localPayload(Vault.snapPath(id));
+    if (!payload) {
+      await loadScript(Vault.snapPath(id) + '?v=' + encodeURIComponent(id));
+      payload = window.MW_SNAP && window.MW_SNAP[id];
+    }
+    if (!payload) throw new Error('file detail MB51 tidak ditemukan');
+    var data = await Vault.decrypt(S.key, payload);
+    if (window.MW_SNAP) delete window.MW_SNAP[id];
+    S.det = { id: v.id, data: data };
+    await Store.set('mb51det', S.det);
+    return data;
+  }
   async function loadData() {
     var ds = { stock: null, oa: null, mb51: null };
     for (var i = 0; i < Vault.TYPES.length; i++) {
@@ -2233,6 +2278,7 @@
   async function logout() {
     sessionClear();
     for (var i = 0; i < Vault.TYPES.length; i++) await Store.del('ds-' + Vault.TYPES[i]);
+    await Store.del('mb51det'); S.det = null;
     S.user = null; S.key = null; S.adminKey = null; S.sharedTok = null; S.ds = { stock: null, oa: null, mb51: null }; S.idx = null;
     if (Fleet) Fleet.reset();
     if (Pass) Pass.reset();
@@ -2473,6 +2519,7 @@
       }
       else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
       else if (act === 'logout') { logout(); }
+      else if (act === 'analisa') { anaMod().open(a.getAttribute('data-m')); }
       else if (act === 'audit-open') { openAudit(); }
       else if (act === 'hero-upload') { uploadHero($('#heroFile').files); }
       else if (act === 'hero-del') {
