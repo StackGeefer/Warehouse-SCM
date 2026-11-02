@@ -98,20 +98,24 @@
           (zero ? ' (' + zero.toLocaleString('id-ID') + ' baris stok 0 di plant selain ' + homePlants.join('/') + ' diabaikan)' : '') + ', plant ' + (replaced.join(', ') || '-') +
           (skipped.length ? '. Dilewati (data lebih baru sudah ada): ' + skipped.join(', ') : ''));
       } else if (p.type === 'me3n') {
-        // Peringatan bila file baru jauh lebih sedikit / ada Purchasing Group yang hilang dibanding versi sebelumnya
-        var prev = ds.oa && ds.oa.rows ? ds.oa.rows : null;
-        if (prev && prev.length) {
-          var pgOf = function (rows) { var o = {}; rows.forEach(function (x) { if (x.pg) o[x.pg] = 1; }); return o; };
-          var oaOf = function (rows) { var o = {}; rows.forEach(function (x) { o[x.po] = 1; }); return o; };
-          var pg0 = pgOf(prev), pg1 = pgOf(p.rows), lostPg = Object.keys(pg0).filter(function (g) { return !pg1[g]; }).sort();
-          var oa1 = oaOf(p.rows), today = todayStr(), lostOa = {};
-          prev.forEach(function (x) { if (!oa1[x.po] && (!x.ve || x.ve >= today)) lostOa[x.po] = 1; });
+        // File ME3N cukup ditarik Purchasing Group X07 & X02. PG lain (X10, X03) yang tidak ada di file baru
+        // dipertahankan dari data sebelumnya; PG yang ada di file baru diganti seluruhnya.
+        var prev = ds.oa && ds.oa.rows ? ds.oa.rows : [];
+        var pgNew = {};
+        p.rows.forEach(function (x) { pgNew[x.pg || ''] = 1; });
+        var keep = prev.filter(function (x) { return !pgNew[x.pg || '']; });
+        if (prev.length) {
+          var oaNew = {}, today = todayStr(), lostOa = {};
+          p.rows.forEach(function (x) { oaNew[x.po] = 1; });
+          prev.forEach(function (x) { if (pgNew[x.pg || ''] && !oaNew[x.po] && (!x.ve || x.ve >= today)) lostOa[x.po] = 1; });
           var nLost = Object.keys(lostOa).length;
-          if (lostPg.length) notes.push('⚠ PERHATIAN: Purchasing Group ' + lostPg.join(', ') + ' ada di versi sebelumnya tetapi TIDAK ADA di file ini — kontraknya akan hilang dari website. Tarik ulang ME3N dengan semua Purchasing Group (lihat panduan).');
-          if (nLost) notes.push('⚠ ' + nLost + ' kontrak OA yang masih berlaku di versi sebelumnya tidak ada di file ini (mis. ' + Object.keys(lostOa).slice(0, 5).join(', ') + '). Periksa filter Document Type / Purchasing Group.');
+          if (nLost) notes.push('⚠ ' + nLost + ' kontrak OA (PG ' + Object.keys(pgNew).filter(Boolean).sort().join(', ') + ') yang masih berlaku di versi sebelumnya tidak ada di file ini (mis. ' + Object.keys(lostOa).slice(0, 5).join(', ') + '). Periksa filter Document Type.');
         }
-        ds.oa = { date: parsed.date, file: parsed.name, rows: p.rows };
-        notes.push('Kontrak ME3N: ' + p.rows.length.toLocaleString('id-ID') + ' item kontrak');
+        var keptPg = {};
+        keep.forEach(function (x) { keptPg[x.pg || '-'] = 1; });
+        ds.oa = { date: parsed.date, file: parsed.name, rows: p.rows.concat(keep), kept: keep.length ? { pg: Object.keys(keptPg).sort(), rows: keep.length, from: ds.oa.date } : null };
+        notes.push('Kontrak ME3N: ' + p.rows.length.toLocaleString('id-ID') + ' item kontrak (PG ' + Object.keys(pgNew).filter(Boolean).sort().join(', ') + ')' +
+          (keep.length ? ' + ' + keep.length.toLocaleString('id-ID') + ' item PG ' + Object.keys(keptPg).sort().join(', ') + ' dipertahankan dari data ' + (ds.oa.kept.from || 'sebelumnya') : ''));
       } else if (p.type === 'mb51') {
         if (/mb52|me3n/i.test(parsed.name)) notes.push('⚠ Nama file "' + parsed.name + '" tidak sesuai isinya — isi file dikenali sebagai MB51 (pemakaian) dan diproses sebagai MB51. Sebaiknya beri nama mis. ' + parsed.date.slice(5, 7) + '.' + parsed.date.slice(8, 10) + '_ZMB51.XLSX');
         var cur51 = ds.mb51 || { files: [], agg: {}, min: null, max: null };
