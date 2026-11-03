@@ -48,7 +48,7 @@
 
     async function open(m) {
       var o = S.idx && S.idx.mats.get(m);
-      A.m = m; A.o = o; A.rows = []; A.f = emptyFilter(); A.limit = 300;
+      A.m = m; A.o = o; A.rows = []; A.f = emptyFilter(); A.limit = 300; A.dd = false;
       var el = overlay();
       el.classList.remove('hidden'); document.body.classList.add('ana-lock');
       el.innerHTML = '<div class="ana-box"><div class="ana-head"><div><div class="mat-code">' + esc(m) + '</div><h2>Analisa Material</h2></div><button class="icon-btn" data-ana="close">✕</button></div><div class="ana-body"><div class="muted">Memuat detail transaksi MB51…</div></div></div>';
@@ -110,12 +110,19 @@
 
       body.innerHTML =
         '<div class="ana-filters">' +
-        '<div class="chips ana-mvt"><span class="small muted" style="margin-right:4px">Movement type:</span>' +
-        '<button class="chip-toggle' + (!Object.keys(f.mvt).length ? ' on' : '') + '" data-ana="mvt-all">Semua <span class="chip-n">' + base.length + '</span></button>' +
-        Object.keys(mv).sort(function (a, b) { return +a - +b; }).map(function (t) {
-          return '<button class="chip-toggle' + (f.mvt[t] ? ' on' : '') + (GI[t] ? ' gi' : mv[t].q > 0 ? ' inn' : '') + '" data-ana="mvt" data-v="' + t + '" title="' + esc(mvtText(t)) + '">' + t + ' <span class="small">' + esc(mvtText(t)) + '</span> <span class="chip-n">' + mv[t].n + '</span></button>';
-        }).join('') + '</div>' +
-        '<div class="toolbar" style="margin-top:8px">' +
+        '<div class="toolbar">' +
+        // Movement type: dropdown dengan centang (Semua / satu / beberapa)
+        (function () {
+          var sel = Object.keys(f.mvt).sort(function (a, b) { return +a - +b; });
+          var lbl = !sel.length ? 'Semua' : sel.length <= 4 ? sel.join(', ') : sel.length + ' dipilih';
+          return '<div class="ana-dd' + (A.dd ? ' open' : '') + '"><button class="select sm ana-dd-btn" data-ana="dd" type="button">Movement type: <b>' + esc(lbl) + '</b></button>' +
+            '<div class="ana-dd-menu">' +
+            '<label class="ana-dd-it all"><input type="checkbox" data-ana-mvt="__all"' + (!sel.length ? ' checked' : '') + '><span class="mono">Semua</span><span class="small muted">semua movement type</span><span class="chip-n">' + base.length + '</span></label>' +
+            Object.keys(mv).sort(function (a, b) { return +a - +b; }).map(function (t) {
+              return '<label class="ana-dd-it' + (GI[t] ? ' gi' : mv[t].q > 0 ? ' inn' : '') + '"><input type="checkbox" data-ana-mvt="' + t + '"' + (f.mvt[t] ? ' checked' : '') + '><b class="mono">' + t + '</b><span class="small">' + esc(mvtText(t)) + '</span><span class="chip-n">' + mv[t].n + '</span></label>';
+            }).join('') +
+            '<div class="ana-dd-foot"><button class="btn sm" data-ana="mvt-all" type="button">Semua</button><button class="btn sm primary" data-ana="dd-close" type="button">Selesai</button></div></div></div>';
+        })() +
         '<select class="select sm" data-anaf="kind"><option value="">Semua arah</option><option value="out"' + (f.kind === 'out' ? ' selected' : '') + '>Keluar (qty −)</option><option value="in"' + (f.kind === 'in' ? ' selected' : '') + '>Masuk (qty +)</option><option value="gi"' + (f.kind === 'gi' ? ' selected' : '') + '>Pemakaian (GI)</option></select>' +
         '<select class="select sm" data-anaf="year"><option value="">Semua tahun</option>' + Object.keys(years).sort().reverse().map(function (y) { return '<option' + (f.year === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
         '<select class="select sm" data-anaf="plant"><option value="">Semua plant</option>' + Object.keys(plants).sort().map(function (p) { return '<option value="' + esc(p) + '"' + (f.plant === p ? ' selected' : '') + '>' + esc(p + ' · ' + plantLabel(p)) + '</option>'; }).join('') + '</select>' +
@@ -168,12 +175,14 @@
     }
 
     document.addEventListener('click', function (e) {
+      if (A.dd && !e.target.closest('.ana-dd')) { A.dd = false; render(); }
       var a = e.target.closest('[data-ana]');
       if (!a) { if (e.target.id === 'anaOv') close(); return; }
       var act = a.getAttribute('data-ana');
       if (act === 'close') close();
       else if (act === 'mvt-all') { A.f.mvt = {}; A.limit = 300; render(); }
-      else if (act === 'mvt') { var v = a.getAttribute('data-v'); if (A.f.mvt[v]) delete A.f.mvt[v]; else A.f.mvt[v] = 1; A.limit = 300; render(); }
+      else if (act === 'dd') { A.dd = !A.dd; render(); }
+      else if (act === 'dd-close') { A.dd = false; render(); }
       else if (act === 'reset') { A.f = emptyFilter(); A.limit = 300; render(); }
       else if (act === 'more') { A.limit += 500; render(); }
       else if (act === 'xlsx') exportXlsx();
@@ -186,7 +195,15 @@
       if (k === 'q') { clearTimeout(qT); qT = setTimeout(function () { render(); var q = document.getElementById('anaQ'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 250); }
       else render();
     }
-    document.addEventListener('change', function (e) { if (e.target.getAttribute && e.target.getAttribute('data-anaf') !== 'q') onF(e); });
+    document.addEventListener('change', function (e) {
+      var t = e.target, v = t.getAttribute && t.getAttribute('data-ana-mvt');
+      if (v) {
+        if (v === '__all') A.f.mvt = {};
+        else if (t.checked) A.f.mvt[v] = 1; else delete A.f.mvt[v];
+        A.limit = 300; A.dd = true; render(); return;
+      }
+      if (t.getAttribute && t.getAttribute('data-anaf') && t.getAttribute('data-anaf') !== 'q') onF(e);
+    });
     document.addEventListener('input', function (e) { if (e.target.getAttribute && e.target.getAttribute('data-anaf') === 'q') onF(e); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && document.getElementById('anaOv') && !document.getElementById('anaOv').classList.contains('hidden')) close(); });
 

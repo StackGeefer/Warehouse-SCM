@@ -767,3 +767,15 @@ body.ana-lock { overflow: hidden; }
 .q-in { color: #15803d; font-weight: 700; }
 .ana-btn { margin-left: 4px; }
 @media (max-width: 900px) { .ana-grid { grid-template-columns: 1fr; } .ana-ov { padding: 0; } .ana-box { border-radius: 0; } }
+
+/* Analisa: dropdown movement type (centang banyak) */
+.ana-dd { position: relative; }
+.ana-dd-btn { cursor: pointer; text-align: left; min-width: 230px; }
+.ana-dd-menu { display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 5; width: 360px; max-height: 360px; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 6px; }
+.ana-dd.open .ana-dd-menu { display: block; }
+.ana-dd-it { display: grid; grid-template-columns: 18px 46px 1fr auto; gap: 8px; align-items: center; padding: 7px 8px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.ana-dd-it:hover { background: var(--surface-2); }
+.ana-dd-it.all { grid-template-columns: 18px 58px 1fr auto; border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; margin-bottom: 4px; }
+.ana-dd-it.gi b { color: var(--warn); }
+.ana-dd-it.inn b { color: #15803d; }
+.ana-dd-foot { display: flex; justify-content: flex-end; gap: 6px; padding: 6px 4px 2px; border-top: 1px solid var(--line); margin-top: 4px; position: sticky; bottom: 0; background: var(--surface); }
