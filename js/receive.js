@@ -1091,22 +1091,25 @@
       // tabel pemeriksa + tanda tangan
       var cols = [{ t: 'No.', w: 5 }, { t: 'Nama', w: 26 }, { t: 'No. ID', w: 12 }, { t: 'Jabatan', w: 23 }, { t: 'Fungsi/Sub Fungsi', w: 14 }, { t: 'Tandatangan', w: 20 }];
       var tw = 100, xs = [L]; cols.forEach(function (cc, i) { xs.push(xs[i] + cc.w / tw * K.W); });
-      var rh = 27;
-      K.need(14 + 12 + rh * 4 + 12);
+      // baris Pemeriksa tinggi (tanda tangan besar); baris Mengetahui pendek bila kosong
+      var RH_SIGN = 46, RH_FILL = 27, RH_EMPTY = 14;
+      var pm1 = who(r, 'lhpbM1'), pm2 = who(r, 'lhpbM2');
+      var hM = function (p) { return p.name || p.img ? RH_FILL : RH_EMPTY; };
+      K.need(14 + 12 + RH_SIGN * 2 + 12 + hM(pm1) + hM(pm2) + 4);
       K.font(8, 'bold'); doc.text('Pemeriksa/Perwakilan Perusahaan', L, K.y + 8); doc.line(L, K.y + 9.5, L + doc.getTextWidth('Pemeriksa/Perwakilan Perusahaan'), K.y + 9.5); K.y += 12;
       cols.forEach(function (cc, i) { doc.rect(xs[i], K.y, xs[i + 1] - xs[i], 12); K.font(7.6, 'bold'); doc.text(cc.t, (xs[i] + xs[i + 1]) / 2, K.y + 8.5, { align: 'center' }); });
       K.y += 12;
-      var prow = function (n, p) {
+      var prow = function (n, p, rh) {
         cols.forEach(function (cc, i) { doc.rect(xs[i], K.y, xs[i + 1] - xs[i], rh); });
         K.font(7.6, 'normal');
         doc.text(String(n), (xs[0] + xs[1]) / 2, K.y + rh / 2 + 2.5, { align: 'center' });
         [p.name, p.nid, p.jab, p.fungsi].forEach(function (t, i) { K.wrap(t || '', xs[i + 2] - xs[i + 1] - 5, 7.6).slice(0, 3).forEach(function (ln, k, arr) { doc.text(ln, xs[i + 1] + 2.5, K.y + rh / 2 + 2.5 - (arr.length - 1) * 4.4 + k * 8.8); }); });
-        if (p.img) ctx.pass().placeSign(doc, p.img, (xs[5] + xs[6]) / 2, K.y + rh - 1.5, xs[6] - xs[5] - 10, rh - 3);
+        if (p.img) ctx.pass().placeSign(doc, p.img, (xs[5] + xs[6]) / 2, K.y + rh - 2, xs[6] - xs[5] - 8, rh - 4);
         K.y += rh;
       };
-      prow(1, who(r, 'lhpb1')); prow(2, who(r, 'lhpb2'));
+      prow(1, who(r, 'lhpb1'), RH_SIGN); prow(2, who(r, 'lhpb2'), RH_SIGN);
       doc.rect(L, K.y, K.W, 12); K.font(8, 'bold'); doc.text('Mengetahui:', L + 3, K.y + 8.5); K.y += 12;
-      prow(1, who(r, 'lhpbM1')); prow(2, who(r, 'lhpbM2'));
+      prow(1, pm1, hM(pm1)); prow(2, pm2, hM(pm2));
     }
     async function pdfDenda(K, r, c) {
       var doc = K.doc;
@@ -1294,8 +1297,10 @@
       var rowsP = [[M(68), 'lhpb1'], [M(69), 'lhpb2'], [M(71), 'lhpbM1'], [M(72), 'lhpbM2']];
       for (var j = 0; j < rowsP.length; j++) {
         var p = who(r, rowsP[j][1]), rr = rowsP[j][0];
+        // Pemeriksa: baris tinggi agar tanda tangan besar; Mengetahui kosong: baris pendek
+        ws.getRow(rr).height = j < 2 ? 52 : (p.name || p.img ? 30 : 15);
         setv(ws, 'B' + rr, p.name); setv(ws, 'D' + rr, p.nid); setv(ws, 'F' + rr, p.jab); setv(ws, 'H' + rr, p.fungsi); setv(ws, 'J' + rr, '');
-        if (p.img) await xlImg(wb, ws, p.img, 10, 10, rr, rr, { padX: 14, padY: 4 });
+        if (p.img) await xlImg(wb, ws, p.img, 10, 10, rr, rr, { padX: 10, padY: 6 });
       }
       await xlLogo(wb, ws, 3);
     }
