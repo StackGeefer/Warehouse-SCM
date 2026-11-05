@@ -128,6 +128,7 @@ vendor/               SheetJS, ExcelJS, PDF.js
 ## Analisa Material (MB51)
 
 - Di **Cari Material** → klik material → tombol **Analisa Material (MB51)**: tabel semua transaksi MB51 material itu (semua movement type) dengan filter **movement type**, arah (masuk/keluar/GI), plant, SLoc, periode & cari (dokumen, reservasi, header text, user, PO); ringkasan masuk/keluar/pemakaian, grafik GI 24 bulan, rekap per tahun, export Excel.
+- **Stok per tanggal**: stok dihitung mundur dari stok ZMB52 terbaru dengan transaksi MB51 plant/SLoc yang sama → stok awal, masuk, keluar, stok akhir untuk periode Dari–s/d, tabel stok harian, dan kolom "Stok setelah" per transaksi (MvT 103/104/107/108/124 = GR ke blocked stock tidak dihitung).
 - Detail disimpan terpisah per versi MB51 (`data/<versi>-det.js`, terenkripsi, dimuat saat dibutuhkan). Upload ZMB51 (Detail list) berikutnya otomatis menggabungkan detail per periode & plant.
 
 ## Peran Receiving & History hapus

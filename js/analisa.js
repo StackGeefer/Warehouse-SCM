@@ -18,6 +18,8 @@
     949: 'GI (custom)', 950: 'GI (custom) – reversal', 963: 'GI (custom)', 964: 'GI (custom) – reversal'
   };
   var GI = { 201: 1, 202: 1, 221: 1, 222: 1, 261: 1, 262: 1, 291: 1, 292: 1, 949: 1, 950: 1, 963: 1, 964: 1 };
+  // Movement type yang TIDAK mengubah stok unrestricted (stok ZMB52): GR ke blocked / valuated blocked stock
+  var NON_UNR = { 103: 1, 104: 1, 107: 1, 108: 1, 124: 1, 125: 1 };
 
   root.AnalisaModule = function (ctx) {
     var S = ctx.S, esc = ctx.esc, toast = ctx.toast;
@@ -86,7 +88,7 @@
         return;
       }
       if (!A.rows.length) { body.innerHTML = '<div class="card card-pad muted">Tidak ada transaksi MB51 untuk material ini pada periode data.</div>'; return; }
-      var list = filtered(), f = A.f;
+      var list = filtered(), f = A.f, sm = stockModel(); A.sm = sm;
       // ringkasan
       var tin = 0, tout = 0, vout = 0, gi = 0;
       list.forEach(function (r) { if (r[4] > 0) tin += r[4]; else tout += -r[4]; if (r[5] < 0) vout += -r[5]; if (GI[r[3]]) gi += -r[4]; });
@@ -135,19 +137,65 @@
         kpi('Transaksi', list.length, 'dari ' + A.rows.length + ' total') +
         kpi('Masuk (qty +)', fmtQ(tin) + ' ' + u, '') + kpi('Keluar (qty −)', fmtQ(tout) + ' ' + u, 'nilai Rp ' + fmtRp(vout)) +
         kpi('Pemakaian (GI)', fmtQ(gi) + ' ' + u, '201/221/261/291/949…') + kpi('Transaksi terakhir', list[0] ? dmy(list[0][0]) : '—', list[0] ? list[0][3] + ' · ' + list[0][1] : '') + '</div>' +
+        stockPanel(sm, u) +
         '<div class="ana-grid"><div class="card card-pad"><h4 class="section-title" style="margin-top:0">Pemakaian (GI) per bulan — 24 bulan</h4><div class="bars">' + bars + '</div><div class="bar-labels">' + labels + '</div></div>' +
         '<div class="card card-pad"><h4 class="section-title" style="margin-top:0">Rekap per tahun</h4><div class="table-wrap" style="max-height:190px"><table class="grid"><thead><tr><th>Tahun</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Pemakaian GI</th><th class="num">Trx</th></tr></thead><tbody>' +
         Object.keys(yr).sort().reverse().map(function (y) { var x = yr[y]; return '<tr><td>' + y + '</td><td class="num">' + fmtQ(x.inq) + '</td><td class="num">' + fmtQ(x.outq) + '</td><td class="num"><b>' + fmtQ(x.gi) + '</b></td><td class="num">' + x.n + '</td></tr>'; }).join('') +
         '</tbody></table></div></div></div>' +
-        '<div class="card"><div class="table-wrap ana-wrap"><table class="grid ana-table"><thead><tr><th>Posting Date</th><th>Plant</th><th>SLoc</th><th>MvT</th><th class="num">Qty</th><th class="num">Nilai (Rp)</th><th>Material Doc.</th><th>Reservasi</th><th>Header Text</th><th>User</th><th>PO</th></tr></thead><tbody>' +
+        '<div class="card"><div class="table-wrap ana-wrap"><table class="grid ana-table"><thead><tr><th>Posting Date</th><th>Plant</th><th>SLoc</th><th>MvT</th><th class="num">Qty</th><th class="num" title="Stok ' + esc(f.plant || 'semua plant') + (f.sloc ? ' ' + esc(f.sloc) : '') + ' setelah transaksi ini">Stok setelah</th><th class="num">Nilai (Rp)</th><th>Material Doc.</th><th>Reservasi</th><th>Header Text</th><th>User</th><th>PO</th></tr></thead><tbody>' +
         (list.length ? list.slice(0, A.limit).map(function (r) {
           return '<tr><td class="nowrap">' + dmy(r[0]) + '</td><td class="nowrap"><span class="mono">' + esc(r[1]) + '</span><div class="small muted">' + esc(plantLabel(r[1])) + '</div></td><td class="mono">' + esc(r[2]) + '</td>' +
             '<td class="nowrap"><b class="mono">' + r[3] + '</b><div class="small muted">' + esc(mvtText(r[3])) + '</div></td>' +
-            '<td class="num ' + (r[4] < 0 ? 'q-out' : 'q-in') + '">' + (r[4] > 0 ? '+' : '') + fmtQ(r[4]) + '</td><td class="num small">' + fmtRp(r[5]) + '</td>' +
+            '<td class="num ' + (r[4] < 0 ? 'q-out' : 'q-in') + '">' + (r[4] > 0 ? '+' : '') + fmtQ(r[4]) + '</td>' +
+            '<td class="num">' + (sm.bal.has(r) ? '<b>' + fmtQ(sm.bal.get(r)) + '</b>' : '<span class="muted small" title="Tidak mengubah stok unrestricted">—</span>') + '</td><td class="num small">' + fmtRp(r[5]) + '</td>' +
             '<td class="mono small">' + esc(r[6]) + '</td><td class="mono small">' + esc(r[7] === '0' ? '' : r[7]) + '</td><td class="small">' + esc(r[8]) + '</td><td class="small">' + esc(r[9]) + '</td><td class="mono small">' + esc(r[10]) + '</td></tr>';
-        }).join('') : '<tr><td colspan="11" class="muted center" style="padding:20px">Tidak ada transaksi sesuai filter</td></tr>') +
+        }).join('') : '<tr><td colspan="12" class="muted center" style="padding:20px">Tidak ada transaksi sesuai filter</td></tr>') +
         '</tbody></table></div>' +
         (list.length > A.limit ? '<div class="card-pad toolbar"><span class="small muted">Menampilkan ' + A.limit + ' dari ' + list.length + ' transaksi</span><button class="btn sm" data-ana="more">Tampilkan lebih banyak</button></div>' : '') + '</div>';
+    }
+    function addDays(d, n) { var p = d.split('-'), t = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n)); return t.toISOString().slice(0, 10); }
+    // Stok per tanggal: dihitung mundur dari stok ZMB52 (unrestricted) dengan transaksi MB51 plant/SLoc yang sama
+    function stockModel() {
+      var f = A.f, o = A.o || {}, dates = (S.idx && S.idx.plantDates) || {};
+      var srows = (o.rows || []).filter(function (r) { return (!f.plant || r.plant === f.plant) && (!f.sloc || r.sloc === f.sloc); });
+      var now = srows.reduce(function (a, r) { return a + (+r.qty || 0); }, 0);
+      var pl = f.plant ? [f.plant] : Object.keys(srows.reduce(function (a, r) { a[r.plant] = 1; return a; }, {}));
+      var sd = pl.map(function (p) { return dates[p]; }).filter(Boolean).sort().pop() || (S.idx && S.idx.homeDate) || A.det.max;
+      var tx = A.rows.filter(function (r) { return (!f.plant || r[1] === f.plant) && (!f.sloc || r[2] === f.sloc) && !NON_UNR[r[3]]; }).slice().reverse(); // urut lama → baru
+      var cum = 0, cdates = [], cvals = [], bal = new Map();
+      tx.forEach(function (r) { cum += r[4]; cdates.push(r[0]); cvals.push(cum); });
+      var P = function (d) { var lo = 0, hi = cdates.length - 1, ans = 0; while (lo <= hi) { var mid = (lo + hi) >> 1; if (cdates[mid] <= d) { ans = cvals[mid]; lo = mid + 1; } else hi = mid - 1; } return ans; };
+      var Ps = P(sd);
+      tx.forEach(function (r, i) { bal.set(r, now + cvals[i] - Ps); });
+      return { now: now, sd: sd, at: function (d) { return now + P(d) - Ps; }, bal: bal, tx: tx, gap: sd > A.det.max };
+    }
+    function stockPanel(sm, u) {
+      var f = A.f, to = f.to || A.det.max, from = f.from || addDays(to, -30), auto = !f.from && !f.to;
+      var start = sm.at(addDays(from, -1)), end = sm.at(to), inq = 0, outq = 0, byDay = {};
+      sm.tx.forEach(function (r) {
+        if (r[0] < from || r[0] > to) return;
+        var x = byDay[r[0]] || (byDay[r[0]] = { i: 0, o: 0, n: 0 });
+        if (r[4] > 0) { inq += r[4]; x.i += r[4]; } else { outq += -r[4]; x.o += -r[4]; }
+        x.n++;
+      });
+      var span = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1, days = [];
+      if (span <= 62) { for (var d = from; d <= to; d = addDays(d, 1)) days.push(d); }
+      else days = Object.keys(byDay).sort();
+      var where = (f.plant ? f.plant + ' · ' + plantLabel(f.plant) : 'Semua plant') + (f.sloc ? ' · SLoc ' + f.sloc : '');
+      var run = start;
+      return '<div class="card card-pad ana-stock"><div class="toolbar" style="margin-bottom:8px"><h4 class="section-title" style="margin:0">Stok per tanggal — ' + esc(where) + '</h4>' +
+        '<span class="small muted">' + (auto ? '30 hari terakhir data · pilih <b>Dari</b> &amp; <b>s/d</b> untuk periode lain' : dmy(from) + ' s/d ' + dmy(to)) + '</span></div>' +
+        '<div class="kpis ana-kpis">' + kpi('Stok awal · akhir ' + dmy(addDays(from, -1)), fmtQ(start) + ' ' + u, '') + kpi('Masuk', '+' + fmtQ(inq) + ' ' + u, dmy(from) + ' – ' + dmy(to)) +
+        kpi('Keluar', '−' + fmtQ(outq) + ' ' + u, dmy(from) + ' – ' + dmy(to)) + kpi('Stok akhir · ' + dmy(to), fmtQ(end) + ' ' + u, '') + '</div>' +
+        '<div class="table-wrap ana-days"><table class="grid"><thead><tr><th>Tanggal</th><th class="num">Stok awal hari</th><th class="num">Masuk</th><th class="num">Keluar</th><th class="num">Stok akhir hari</th><th class="num">Trx</th></tr></thead><tbody>' +
+        (days.length ? days.map(function (d) {
+          var x = byDay[d] || { i: 0, o: 0, n: 0 }, s0 = sm.at(addDays(d, -1)), s1 = sm.at(d);
+          return '<tr' + (x.n ? ' class="has-trx"' : '') + '><td class="nowrap">' + dmy(d) + '</td><td class="num">' + fmtQ(s0) + '</td><td class="num q-in">' + (x.i ? '+' + fmtQ(x.i) : '') + '</td><td class="num q-out">' + (x.o ? '−' + fmtQ(x.o) : '') + '</td><td class="num"><b>' + fmtQ(s1) + '</b></td><td class="num small">' + (x.n || '') + '</td></tr>';
+        }).join('') : '<tr><td colspan="6" class="muted center">Tidak ada transaksi pada periode ini — stok tetap ' + fmtQ(start) + ' ' + esc(u) + '</td></tr>') +
+        '</tbody></table></div>' +
+        '<div class="small muted" style="margin-top:6px">Dihitung mundur dari stok ZMB52 <b>' + dmy(sm.sd) + '</b> (' + fmtQ(sm.now) + ' ' + esc(u) + ') dengan transaksi MB51 — cocok untuk rekonsiliasi dengan MB51/MB5B. ' +
+        'Movement 103/104/107/108/124 (GR ke blocked stock) tidak dihitung karena belum masuk stok unrestricted.' +
+        (sm.gap ? ' <span class="txt-bad">MB51 baru tersedia s/d ' + dmy(A.det.max) + ' — transaksi ' + dmy(addDays(A.det.max, 1)) + ' s/d ' + dmy(sm.sd) + ' belum ada, jadi hasil bisa selisih bila ada transaksi di rentang itu.</span>' : '') + '</div></div>';
     }
     function kpi(k, v, s) { return '<div class="kpi"><div class="k">' + esc(k) + '</div><div class="v">' + esc(String(v)) + '</div><div class="s">' + esc(s || '') + '</div></div>'; }
 
@@ -156,7 +204,7 @@
       ctx.loading('Membuat Excel…');
       try {
         var ExcelJS = await ctx.loadExcelJS(), wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('MB51 ' + A.m, { views: [{ state: 'frozen', ySplit: 3 }] });
-        var cols = [['Posting Date', 12], ['Plant', 8], ['Field', 14], ['SLoc', 7], ['Movement Type', 9], ['Movement Type Text', 26], ['Quantity', 11], ['Unit', 7], ['Amount in LC', 16], ['Material Document', 14], ['Reservation', 12], ['Document Header Text', 26], ['User name', 14], ['Purchase Order', 14], ['Reference', 14]];
+        var cols = [['Posting Date', 12], ['Plant', 8], ['Field', 14], ['SLoc', 7], ['Movement Type', 9], ['Movement Type Text', 26], ['Quantity', 11], ['Unit', 7], ['Stok setelah transaksi', 14], ['Amount in LC', 16], ['Material Document', 14], ['Reservation', 12], ['Document Header Text', 26], ['User name', 14], ['Purchase Order', 14], ['Reference', 14]];
         ws.columns = cols.map(function (c) { return { width: c[1] }; });
         ws.getCell(1, 1).value = 'Analisa Material ' + A.m + ' — ' + (o.d || '') + ' (MB51 ' + dmy(A.det.min) + ' s/d ' + dmy(A.det.max) + ')';
         ws.getCell(1, 1).font = { bold: true, size: 12 };
@@ -164,8 +212,8 @@
         cols.forEach(function (c, i) { var cl = hr.getCell(i + 1); cl.value = c[0]; cl.font = { bold: true }; cl.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }; cl.border = { bottom: { style: 'thin' } }; });
         list.forEach(function (r, i) {
           var row = ws.getRow(4 + i), p = r[0].split('-');
-          [new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])), r[1], plantLabel(r[1]), r[2], r[3], mvtText(r[3]), r[4], o.u || '', r[5], r[6], r[7] === '0' ? '' : r[7], r[8], r[9], r[10], r[11]].forEach(function (v, j) { row.getCell(j + 1).value = v; });
-          row.getCell(1).numFmt = 'dd.mm.yyyy'; row.getCell(9).numFmt = '#,##0';
+          [new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])), r[1], plantLabel(r[1]), r[2], r[3], mvtText(r[3]), r[4], o.u || '', A.sm && A.sm.bal.has(r) ? A.sm.bal.get(r) : '', r[5], r[6], r[7] === '0' ? '' : r[7], r[8], r[9], r[10], r[11]].forEach(function (v, j) { row.getCell(j + 1).value = v; });
+          row.getCell(1).numFmt = 'dd.mm.yyyy'; row.getCell(10).numFmt = '#,##0';
         });
         var buf = await wb.xlsx.writeBuffer(), url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
         var a = document.createElement('a'); a.href = url; a.download = 'Analisa_MB51_' + A.m + '.xlsx'; document.body.appendChild(a); a.click(); a.remove();

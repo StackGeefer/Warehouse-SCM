@@ -779,3 +779,8 @@ body.ana-lock { overflow: hidden; }
 .ana-dd-it.gi b { color: var(--warn); }
 .ana-dd-it.inn b { color: #15803d; }
 .ana-dd-foot { display: flex; justify-content: flex-end; gap: 6px; padding: 6px 4px 2px; border-top: 1px solid var(--line); margin-top: 4px; position: sticky; bottom: 0; background: var(--surface); }
+
+.ana-stock .ana-kpis { margin-bottom: 10px; }
+.ana-days { max-height: 280px; }
+.ana-days tr.has-trx td { background: rgba(37, 99, 235, .05); }
+.ana-days th { position: sticky; top: 0; z-index: 1; }
