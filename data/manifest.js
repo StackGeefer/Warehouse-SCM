@@ -1,9 +1,35 @@
-/* Daftar versi data SAP (maks. 3 versi per jenis). Diperbarui 2026-11-02T04:55:53.196Z */
+/* Daftar versi data SAP (maks. 3 versi per jenis). Diperbarui 2026-11-05T07:43:35.723Z */
 window.MW_MANIFEST = {
  "v": 2,
- "updatedAt": "2026-11-02T04:55:53.196Z",
+ "updatedAt": "2026-11-05T07:43:35.723Z",
  "versions": {
   "stock": [
+   {
+    "id": "stock-2026-11-05-mw38oc2z",
+    "date": "2026-11-05",
+    "uploadedAt": "2026-11-05T07:43:35.765Z",
+    "by": "Seto.agustian",
+    "files": [
+     "11.05_ZMB52.XLSX"
+    ],
+    "info": {
+     "plants": 22,
+     "rows": 16264
+    }
+   },
+   {
+    "id": "stock-2026-11-03-mw0igw1w",
+    "date": "2026-11-03",
+    "uploadedAt": "2026-11-03T09:54:26.031Z",
+    "by": "Seto.agustian",
+    "files": [
+     "11.03_ZMB52.XLSX"
+    ],
+    "info": {
+     "plants": 22,
+     "rows": 16235
+    }
+   },
    {
     "id": "stock-2026-11-02-mvyljalo",
     "date": "2026-11-02",
@@ -15,32 +41,6 @@ window.MW_MANIFEST = {
     "info": {
      "plants": 22,
      "rows": 16188
-    }
-   },
-   {
-    "id": "stock-2026-10-30-mvuderii",
-    "date": "2026-10-30",
-    "uploadedAt": "2026-10-30T02:46:11.698Z",
-    "by": "Seto.agustian",
-    "files": [
-     "10.30_ZMB52.XLSX"
-    ],
-    "info": {
-     "plants": 22,
-     "rows": 16197
-    }
-   },
-   {
-    "id": "stock-2026-10-29-mvt9b31j",
-    "date": "2026-10-29",
-    "uploadedAt": "2026-10-29T08:03:35.380Z",
-    "by": "Seto.agustian",
-    "files": [
-     "10.29_ZMB52.XLSX"
-    ],
-    "info": {
-     "plants": 22,
-     "rows": 16184
     }
    }
   ],
