@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261105c'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261106a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1388,6 +1388,7 @@
       if (sess) { sess.ak = Vault.toB64(S.adminKey); sessionSet(sess, !!localStorage.getItem('mw:session')); }
       await unlockShared();
       if (ghToken()) toast('Akses simpan aktif');
+      else toast('Kunci akses akun ' + S.user.name + ' tidak cocok dengan token terbaru. Minta Owner Utama mengatur ulang password akun ini (Pengaturan → Pengguna).', true);
       return !!ghToken();
     } catch (e) { toast('Password salah', true); return false; }
   }
@@ -1414,6 +1415,15 @@
       el.querySelector('form').onsubmit = function (e) { e.preventDefault(); done(inp.value); };
     });
   }
+  // Kunci admin di browser ini masih cocok dengan token bersama terbaru? (sesi lama bisa membawa kunci usang)
+  async function adminKeyFresh() {
+    if (!S.adminKey) return false;
+    await loadScript('data/admin.js?t=' + Date.now()).catch(function () {});
+    var adm = localVal('admin') || window.MW_ADMIN;
+    if (!adm || !adm.tok) return true;
+    try { await Vault.decrypt(S.adminKey, adm.tok); return true; } catch (e) { return false; }
+  }
+  var STALE_AK = 'Kunci akses di browser ini sudah usang. Keluar (logout), login ulang, lalu ulangi langkah ini.';
   async function unlockShared() {
     S.sharedTok = null;
     var adm = localVal('admin') || window.MW_ADMIN;
@@ -2050,6 +2060,7 @@
     if (!isMainOwner() || !u || u.role === 'owner') return;
     if (Vault.hasAdminKey(role)) {
       if (!S.adminKey) { toast('Bagikan token dulu: Koneksi GitHub → isi password Anda → Bagikan ke Co-Owner', true); return; }
+      if (pw && !(await adminKeyFresh())) { toast(STALE_AK, true); return; }
       if (!pw || pw.length < 6) { toast('Isi password ' + u.name + ' (min. 6 karakter) untuk mengaktifkan akses ' + roleLabel(role), true); return; }
     }
     var entry;
@@ -2634,6 +2645,8 @@
         Vault.hashUser(nu).then(function (h) {
           if (S.users.some(function (x) { return x.id === h; })) throw new Error('Username sudah ada');
           if (Vault.hasAdminKey(nr) && !S.adminKey) throw new Error('Bagikan token dulu (Koneksi GitHub → Bagikan ke Co-Owner), lalu tambahkan ' + roleLabel(nr));
+          return Vault.hasAdminKey(nr) ? adminKeyFresh().then(function (ok) { if (!ok) throw new Error(STALE_AK); }) : null;
+        }).then(function () {
           return Vault.makeUser(nu, np, nr, S.key, null, S.adminKey);
         }).then(function (entry) {
           loading(false);
@@ -2653,7 +2666,10 @@
         if (c1 !== c2) { toast('Konfirmasi password tidak sama', true); return; }
         var me = S.users.filter(function (x) { return x.id === S.user.id; })[0];
         loading('Menyimpan password…');
-        Vault.makeUser(me.name, c1, me.role, S.key, null, S.adminKey).then(function (entry) {
+        (S.adminKey && Vault.hasAdminKey(me.role) ? adminKeyFresh() : Promise.resolve(true)).then(function (ok) {
+          if (!ok) throw new Error(STALE_AK);
+          return Vault.makeUser(me.name, c1, me.role, S.key, null, S.adminKey);
+        }).then(function (entry) {
           loading(false);
           return saveUsers(S.users.map(function (x) { return x.id === me.id ? entry : x; }), 'password ' + me.name + ' diganti');
         }).catch(function (err) { loading(false); toast(err.message, true); });
