@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261106a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261106b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -506,9 +506,7 @@
     var d = $('#drawer'), idx = S.idx, it = item(m);
     var F = fields();
     // stok per plant
-    var rows = o.rows.slice().filter(function (r) { return S.drawerAll || r.qty !== 0; });
-    function rank(p) { var f = idx.fieldOfPlant(p); if (!f) return 999; return f.home ? 0 : (f.main ? 0 : 100) + F.indexOf(f) + 1; }
-    rows.sort(function (a, b) { return rank(a.plant) - rank(b.plant) || a.plant.localeCompare(b.plant) || b.qty - a.qty; });
+    var rows = sortedStockRows(o, S.drawerAll);
     var stockRows = rows.map(function (r) {
       var f = idx.fieldOfPlant(r.plant);
       return '<tr><td>' + (f ? '<b>' + esc(fieldLabel(f)) + '</b> <span class="small muted">' + esc(f.zone || '') + '</span>' : '<span class="muted">Plant lain</span>') + '</td><td class="mono">' + esc(r.plant) + '</td><td class="mono">' + esc(r.sloc) + '</td><td class="small">' + esc(r.batch || '-') + '</td><td class="num">' + qtyPill(r.qty, f && f.home) + '</td><td class="small muted">' + ddmm(idx.plantDates[r.plant]) + '</td></tr>';
@@ -543,7 +541,7 @@
     d.innerHTML =
       '<div class="drawer-head"><div style="flex:1;min-width:0"><div class="mat-code">' + esc(o.m) + (o.u ? ' · ' + esc(o.u) : '') + ' ' + agingBadge(o) + '</div><h2>' + esc(o.d) + '</h2>' +
       '<div class="picks" style="margin-top:12px">' + pick('ro', o.m, it && it.ro.on, !o.oa.length) + pick('bau', o.m, it && it.bau.on, false) + pick('out', o.m, isOut(it), false) +
-      '<button class="btn sm ghost" data-act="copy" data-text="' + esc(o.m) + '">Salin KIMAP</button>' +
+      '<button class="btn sm ghost" data-act="copy" data-m="' + esc(o.m) + '" title="Salin KIMAP, deskripsi & stok per plant">Salin KIMAP</button>' +
       '<button class="btn sm primary ana-btn" data-act="analisa" data-m="' + esc(o.m) + '" title="Tabel transaksi MB51 material ini — filter movement type">Analisa Material (MB51)</button></div></div>' +
       '<button class="icon-btn" data-act="close-drawer" aria-label="Tutup">' + ICON.close + '</button></div>' +
       '<div class="drawer-body">' +
@@ -567,6 +565,44 @@
     d.classList.add('open');
     d.setAttribute('aria-hidden', 'false');
     $('#scrim').classList.add('open');
+  }
+  // Baris stok per plant, urut: home → field utama → plant lain
+  function sortedStockRows(o, withZero) {
+    var idx = S.idx, F = fields();
+    function rank(p) { var f = idx.fieldOfPlant(p); if (!f) return 999; return f.home ? 0 : (f.main ? 0 : 100) + F.indexOf(f) + 1; }
+    return o.rows.filter(function (r) { return withZero || r.qty !== 0; })
+      .sort(function (a, b) { return rank(a.plant) - rank(b.plant) || a.plant.localeCompare(b.plant) || b.qty - a.qty; });
+  }
+  // Teks "Salin KIMAP": KIMAP, deskripsi, satuan & stok per plant (siap tempel ke WA / email / Excel)
+  function materialCopyText(m) {
+    var o = S.idx && S.idx.mats.get(m);
+    if (!o) return m;
+    var idx = S.idx, u = o.u ? ' ' + o.u : '';
+    var lines = ['KIMAP     : ' + o.m, 'Deskripsi : ' + o.d];
+    if (o.u) lines.push('Satuan    : ' + o.u);
+    lines.push('Stok ' + homeName() + ' : ' + fmtQ(o.homeStock) + u + (idx.homeDate ? ' (SAP ' + fmtDate(idx.homeDate) + ')' : ''));
+    var rows = sortedStockRows(o, false);
+    if (rows.length) {
+      lines.push('', 'Stok per plant:');
+      rows.forEach(function (r) {
+        var f = idx.fieldOfPlant(r.plant);
+        lines.push('- ' + (f ? fieldLabel(f) : 'Plant lain') + ' (' + r.plant + '/' + r.sloc + (r.batch ? '/' + r.batch : '') + ') : ' + fmtQ(r.qty) + u + (idx.plantDates[r.plant] ? ' · data ' + ddmm(idx.plantDates[r.plant]) : ''));
+      });
+    } else lines.push('', 'Stok per plant: tidak ada stok tercatat');
+    return lines.join('\n');
+  }
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).catch(function () { return copyFallback(text); });
+    return copyFallback(text);
+  }
+  function copyFallback(text) {
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+      ta.remove(); ok ? resolve() : reject(new Error('Gagal menyalin'));
+    });
   }
   function orderHistHtml(o) {
     var h = materialHistory(o.m);
@@ -2480,7 +2516,10 @@
       else if (act === 'oa-show-other') { e.preventDefault(); S.oaF.pg = '*other'; var ps = $('#oapg'); if (ps) ps.value = '*other'; renderOACards(); }
       else if (act === 'close-drawer') closeDrawer();
       else if (act === 'detail') { e.preventDefault(); openDrawer(a.getAttribute('data-m')); }
-      else if (act === 'copy') { navigator.clipboard && navigator.clipboard.writeText(a.getAttribute('data-text')).then(function () { toast('KIMAP disalin'); }); }
+      else if (act === 'copy') {
+        var cm = a.getAttribute('data-m');
+        copyText(cm ? materialCopyText(cm) : a.getAttribute('data-text')).then(function () { toast(cm ? 'KIMAP, deskripsi & stok disalin' : 'Disalin'); }, function () { toast('Gagal menyalin', true); });
+      }
       else if (act === 'use-oa') {
         var mm = a.getAttribute('data-m');
         setRO(mm, true, a.getAttribute('data-key'));
