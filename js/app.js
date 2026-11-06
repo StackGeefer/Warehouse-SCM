@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261106b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261106c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -541,7 +541,7 @@
     d.innerHTML =
       '<div class="drawer-head"><div style="flex:1;min-width:0"><div class="mat-code">' + esc(o.m) + (o.u ? ' · ' + esc(o.u) : '') + ' ' + agingBadge(o) + '</div><h2>' + esc(o.d) + '</h2>' +
       '<div class="picks" style="margin-top:12px">' + pick('ro', o.m, it && it.ro.on, !o.oa.length) + pick('bau', o.m, it && it.bau.on, false) + pick('out', o.m, isOut(it), false) +
-      '<button class="btn sm ghost" data-act="copy" data-m="' + esc(o.m) + '" title="Salin KIMAP, deskripsi & stok per plant">Salin KIMAP</button>' +
+      '<button class="btn sm ghost" data-act="copy" data-m="' + esc(o.m) + '" title="Salin KIMAP, deskripsi & stok">Salin KIMAP</button>' +
       '<button class="btn sm primary ana-btn" data-act="analisa" data-m="' + esc(o.m) + '" title="Tabel transaksi MB51 material ini — filter movement type">Analisa Material (MB51)</button></div></div>' +
       '<button class="icon-btn" data-act="close-drawer" aria-label="Tutup">' + ICON.close + '</button></div>' +
       '<div class="drawer-body">' +
@@ -573,7 +573,7 @@
     return o.rows.filter(function (r) { return withZero || r.qty !== 0; })
       .sort(function (a, b) { return rank(a.plant) - rank(b.plant) || a.plant.localeCompare(b.plant) || b.qty - a.qty; });
   }
-  // Teks "Salin KIMAP": KIMAP, deskripsi, satuan & stok per plant (siap tempel ke WA / email / Excel)
+  // Teks "Salin KIMAP": KIMAP, deskripsi, satuan & stok home (siap tempel ke WA / email / Excel)
   function materialCopyText(m) {
     var o = S.idx && S.idx.mats.get(m);
     if (!o) return m;
@@ -581,14 +581,6 @@
     var lines = ['KIMAP     : ' + o.m, 'Deskripsi : ' + o.d];
     if (o.u) lines.push('Satuan    : ' + o.u);
     lines.push('Stok ' + homeName() + ' : ' + fmtQ(o.homeStock) + u + (idx.homeDate ? ' (SAP ' + fmtDate(idx.homeDate) + ')' : ''));
-    var rows = sortedStockRows(o, false);
-    if (rows.length) {
-      lines.push('', 'Stok per plant:');
-      rows.forEach(function (r) {
-        var f = idx.fieldOfPlant(r.plant);
-        lines.push('- ' + (f ? fieldLabel(f) : 'Plant lain') + ' (' + r.plant + '/' + r.sloc + (r.batch ? '/' + r.batch : '') + ') : ' + fmtQ(r.qty) + u + (idx.plantDates[r.plant] ? ' · data ' + ddmm(idx.plantDates[r.plant]) : ''));
-      });
-    } else lines.push('', 'Stok per plant: tidak ada stok tercatat');
     return lines.join('\n');
   }
   function copyText(text) {
