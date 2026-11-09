@@ -41,7 +41,7 @@
 
   root.ReturnModule = function (ctx) {
     var S = ctx.S, esc = ctx.esc, toast = ctx.toast, loading = ctx.loading;
-    var R = S.kembali = { data: null, signs: null, kind: 'ret', drafts: {}, editId: null, filt: 'Semua', kf: 'Semua', q: '', month: '', img: {}, savedAt: null, memo: {} };
+    var R = S.kembali = { data: null, signs: null, kind: 'ret', drafts: {}, editId: null, filt: 'Semua', kf: 'Semua', q: '', month: '', img: {}, savedAt: null, memo: {}, fotos: {} };
 
     // ---------- util ----------
     function $(s) { return document.querySelector(s); }
@@ -139,7 +139,7 @@
           items: [{ d: '', q: '', u: '', ket: '' }] };
       }
       return { kind: 'ret', h: { jenis: 'Ex Operation', tgl: today(), ap: 'PT Pertamina EP Field Rantau', wh: 'Warehouse Field Rantau', kbo: 'KBO', kode: 'W101', fungsi: '', project: '', afe: '', afeSt: '',
-        statMat: 'Stock', integ: 'Goods Value', memo: '', reservasi: '', inspeksi: 'Baik', catatan: '', foto: false },
+        statMat: 'Stock', integ: 'Goods Value', reservasi: '', inspeksi: 'Baik' },
         items: [{ cat: 'Material Operasi', kond: 'Baik' }], docs: [], sign: { user: [{ name: '', jab: '' }], wh: [], ack: [] } };
     }
     function draftKey() { return DRAFT_KEY + ':' + (S.user ? S.user.id : 'anon'); }
@@ -150,6 +150,40 @@
         var v = localStorage.getItem(draftKey());
         if (v) { var o = JSON.parse(v); R.drafts = o.drafts || {}; R.kind = o.kind || 'ret'; R.editId = o.edit || null; R.savedAt = o.at || null; }
       } catch (e) { /* abaikan */ }
+      // foto draft disimpan di IndexedDB (terlalu besar untuk localStorage)
+      if (root.Store) root.Store.get(fotoKey()).then(function (m) {
+        if (!m) return;
+        var miss = false;
+        Object.keys(m).forEach(function (k) { if (!R.fotos[k]) { R.fotos[k] = m[k]; miss = true; } });
+        if (miss && ctx.route() === 'kembali') rerender();
+      }, function () {});
+    }
+    function fotoKey() { return 'kb-foto:' + (S.user ? S.user.id : 'anon'); }
+    function draftFids() {
+      var o = {};
+      Object.keys(R.drafts).forEach(function (k) { ((R.drafts[k] || {}).items || []).forEach(function (it) { if (it.fid && R.fotos[it.fid]) o[it.fid] = R.fotos[it.fid]; }); });
+      return o;
+    }
+    function storeFotos() { if (root.Store) root.Store.set(fotoKey(), draftFids()).catch(function () {}); }
+    function itemFotos(items) { var o = {}; (items || []).forEach(function (it) { if (it.fid && R.fotos[it.fid]) o[it.fid] = R.fotos[it.fid]; }); return o; }
+    // kompres foto: sisi terpanjang maks. 1100 px, JPEG
+    function compress(file) {
+      return new Promise(function (res, rej) {
+        var fr = new FileReader();
+        fr.onload = function () {
+          var im = new Image();
+          im.onload = function () {
+            var k = Math.min(1, 1100 / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement('canvas');
+            cv.width = Math.round(im.naturalWidth * k); cv.height = Math.round(im.naturalHeight * k);
+            var g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(im, 0, 0, cv.width, cv.height);
+            res(cv.toDataURL('image/jpeg', 0.72));
+          };
+          im.onerror = function () { rej(new Error('File bukan gambar')); };
+          im.src = fr.result;
+        };
+        fr.onerror = function () { rej(fr.error); };
+        fr.readAsDataURL(file);
+      });
     }
     function draft() { loadDrafts(); if (!R.drafts[R.kind]) R.drafts[R.kind] = newDraft(R.kind); return R.drafts[R.kind]; }
     var saveTimer;
@@ -167,7 +201,7 @@
     function clearDraft(kind) {
       delete R.drafts[kind || R.kind]; delete R.memo[kind || R.kind];
       if (R.editId) R.editId = null;
-      flushDraft();
+      flushDraft(); storeFotos();
     }
 
     // ---------- form helpers ----------
@@ -226,7 +260,6 @@
     }
     function formRet(d) {
       var h = d.h, proj = h.jenis === 'Ex Project', t = totals(d), cats = CATS[h.jenis] || [];
-      var docs = DOCREQ[h.jenis] || [];
       return '<div class="card card-pad rcv-sec"><h4 class="section-title">A. Informasi Pengembalian <span class="small muted">(' + esc(TKO_RET) + ' · Lampiran 4)</span></h4><div class="rcv-grid">' +
         fld('Jenis pengembalian', sel('h.jenis', h.jenis, JENIS, { rr: 1 })) +
         fld('Tanggal BA *', inp('h.tgl', h.tgl, { type: 'date', rr: 1 })) +
@@ -235,7 +268,6 @@
         fld('Integrasi SAP', sel('h.integ', h.integ, INTEG)) +
         fld('Hasil preliminary inspection', sel('h.inspeksi', h.inspeksi, INSPEKSI)) +
         (proj ? fld('Nama Project *', inp('h.project', h.project, { ph: 'mis. Flowline RK 2025' })) + fld('No. AFE *', inp('h.afe', h.afe, { cls: 'mono' })) + fld('Status AFE', sel('h.afeSt', h.afeSt, AFE_ST, { blank: '— pilih —' })) : '') +
-        fld('No. Memo justifikasi User', inp('h.memo', h.memo, { ph: 'mis. 123/PHR…/2026-S5' })) +
         fld('No. Reservasi return / dokumen SAP', inp('h.reservasi', h.reservasi, { cls: 'mono' })) +
         fld('Nama AP / Entitas', inp('h.ap', h.ap)) +
         fld('Lokasi Warehouse', inp('h.wh', h.wh, { rr: 1 })) +
@@ -244,27 +276,25 @@
         fld('No. urut BA', inp('h.seq', h.seq, { type: 'number', num: 1, step: '1', cls: 'mono', rr: 1 })) +
         '</div><p class="small muted" style="margin:8px 0 0">' + noLine(d) + '</p></div>' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">B. Daftar Material <span class="small muted">(' + d.items.length + ' baris — tanpa batas; KIMAP terisi otomatis dari data SAP; bisa paste dari Excel)</span></h4>' +
-        '<div class="table-wrap"><table class="grid rcv-items"><thead><tr><th>No</th><th>Category</th><th>KIMAP</th><th>Deskripsi *</th><th>UOM</th><th>Eks PO</th><th>Kondisi</th><th>Qty check *</th><th>PO Unit Price (IDR)</th><th>Vendor</th><th>Keterangan</th><th></th></tr></thead><tbody>' +
+        '<div class="table-wrap"><table class="grid rcv-items"><thead><tr><th>No</th><th>Category</th><th>KIMAP</th><th>Deskripsi *</th><th>UOM</th><th>Kondisi</th><th>Qty check *</th><th>PO Unit Price (IDR)</th><th>Keterangan</th><th>Foto <span class="small muted">(maks. 1)</span></th><th></th></tr></thead><tbody>' +
         d.items.map(function (it, i) {
           var k = 'items.' + i + '.';
           return '<tr><td class="c muted">' + (i + 1) + '</td><td>' + inp(k + 'cat', it.cat, { cls: 'sm', list: 'kbCats' }) + '</td><td>' + inp(k + 'm', it.m, { cls: 'sm mono', ph: 'KIMAP' }) + '</td>' +
-            '<td>' + inp(k + 'd', it.d, { cls: 'sm', ph: 'Deskripsi material' }) + '</td><td>' + inp(k + 'u', it.u, { cls: 'sm', list: 'kbUom' }) + '</td><td>' + inp(k + 'po', it.po, { cls: 'sm mono' }) + '</td>' +
+            '<td>' + inp(k + 'd', it.d, { cls: 'sm', ph: 'Deskripsi material' }) + '</td><td>' + inp(k + 'u', it.u, { cls: 'sm', list: 'kbUom' }) + '</td>' +
             '<td>' + sel(k + 'kond', it.kond || 'Baik', KONDISI) + '</td><td>' + inp(k + 'q', it.q, { cls: 'sm num', type: 'number', num: 1, step: 'any' }) + '</td>' +
-            '<td>' + inp(k + 'price', it.price, { cls: 'sm num', type: 'number', num: 1, step: 'any', ph: '0' }) + '</td><td>' + inp(k + 'vendor', it.vendor, { cls: 'sm' }) + '</td>' +
-            '<td>' + inp(k + 'note', it.note, { cls: 'sm' }) + '</td><td><button class="icon-btn" data-ka="row-del" data-i="' + i + '" title="Hapus baris">✕</button></td></tr>';
+            '<td>' + inp(k + 'price', it.price, { cls: 'sm num', type: 'number', num: 1, step: 'any', ph: '0' }) + '</td>' +
+            '<td>' + inp(k + 'note', it.note, { cls: 'sm' }) + '</td><td>' + fotoCell(it, i) + '</td><td><button class="icon-btn" data-ka="row-del" data-i="' + i + '" title="Hapus baris">✕</button></td></tr>';
         }).join('') + '</tbody></table></div><datalist id="kbCats">' + cats.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>' +
         '<div class="toolbar" style="margin-top:8px"><button class="btn sm" data-ka="row-add">+ Tambah baris</button><button class="btn sm" data-ka="row-add" data-n="5">+ 5 baris</button>' +
-        '<span class="small muted">Tip: salin kolom dari Excel (Category, KIMAP, Deskripsi, UOM, Eks PO, Kondisi, Qty, Harga, Vendor, Keterangan) lalu tempel di sel pertama.</span><span class="spacer"></span><b class="small" id="kbTot">' + t.n + ' item · PO Value Rp ' + idr(t.val) + '</b></div></div>' +
-        '<div class="card card-pad rcv-sec"><h4 class="section-title">C. Kelengkapan Dokumen &amp; Catatan</h4><div class="chips">' +
-        docs.map(function (x) { var on = (d.docs || []).indexOf(x) >= 0; return '<label class="chip-toggle' + (on ? ' on' : '') + '"><input type="checkbox" data-kdoc="' + esc(x) + '"' + (on ? ' checked' : '') + ' hidden>' + esc(x) + '</label>'; }).join('') + '</div>' +
-        (proj ? '<p class="small muted" style="margin:6px 0 0">* Mandatori untuk item yang disubmit pada proposal PIS (material belum dapat dipastikan zero value &amp; open to transfer to other User).</p>' : '') +
-        '<div class="rcv-grid" style="margin-top:10px">' + fld('Catatan tambahan (opsional)', '<textarea class="input" rows="2" data-k="h.catatan">' + esc(h.catatan || '') + '</textarea>', 'full') + '</div>' +
-        '<label class="rcv-telat" style="margin-top:8px"><input type="checkbox" data-k="h.foto"' + (h.foto ? ' checked' : '') + '> Foto per item / lot material terlampir (dilampirkan terpisah)</label></div>' +
-        '<div class="card card-pad rcv-sec"><h4 class="section-title">D. Penandatangan</h4>' +
-        '<div class="kb-sign-g"><b>' + (proj ? 'Tim Project' : 'Fungsi User') + '</b> <span class="small muted">(ketik manual, tanda tangan basah — min. 1, maks. 3)</span>' + people('user', d.sign.user, 3) + '</div>' +
-        '<div class="kb-sign-g"><b>Tim Warehouse Operation &amp; Material Management</b><div class="remind-card card-pad" style="margin:6px 0">Penandatangan pertama otomatis <b>Gerald atau Seto — siapa yang approve</b>; tanda tangannya tertempel saat approve.</div>' +
-        '<span class="small muted">Tambahan penandatangan Warehouse (opsional, tanda tangan basah)</span>' + people('wh', d.sign.wh, 2) + '</div>' +
-        '<div class="kb-sign-g"><b>Acknowledged by</b> <span class="small muted">(opsional — mis. Project Leader, Warehouse Asst. Manager Zona, SCM Manager Zona)</span>' + people('ack', d.sign.ack, 7) + '</div></div>';
+        '<span class="small muted">Tip: salin kolom dari Excel (Category, KIMAP, Deskripsi, UOM, Kondisi, Qty, Harga, Keterangan) lalu tempel di sel pertama.</span><span class="spacer"></span><b class="small" id="kbTot">' + t.n + ' item · PO Value Rp ' + idr(t.val) + '</b></div></div>' +
+        '<div class="card card-pad rcv-sec"><h4 class="section-title">C. Penandatangan</h4>' +
+        '<div class="kb-sign-g"><b>' + (proj ? 'Tim Project' : 'Fungsi User') + '</b> <span class="small muted">(ketik manual, tanda tangan basah — min. 1, maks. 3)</span>' + people('user', d.sign.user, 3) + '</div></div>';
+    }
+    // Foto material: maks. 1 foto per baris (KIMAP), dikompres di browser
+    function fotoCell(it, i) {
+      var src = it.fid && R.fotos[it.fid];
+      if (src) return '<div class="kb-foto"><img src="' + src + '" alt="Foto" data-ka="foto-view" data-fid="' + esc(it.fid) + '"><button class="icon-btn" data-ka="foto-del" data-i="' + i + '" title="Hapus foto">✕</button></div>';
+      return '<label class="btn sm kb-foto-add">📷 Foto<input type="file" accept="image/*" data-kfoto="' + i + '" hidden></label>' + (it.fid ? '<div class="small muted">memuat…</div>' : '');
     }
     function people(key, list, max) {
       list = list || [];
@@ -285,10 +315,9 @@
         fld('Jatuh tempo', inp('h.due', due, { type: 'date', rr: 1 }) + '<span class="small muted">' + (h.dueManual ? 'diisi manual · <a href="#" data-ka="due-auto">otomatis</a>' : 'otomatis dari tanggal BA + masa penitipan') + '</span>') +
         fld('Alasan penitipan', sel('h.alasan', h.alasan, ALASAN_DC, { rr: 1 })) +
         (h.alasan === 'Lainnya' ? fld('Alasan lainnya', inp('h.alasanLain', h.alasanLain)) : '') +
-        fld('No. Memo Permohonan Penitipan (User)', inp('h.memoUser', h.memoUser, { ph: 'mis. 2088/PHR72320/2025-S5' })) +
-        fld('Tanggal memo', inp('h.memoTgl', h.memoTgl, { type: 'date' })) +
         fld('Lampiran memo User (PDF, opsional, maks. 3 MB)', '<input type="file" class="input" accept="application/pdf,.pdf" id="kbMemoFile">' +
           (memoF ? '<span class="small">📎 ' + esc(memoF.name) + ' · ' + Math.round((memoF.size || 0) / 1024) + ' KB' + (R.memo.dc ? ' <a href="#" data-ka="memo-clear">hapus</a>' : ' (tersimpan)') + '</span>' : '<span class="small muted">Ikut dilampirkan di PDF sebagai Lampiran 2</span>')) +
+        (memoF ? fld('No. Memo Permohonan Penitipan *', inp('h.memoUser', h.memoUser, { ph: 'mis. 2088/PHR72320/2025-S5' })) + fld('Tanggal memo *', inp('h.memoTgl', h.memoTgl, { type: 'date' })) : '') +
         fld('No. urut BA', inp('h.seq', h.seq, { type: 'number', num: 1, step: '1', cls: 'mono', rr: 1 })) +
         '</div><p class="small muted" style="margin:8px 0 0">' + noLine(d) + ' · Maks. penitipan 3 bulan, perpanjangan maks. 1 bulan (memo perpanjangan User).</p></div>' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">B. Para Pihak</h4><div class="rcv-grid">' +
@@ -296,7 +325,7 @@
         fld('Jabatan *', inp('h.p1jab', h.p1jab, { ph: 'mis. Pjs. Ast Manager Well Service Field Rantau' })) +
         fld('Fungsi', inp('h.p1fungsi', h.p1fungsi, { ph: 'mis. Well Service' })) +
         fld('PIHAK KEDUA (SCM Receiving)', '<div class="rcv-auto">' + (rp ? esc(rp.name) + ' — ' + esc(rp.jab) : '<span class="txt-bad">Profil Receiving belum diatur di Pengaturan</span>') + ' <span class="small muted">(otomatis)</span></div>', 'wide') +
-        '</div><div class="remind-card card-pad" style="margin-top:10px">Approval: <b>Seto Agustian</b> (Owner Gerald juga bisa approve). Tanda tangan yang tertempel di Pihak Kedua tetap <b>Seto Agustian</b> (fungsi Receiving). Memo VP SCM ' + MEMO_NO + ' otomatis dilampirkan.</div></div>' +
+        '</div></div>' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">C. Material yang Dititipkan <span class="small muted">(' + d.items.length + ' baris)</span></h4>' +
         '<div class="table-wrap"><table class="grid rcv-items"><thead><tr><th>No</th><th>Deskripsi *</th><th>Qty *</th><th>UOM *</th><th>Keterangan (No. PO / SPK, item)</th><th></th></tr></thead><tbody>' +
         d.items.map(function (it, i) {
@@ -316,8 +345,9 @@
         if (!t.n) miss.push('minimal 1 material');
         if (t.rows.some(function (x) { return !x.d || !has(x.q) || !x.u; })) miss.push('Deskripsi, Qty & UOM tiap material');
         if (!recvUid()) miss.push('profil Receiving (Seto) di Pengaturan');
+        if (R.memo.dc || (R.editId && (find(R.editId) || {}).memoFile)) { if (!h.memoUser) miss.push('No. Memo Permohonan'); if (!h.memoTgl) miss.push('Tanggal memo'); }
       } else {
-        if (!h.fungsi) miss.push('Fungsi User');
+        if (!h.fungsi) miss.push('Fungsi User (bagian A)');
         if (h.jenis === 'Ex Project') { if (!h.project) miss.push('Nama Project'); if (!h.afe) miss.push('No. AFE'); }
         if (!t.n) miss.push('minimal 1 material');
         if (t.rows.some(function (x) { return !x.d || !has(x.q); })) miss.push('Deskripsi & Qty tiap material');
@@ -328,7 +358,8 @@
     function cleanBody(d) {
       var b = clone(d);
       b.items = b.items.filter(function (x) { return x.d || x.m; });
-      if (b.kind === 'ret') ['user', 'wh', 'ack'].forEach(function (g) { b.sign[g] = (b.sign[g] || []).filter(function (p) { return p.name || p.jab; }); });
+      if (b.kind === 'ret') { b.sign.user = (b.sign.user || []).filter(function (p) { return p.name || p.jab; }); b.sign.wh = []; b.sign.ack = []; }
+      if (b.kind === 'dc' && !R.memo.dc && !(R.editId && (find(R.editId) || {}).memoFile)) { b.h.memoUser = ''; b.h.memoTgl = ''; }
       if (b.kind === 'dc') { b.h.bulan = +b.h.bulan || 3; if (!b.h.dueManual) b.h.due = addMonths(b.h.tgl, b.h.bulan); }
       return b;
     }
@@ -341,6 +372,8 @@
       loading(editId ? 'Menyimpan perubahan…' : 'Mengajukan ' + KIND[kind] + '…');
       try {
         if (memo) body.memoFile = { name: memo.name, size: memo.size, path: 'data/kembali/' + id + '-memo.js' };
+        var fotos = itemFotos(body.items), nF = Object.keys(fotos).length;
+        body.fotoFile = nF ? { path: 'data/kembali/' + id + '-foto.js', n: nF } : null;
         await save(function (D) {
           var seqs = D.seq || (D.seq = { ret: 1, dc: 1 });
           var used = function (n) { var no = docNoFor(kind, n, body.h); return D.list.some(function (x) { return x.id !== id && x.kind === kind && x.no && x.no.no === no; }); };
@@ -367,6 +400,7 @@
           } else D.list.push(Object.assign({ id: id, status: ST.pending, createdBy: me(), createdById: S.user.id, createdAt: at }, body));
           return D;
         }, (kind === 'dc' ? 'Penitipan DC' : 'Pengembalian material') + ': ' + (editId ? 'ubah ' : 'pengajuan ') + (kind === 'dc' ? body.h.p1name : body.h.jenis + ' ' + body.h.fungsi) + ' (' + me() + ')');
+        if (nF && !lost) await ctx.pass().atomic(body.fotoFile.path, 'MW_KBF', 'Foto material — ' + id, function () { return fotos; }, 'Pengembalian/Penitipan: foto material ' + body.no.no + ' (' + me() + ')');
         if (memo && !lost) await ctx.pass().atomic(body.memoFile.path, 'MW_KBF', 'Lampiran memo User — ' + id, function () { return memo; }, 'Penitipan DC: lampiran memo ' + body.no.no + ' (' + me() + ')');
         if (lost) toast('Data sudah dihapus orang lain — perubahan tidak tersimpan', true);
         else toast(editId ? (reapp ? 'Perubahan disimpan — menunggu approval ulang' : 'Perubahan disimpan') : 'Diajukan — menunggu approval ' + (kind === 'dc' ? 'Seto Agustian' : 'Gerald / Seto'));
@@ -545,6 +579,7 @@
       if (!d.items.length) d.items = newDraft(r.kind).items;
       R.kind = r.kind; R.drafts[r.kind] = d; R.editId = id; delete R.memo[r.kind]; storeDraft();
       location.hash = '#/kembali';
+      if (r.fotoFile && r.fotoFile.path) ctx.pass().readJSON(r.fotoFile.path).then(function (m) { Object.assign(R.fotos, m || {}); storeFotos(); if (ctx.route() === 'kembali') rerender(); }, function () { toast('Foto material gagal dimuat', true); });
     }
 
     // ================= Export =================
@@ -660,12 +695,17 @@
         rows.forEach(function (row) {
           var cells = row.map(function (v) { return v != null && typeof v === 'object' ? v : { t: v }; });
           var ls = cells.map(function (cl, i) { K.font(sz, cl.b ? 'bold' : 'normal'); return doc.splitTextToSize(String(cl.t == null ? '' : cl.t), ws[i] - 5); });
-          var rh = Math.max(o.rowH || 15, Math.max.apply(null, ls.map(function (l) { return l.length; })) * sz * 1.2 + 6);
+          var rh = Math.max(o.rowH || 15, Math.max.apply(null, ls.map(function (l) { return l.length; })) * sz * 1.2 + 6, Math.max.apply(null, cells.map(function (cl) { return cl.minH || 0; })));
           var pg = K.page; K.need(rh); if (pg !== K.page) head();
           cells.forEach(function (cl, i) {
             if (cl.span) return;
             var w = ws[i], j = i; while (cells[j + 1] && cells[j + 1].span) w += ws[++j];
             doc.rect(xs[i], K.y, w, rh);
+            if (cl.img) {
+              var ip = doc.getImageProperties(cl.img), kk = Math.min((w - 4) / ip.width, (rh - 4) / ip.height);
+              doc.addImage(cl.img, 'JPEG', xs[i] + w / 2 - ip.width * kk / 2, K.y + rh / 2 - ip.height * kk / 2, ip.width * kk, ip.height * kk);
+              return;
+            }
             K.font(sz, cl.b ? 'bold' : 'normal');
             var a = cl.a || cols[i].a || 'l', lines = w !== ws[i] ? doc.splitTextToSize(String(cl.t || ''), w - 5) : ls[i];
             var y0 = K.y + rh / 2 - (lines.length - 1) * sz * 0.6 + sz * 0.35;
@@ -712,6 +752,7 @@
         'Integrasi ke dalam sistem SAP dilakukan dengan **' + h.integ + '**' + (drill ? '; material kondisi baik return ke warehouse, material repairable diperbaiki/rekondisi dengan anggaran Fungsi User, dan material yang tidak dapat diperbaiki tidak diintegrasikan (proses scrap).' : ' sesuai status cost object material (open/closed).'),
         'Pengelolaan material selanjutnya diserahkan ke SCM sesuai aturan yang berlaku, dan proses penerimaan material mengacu ke TKO B7-038/PHE52000/2022-S9 Rev.0 dan/atau perubahannya.'];
     }
+    function fotoCount(r) { var F = r._fotos || {}; return totals(r).rows.filter(function (x) { return x.fid && F[x.fid]; }).length; }
     function groupItems(r) {
       var g = {}, order = [];
       totals(r).rows.forEach(function (x) { var c = x.cat || 'Material'; if (!g[c]) { g[c] = []; order.push(c); } g[c].push(x); });
@@ -742,26 +783,16 @@
         if (g.items.length > 8) K.rich('… dan ' + (g.items.length - 8) + ' item lainnya (lihat Daftar Material terlampir)', { indent: 36, justify: false, after: 0 });
         K.y += 3;
       });
-      K.rich('Daftar Material terlampir' + (h.foto ? '; foto-foto per item / lot material terlampir.' : '.'), { indent: 18, label: (n + 1) + '.', after: 8 });
+      K.rich('Daftar Material terlampir' + (fotoCount(r) ? ' beserta foto material.' : '.'), { indent: 18, label: (n + 1) + '.', after: 8 });
       K.rich('**Point of Agreement:**', { after: 2 });
       var pts = retAgreement(r);
       pts.forEach(function (p, i) { K.rich(p, { indent: 18, label: (i + 1) + '.', after: 2 }); });
-      // kelengkapan dokumen
-      var docs = DOCREQ[h.jenis] || [];
-      K.rich('Kelengkapan dokumen yang harus disertakan adalah:', { indent: 18, label: (pts.length + 1) + '.', after: 2 });
-      docs.forEach(function (x) {
-        K.need(13); K.check(K.L + 22, K.y + 1.5, (r.docs || []).indexOf(x) >= 0);
-        K.rich(x, { indent: 36, justify: false, after: 0, sz: 9.5 });
-      });
-      if (h.jenis === 'Ex Project') { K.y += 2; K.rich('*) Mandatori untuk item yang diajukan pada proposal PIS, pada saat serah terima material di warehouse material tersebut belum dapat dipastikan zero value dan open to transfer to other User.', { indent: 18, sz: 8.5, after: 2 }); }
-      if (h.catatan) { K.y += 3; K.rich('Catatan: ' + h.catatan, { after: 2 }); }
       K.y += 6;
       K.rich('Demikian berita acara serah terima material ' + (h.jenis === 'Ex Project' ? 'excess **' + (h.project || '…') + '** (AFE **' + (h.afe || '…') + '**)' : '**' + h.jenis + '**') + ' ini dibuat dengan sebenarnya sebagai dokumen pendukung untuk proses serah terima pengelolaan material ke Logistic' + (h.jenis === 'Ex Project' ? ' sebagai material sisa proyek.' : '.'), { after: 14 });
       // tanda tangan: kiri Tim Project / Fungsi User, kanan Tim Warehouse
       var left = (r.sign && r.sign.user) || [], wh = [];
       var ap = r.status === ST.ok ? profile(r.signerUid || r.approvedById) : null;
       wh.push(ap ? { name: ap.name, jab: ap.jab, img: (r.signed || {})[ap.uid] ? ap.img : null } : { name: '', jab: 'Gerald / Seto (yang approve)' });
-      ((r.sign && r.sign.wh) || []).forEach(function (p) { wh.push(p); });
       var colW = K.CW / 2, rowsN = Math.max(left.length, wh.length), sigH = 52;
       K.need(40 + sigH + 50);
       K.font(10, 'bold');
@@ -774,28 +805,38 @@
         var y = K.y, h1 = left[i] ? K.person(K.L, colW, y, left[i], sigH) : 0, h2 = wh[i] ? K.person(K.L + colW, colW, y, wh[i], sigH) : 0;
         K.y = y + Math.max(h1, h2) + 6;
       }
-      var ack = (r.sign && r.sign.ack) || [];
-      if (ack.length) {
-        K.need(sigH + 70); K.y += 6;
-        K.center('Acknowledged by,', 10, 'bold', { after: 4 });
-        for (var a = 0; a < ack.length; a += 3) {
-          K.need(sigH + 50);
-          var part = ack.slice(a, a + 3), w = K.CW / 3, x0 = K.L + (3 - part.length) * w / 2, y2 = K.y, mh = 0;
-          part.forEach(function (p, j) { mh = Math.max(mh, K.person(x0 + j * w, w, y2, p, sigH - 8)); });
-          K.y = y2 + mh + 6;
-        }
-      }
       // Daftar material (landscape)
       K.newPage('landscape'); K.y = 70;
       K.center('DAFTAR MATERIAL ' + (h.jenis === 'Ex Project' ? 'SISA PROJECT' : 'PENGEMBALIAN ' + h.jenis.toUpperCase()), 11, 'bold', { after: 0 });
       K.center('SERAH TERIMA MATERIAL ' + no, 10, 'bold', { after: 8 });
+      var proj = h.jenis === 'Ex Project', F = r._fotos || {}, anyF = fotoCount(r) > 0;
+      var cols = [{ t: 'NO', w: 3, a: 'c' }, { t: 'CATEGORY', w: 9 }, { t: 'KIMAP', w: 8, a: 'c' }, { t: 'DESKRIPSI', w: 24 }, { t: 'UOM', w: 4, a: 'c' }, { t: 'KONDISI', w: 6, a: 'c' }, { t: 'QTY CHECK', w: 5, a: 'c' }]
+        .concat(proj ? [{ t: 'AFE NO', w: 6, a: 'c' }, { t: 'PROJECT NAME', w: 8 }] : [])
+        .concat([{ t: 'PO UNIT PRICE', w: 8, a: 'r' }, { t: 'PO VALUE', w: 9, a: 'r' }, { t: 'KET.', w: 9 }]).concat(anyF ? [{ t: 'GAMBAR', w: 10, a: 'c' }] : []);
       var rows = t.rows.map(function (x, i) {
-        return [i + 1, x.cat || '', x.m || '', x.d, x.u || '', x.po || '', x.kond || '', qty(x.q), h.afe || '', h.project || '', has(x.price) ? idr(x.price) : '', has(x.price) ? idr(num(x.q) * num(x.price)) : '', x.vendor || '', x.note || ''];
+        var row = [i + 1, x.cat || '', x.m || '', x.d, x.u || '', x.kond || '', qty(x.q)].concat(proj ? [h.afe || '', h.project || ''] : [])
+          .concat([has(x.price) ? idr(x.price) : '', has(x.price) ? idr(num(x.q) * num(x.price)) : '', x.note || '']);
+        if (anyF) row.push(x.fid && F[x.fid] ? { img: F[x.fid], minH: 54 } : '');
+        return row;
       });
-      rows.push([{ t: 'TOTAL', a: 'r', b: true }].concat(Array(10).fill({ span: 1 })).concat([{ t: idr(t.val), a: 'r', b: true }, '', '']));
-      K.table([{ t: 'NO', w: 3, a: 'c' }, { t: 'CATEGORY', w: 9 }, { t: 'KIMAP', w: 8, a: 'c' }, { t: 'DESKRIPSI', w: 20 }, { t: 'UOM', w: 4, a: 'c' }, { t: 'EKS PO', w: 8, a: 'c' }, { t: 'KONDISI', w: 6, a: 'c' },
-        { t: 'QTY CHECK', w: 5, a: 'c' }, { t: 'AFE NO', w: 6, a: 'c' }, { t: 'PROJECT NAME', w: 8 }, { t: 'PO UNIT PRICE', w: 7, a: 'r' }, { t: 'PO VALUE', w: 8, a: 'r' }, { t: 'VENDOR NAME', w: 9 }, { t: 'KET.', w: 7 }], rows, { sz: 7.5, hsz: 7.5, fill: true });
+      var pre = proj ? 9 : 7, tot = [{ t: 'TOTAL', a: 'r', b: true }];
+      for (var sp = 1; sp < pre + 1; sp++) tot.push({ span: 1 });
+      tot.push({ t: idr(t.val), a: 'r', b: true }, ''); if (anyF) tot.push('');
+      rows.push(tot);
+      K.table(cols, rows, { sz: 7.5, hsz: 7.5, fill: true });
       K.font(7.5, 'italic'); doc.text('Lampiran BA ' + no + ' — mengacu ' + TKO_RET + ' Lampiran 4. GR Slip mengikuti dokumen SAP.', K.L, K.y + 4);
+      // halaman foto material (3 x 2 per halaman)
+      var withF = t.rows.map(function (x, i) { return { x: x, i: i }; }).filter(function (o) { return o.x.fid && F[o.x.fid]; });
+      for (var fi = 0; fi < withF.length; fi++) {
+        var pos = fi % 6;
+        if (!pos) { K.newPage('landscape'); K.y = 70; K.center('FOTO MATERIAL — ' + no, 11, 'bold', { after: 6 }); }
+        var gw = K.CW / 3, gh = 215, gx = K.L + (pos % 3) * gw, gy = K.y + Math.floor(pos / 3) * (gh + 8), o = withF[fi];
+        doc.setLineWidth(0.5); doc.rect(gx + 4, gy, gw - 8, gh);
+        var ip = doc.getImageProperties(F[o.x.fid]), kk = Math.min((gw - 20) / ip.width, (gh - 40) / ip.height), iw = ip.width * kk, ih = ip.height * kk;
+        doc.addImage(F[o.x.fid], 'JPEG', gx + gw / 2 - iw / 2, gy + 6 + (gh - 40 - ih) / 2, iw, ih);
+        K.font(8, 'bold'); doc.text((o.i + 1) + '. ' + (o.x.m || '') , gx + 10, gy + gh - 22);
+        K.font(7.5, 'normal'); doc.text(doc.splitTextToSize((o.x.d || '') + ' — ' + qty(o.x.q) + ' ' + (o.x.u || '') + ' (' + (o.x.kond || '') + ')', gw - 22)[0], gx + 10, gy + gh - 10);
+      }
     }
 
     // ---------- PDF: BA Penitipan Material Direct Charge ----------
@@ -832,8 +873,7 @@
         'Penitipan material memiliki durasi maksimum penitipan material Direct Charge di warehouse selama **' + (h.bulan || 3) + ' Bulan jatuh pada tanggal ' + longDate(due) + '**, dan apabila dibutuhkan perpanjangan maka diperbolehkan selama **1 Bulan setelahnya**.'];
       if (r.ext) pts.push('Perpanjangan penitipan selama 1 (satu) bulan s/d **' + longDate(r.ext.until) + '** berdasarkan Memo Perpanjangan No. ' + r.ext.memo + '.');
       pts.forEach(function (p, i) { K.rich(p, { indent: 18, label: (i + 1) + '.', after: 2 }); });
-      K.y += 4;
-      K.rich('Demikian Berita Acara ini dibuat dalam 2 (dua) rangkap untuk dipergunakan sebagaimana mestinya.', { after: 16 });
+      K.y += 12;
       // kotak tanda tangan 2 kolom
       var colW = K.CW / 2, top, hh = 34, sh = 78, nh = 20;
       K.need(hh + sh + nh + 4); top = K.y;
@@ -853,6 +893,11 @@
     async function buildPdf(r) {
       var JsPDF = await ctx.pass().loadJsPDF(), lg = await dataUrl('assets/terima/logo-phe.png');
       var doc = new JsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' }), K = kit(doc, lg, draftMark(r));
+      if (r.kind === 'ret') {
+        var F = r.id === 'draft' ? itemFotos(r.items) : {};
+        if (r.id !== 'draft' && r.fotoFile && r.fotoFile.path) { try { F = (await ctx.pass().readJSON(r.fotoFile.path)) || {}; } catch (e) { toast('Foto material gagal dimuat: ' + e.message, true); } }
+        r = Object.assign({}, r, { _fotos: F });
+      }
       if (r.kind === 'dc') pdfDc(K, r); else pdfRet(K, r);
       return doc;
     }
@@ -920,18 +965,18 @@
       try {
         var ExcelJS = await ctx.loadExcelJS(), wb = new ExcelJS.Workbook(), t = totals(r), no = (r.no && r.no.no) || 'DRAFT';
         var ws = wb.addWorksheet('Daftar Material', { pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }, views: [{ state: 'frozen', ySplit: 4 }] });
-        var cols = [['NO', 5], ['CATEGORY', 18], ['KIMAP', 13], ['DESKRIPSI', 42], ['UOM', 7], ['EKS PO', 14], ['KONDISI', 12], ['QTY CHECK', 10, '#,##0.###'], ['AFE NO', 12], ['PROJECT NAME', 20], ['PO UNIT PRICE', 15, NUMF], ['PO VALUE', 16, NUMF], ['VENDOR NAME', 24], ['KETERANGAN', 20]];
+        var cols = [['NO', 5], ['CATEGORY', 18], ['KIMAP', 13], ['DESKRIPSI', 42], ['UOM', 7], ['KONDISI', 12], ['QTY CHECK', 10, '#,##0.###'], ['AFE NO', 12], ['PROJECT NAME', 20], ['PO UNIT PRICE', 15, NUMF], ['PO VALUE', 16, NUMF], ['KETERANGAN', 24]];
         ws.columns = cols.map(function (c) { return { width: c[1] }; });
         ws.mergeCells(1, 1, 1, cols.length); ws.mergeCells(2, 1, 2, cols.length);
         ws.getCell(1, 1).value = 'DAFTAR MATERIAL ' + (r.h.jenis === 'Ex Project' ? 'SISA PROJECT' : 'PENGEMBALIAN ' + r.h.jenis.toUpperCase());
         ws.getCell(2, 1).value = 'SERAH TERIMA MATERIAL ' + no + (r.status !== ST.ok ? ' (DRAFT – ' + (r.status || 'belum diajukan').toUpperCase() + ')' : '');
         [1, 2].forEach(function (i) { ws.getCell(i, 1).font = { name: 'Arial', size: 12, bold: true }; ws.getCell(i, 1).alignment = { horizontal: 'center' }; });
         sheetTable(ws, 4, cols, t.rows.map(function (x, i) {
-          return [i + 1, x.cat || '', x.m || '', x.d, x.u || '', x.po || '', x.kond || '', num(x.q), r.h.afe || '', r.h.project || '', has(x.price) ? num(x.price) : '', has(x.price) ? num(x.q) * num(x.price) : '', x.vendor || '', x.note || ''];
+          return [i + 1, x.cat || '', x.m || '', x.d, x.u || '', x.kond || '', num(x.q), r.h.afe || '', r.h.project || '', has(x.price) ? num(x.price) : '', has(x.price) ? num(x.q) * num(x.price) : '', x.note || ''];
         }));
         var tr = ws.getRow(5 + t.rows.length);
-        tr.getCell(11).value = 'TOTAL'; tr.getCell(11).font = { name: 'Arial', size: 10, bold: true };
-        tr.getCell(12).value = { formula: 'SUM(L5:L' + (4 + t.rows.length) + ')', result: t.val }; tr.getCell(12).numFmt = NUMF; tr.getCell(12).font = { name: 'Arial', size: 10, bold: true }; tr.getCell(12).border = BORDER;
+        tr.getCell(10).value = 'TOTAL'; tr.getCell(10).font = { name: 'Arial', size: 10, bold: true };
+        tr.getCell(11).value = { formula: 'SUM(K5:K' + (4 + t.rows.length) + ')', result: t.val }; tr.getCell(11).numFmt = NUMF; tr.getCell(11).font = { name: 'Arial', size: 10, bold: true }; tr.getCell(11).border = BORDER;
         var buf = await wb.xlsx.writeBuffer();
         saveBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileBase(r) + '_Daftar_Material.xlsx');
       } catch (e) { toast('Gagal membuat Excel: ' + e.message, true); }
@@ -979,6 +1024,15 @@
         if (t.checked && i < 0) L.push(nm); if (!t.checked && i >= 0) L.splice(i, 1);
         t.parentNode.classList.toggle('on', t.checked); storeDraft(); return;
       }
+      if (t.hasAttribute('data-kfoto')) {
+        var fi = +t.getAttribute('data-kfoto'), file = t.files[0], row = d.items[fi]; if (!file || !row) return;
+        loading('Memproses foto…');
+        compress(file).then(function (url) {
+          row.fid = row.fid || ('f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5));
+          R.fotos[row.fid] = url; storeDraft(); storeFotos(); rerender();
+        }, function (e) { toast('Gagal memproses foto: ' + e.message, true); }).then(function () { loading(false); });
+        return;
+      }
       if (t.id === 'kbMemoFile') {
         var f = t.files[0]; if (!f) return;
         if (f.size > 3 * 1048576) { toast('Maksimal 3 MB', true); t.value = ''; return; }
@@ -1004,7 +1058,7 @@
       if (inForm(t)) onField(t, true);
       else if (t.id === 'kbMonth') { R.month = t.value; renderHistory(); }
     });
-    var PASTE = { ret: ['cat', 'm', 'd', 'u', 'po', 'kond', 'q', 'price', 'vendor', 'note'], dc: ['d', 'q', 'u', 'ket'] };
+    var PASTE = { ret: ['cat', 'm', 'd', 'u', 'kond', 'q', 'price', 'note'], dc: ['d', 'q', 'u', 'ket'] };
     document.addEventListener('paste', function (e) {
       var t = e.target, k = t.getAttribute && t.getAttribute('data-k'), m = k && /^items\.(\d+)\.(\w+)$/.exec(k);
       if (!m || !inForm(t)) return;
@@ -1043,6 +1097,8 @@
       else if (act === 'p-del' && d) { d.sign[a.getAttribute('data-g')].splice(+a.getAttribute('data-i'), 1); storeDraft(); rerender(); }
       else if (act === 'due-auto' && d) { d.h.dueManual = false; d.h.due = ''; storeDraft(); rerender(); }
       else if (act === 'memo-clear') { delete R.memo.dc; rerender(); }
+      else if (act === 'foto-del' && d) { var fr0 = d.items[+a.getAttribute('data-i')]; if (fr0) { delete R.fotos[fr0.fid]; delete fr0.fid; storeDraft(); storeFotos(); rerender(); } }
+      else if (act === 'foto-view') { var src = R.fotos[a.getAttribute('data-fid')]; if (src) { var w = window.open(''); if (w) w.document.write('<img src="' + src + '" style="max-width:100%">'); } }
       else if (act === 'reset') { if (confirm('Kosongkan seluruh isian form?')) { clearDraft(); rerender(); } }
       else if (act === 'edit-cancel') { clearDraft(); rerender(); }
       else if (act === 'submit') submit();
