@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261106c'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261109a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -318,8 +318,10 @@
     riwayat: ['Riwayat Order ke MIM', 'Semua Call Order yang sudah di-export, lengkap dengan tanggal & status'],
     tko: ['TKO & Referensi Warehouse', 'Tata Kerja, Pedoman & SOP — preview langsung atau download PDF'],
     pass: ['Pass Keluar Barang', 'Material keluar dari gudang — approval Owner / Co-Owner, lalu PDF Pass Keluar'],
-    terima: ['Penerimaan Barang', 'Barang masuk — BASTB, SPB, LHPB & Form Denda Keterlambatan (TKO B7-084 Lampiran 3–7) dalam satu form'],
-    'terima-riwayat': ['Riwayat Penerimaan Barang', 'Approval Owner / Co-Owner, tanda tangan otomatis, export PDF atau Excel'],
+    terima: ['Penerimaan Material', 'Material masuk — BASTB, SPB, LHPB & Form Denda Keterlambatan (TKO B7-084 Lampiran 3–7) dalam satu form'],
+    'terima-riwayat': ['Riwayat Penerimaan Material', 'Approval Owner / Co-Owner, tanda tangan otomatis, export PDF atau Excel'],
+    kembali: ['Pengembalian & Penitipan Material DC', 'BA Pengembalian Material (TKO B7-044) & BA Penitipan Material Direct Charge (Memo VP SCM 2230)'],
+    'kembali-riwayat': ['Riwayat Pengembalian & Penitipan DC', 'Approval Gerald / Seto, tanda tangan otomatis, masa penitipan Direct Charge & export PDF'],
     angber: ['Reservasi Armada', 'Angkutan Berat — Crane, Picker, Tronton, Trailer, Vacuum Truck & Forklift'],
     'angber-riwayat': ['Riwayat Armada', 'Riwayat pemakaian angkutan berat per bulan — filter, edit & export Excel']
   };
@@ -349,6 +351,8 @@
     else if (r.name === 'pass') passMod().render();
     else if (r.name === 'terima') recvMod().renderForm();
     else if (r.name === 'terima-riwayat') recvMod().renderHistory();
+    else if (r.name === 'kembali') retMod().renderForm();
+    else if (r.name === 'kembali-riwayat') retMod().renderHistory();
     else if (r.name === 'angber') fleet().renderForm();
     else if (r.name === 'angber-riwayat') fleet().renderHistory();
     updateCartUI();
@@ -1163,7 +1167,7 @@
   }
 
   // ================= Halaman: TKO & Referensi =================
-  var DOC_CATS = ['TKO', 'TKI', 'TKPA', 'Pedoman', 'SOP', 'Form', 'Lainnya'];
+  var DOC_CATS = ['TKO', 'TKI', 'TKPA', 'Pedoman', 'SOP', 'Memo', 'Form', 'Lainnya'];
   function fmtSize(b) { return b > 1048576 ? nf2.format(b / 1048576) + ' MB' : nf0.format(b / 1024) + ' KB'; }
   function renderDocs() {
     var q = (S.docQ || '').trim().toUpperCase(), cat = S.docCat || '';
@@ -1348,7 +1352,7 @@
         rows.slice(0, 400).map(function (x) {
           return '<tr><td class="nowrap">' + esc(fmtDateTime(x.at)) + '</td><td><b>' + esc(x.by) + '</b><div class="small">' + roleBadge(x.role) + '</div></td><td>' + esc(x.modul) + '</td><td>' + esc(x.label) + '</td></tr>';
         }).join('') + '</tbody></table></div>' : '<div class="muted">Belum ada data yang dihapus.</div>') +
-      '<div class="small muted">Dicatat otomatis setiap ada data yang dihapus (Register, Penerimaan Barang, Pass Keluar, Reservasi Armada, Riwayat Order, Dokumen TKO, Foto login, Pengguna). Menyimpan ' + AUDIT_MAX + ' catatan terakhir.</div>';
+      '<div class="small muted">Dicatat otomatis setiap ada data yang dihapus (Register, Penerimaan Material, Pengembalian &amp; Penitipan DC, Pass Keluar, Reservasi Armada, Riwayat Order, Dokumen TKO, Foto login, Pengguna). Menyimpan ' + AUDIT_MAX + ' catatan terakhir.</div>';
   }
   var Ana = null;
   function anaMod() {
@@ -1374,6 +1378,8 @@
     b.textContent = n; b.classList.toggle('hidden', !n);
     var t = $('#navTerima');
     if (t) { var m = Recv && canReceiving() ? Recv.pendingCount() : 0; t.textContent = m; t.classList.toggle('hidden', !m); }
+    var k = $('#navKembali');
+    if (k) { var n2 = Ret && canReceiving() ? Ret.pendingCount() : 0; k.textContent = n2; k.classList.toggle('hidden', !n2); }
   }
   // Penerimaan Barang (BASTB / SPB / LHPB / Denda) — memakai penyimpanan, PDF & tanda tangan modul Pass Keluar
   var Recv = null;
@@ -1384,6 +1390,17 @@
       loadExcelJS: Exporter.loadExcelJS, pass: passMod, canReceiving: canReceiving, audit: logDelete
     });
     return Recv;
+  }
+  // Pengembalian Material (TKO B7-044) & Penitipan Material Direct Charge (Memo VP SCM 2230)
+  var Ret = null;
+  function retMod() {
+    if (!Ret) Ret = window.ReturnModule({
+      S: S, esc: esc, toast: toast, loading: loading, route: function () { return currentRoute().name; },
+      isOwner: isOwner, isMainOwner: isMainOwner, closeDrawer: closeDrawer, refreshNav: refreshPassNav,
+      loadExcelJS: Exporter.loadExcelJS, pass: passMod, canReceiving: canReceiving, audit: logDelete,
+      docs: function () { return S.docs || []; }, docBlob: docBlob
+    });
+    return Ret;
   }
   var Fleet = null;
   function fleet() {
@@ -1701,7 +1718,7 @@
       '<input class="input sm" id="cpPw" type="password" placeholder="Password baru" autocomplete="new-password">' +
       '<input class="input sm" id="cpPw2" type="password" placeholder="Ulangi password baru" autocomplete="new-password">' +
       '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
-      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak, Call Order, ajukan Pass Keluar, Register &amp; Penerimaan Barang (tanpa edit/hapus), Reservasi Armada. <b>Receiving</b>: seperti Warehouse + edit &amp; hapus Register dan Penerimaan Barang. <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
+      '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak, Call Order, ajukan Pass Keluar, Register, Penerimaan Material &amp; Pengembalian/Penitipan DC (tanpa edit/hapus), Reservasi Armada. <b>Receiving</b>: seperti Warehouse + edit &amp; hapus Register, Penerimaan Material &amp; Pengembalian/Penitipan DC. <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub</h4><p class="muted small" style="margin-top:0">Agar upload &amp; perubahan langsung tampil untuk semua pengguna.</p>' +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
@@ -1728,7 +1745,7 @@
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Saran qty: cover berapa bulan?</div><input class="input" type="number" min="1" max="24" id="setCover" value="' + esc(st.coverMonths) + '"><div class="small muted" style="margin-top:4px">Saran = pemakaian/bulan (60% rata-rata 3 bln terakhir + 40% rata-rata 12 bln) × (cover + lead time) − stok ' + esc(homeName()) + '</div></label>' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Lead time RO (bulan)</div><input class="input" type="number" min="0" max="12" step="0.5" id="setLead" value="' + esc(st.leadMonths != null ? st.leadMonths : 1) + '"><div class="small muted" style="margin-top:4px">Perkiraan waktu dari Call RO sampai barang tiba di gudang</div></label>' +
       '<label><div class="small muted" style="font-weight:700;margin-bottom:4px">Tahun kolom "History"</div><select class="select" id="setHist"><option value="">Otomatis (tahun lalu)</option>' + years.map(function (y) { return '<option' + (+st.historyYear === y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select></label></div></div>' +
-      (canReceiving() ? '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">History hapus data</h4><p class="muted small" style="margin-top:0">Catatan siapa yang menghapus data apa &amp; kapan — Register, Penerimaan Barang, Pass Keluar, Reservasi Armada, Riwayat Order, Dokumen, Foto, Pengguna. Data yang diedit cukup ditandai "Last edit" di masing-masing tabel.</p><button class="btn sm primary" data-act="audit-open">Lihat history hapus</button></div>' : '') +
+      (canReceiving() ? '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">History hapus data</h4><p class="muted small" style="margin-top:0">Catatan siapa yang menghapus data apa &amp; kapan — Register, Penerimaan Material, Pengembalian &amp; Penitipan DC, Pass Keluar, Reservasi Armada, Riwayat Order, Dokumen, Foto, Pengguna. Data yang diedit cukup ditandai "Last edit" di masing-masing tabel.</p><button class="btn sm primary" data-act="audit-open">Lihat history hapus</button></div>' : '') +
       '<div class="toolbar" style="margin-top:16px"><button class="btn primary" data-act="save-settings">Simpan Pengaturan</button><button class="btn" data-act="reset-settings">Kembalikan default</button><span class="spacer"></span><button class="btn danger" data-act="wipe">' + ICON.trash + ' Kosongkan Call Order &amp; cache browser</button></div>';
     collapseSettings(view);
     if (isOwner()) passMod().fillSignCard();
@@ -2322,6 +2339,7 @@
     if (Fleet) Fleet.reset();
     if (Pass) Pass.reset();
     if (Recv) Recv.reset();
+    if (Ret) Ret.reset();
     refreshPassNav();
     closeDrawer();
     view.innerHTML = '';
@@ -2350,6 +2368,7 @@
     if (canFleet()) fleet().preload().then(function () { if (S.user) renderSide(); });
     if (isOwner()) passMod().load().then(refreshPassNav, function () {});
     if (canReceiving()) recvMod().load().then(refreshPassNav, function () {});
+    if (canReceiving()) retMod().load().then(refreshPassNav, function () {});
   }
 
   // ================= Event handlers =================

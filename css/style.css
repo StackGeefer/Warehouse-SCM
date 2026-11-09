@@ -784,3 +784,10 @@ body.ana-lock { overflow: hidden; }
 .ana-days { max-height: 280px; }
 .ana-days tr.has-trx td { background: rgba(37, 99, 235, .05); }
 .ana-days th { position: sticky; top: 0; z-index: 1; }
+
+/* Pengembalian & Penitipan DC */
+.kb-sign-g { border-top: 1px solid var(--line); padding: 10px 0; }
+.kb-sign-g > b { display: inline-block; margin-bottom: 4px; }
+.kb-people { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; align-items: flex-start; }
+.kb-person { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(200px, 1.4fr) auto; gap: 6px; width: 100%; max-width: 760px; }
+@media (max-width: 640px) { .kb-person { grid-template-columns: 1fr auto; } .kb-person .input:nth-child(2) { grid-column: 1; } }

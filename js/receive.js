@@ -624,7 +624,7 @@
         }).join('') + '<span class="small muted" style="margin-left:auto">Menampilkan <b>' + list.length + '</b> dari ' + all.length + ' penerimaan</span></div></div>' +
         (list.length ? '<div class="table-wrap"><table class="grid rcv-table"><thead><tr><th>No. BASTB / Tgl Terima</th><th>PO/RO · OA</th><th>Vendor</th><th>Material</th><th class="num">Nilai (IDR)</th><th>Penyerahan</th><th>Status</th><th></th></tr></thead><tbody>' +
           list.map(rowHtml).join('') + '</tbody></table></div>'
-          : '<div class="empty" style="padding:28px"><h3>Belum ada penerimaan</h3><p>Isi form di <a href="#/terima">Penerimaan Barang</a> lalu ajukan untuk approval.</p></div>') + '</div>';
+          : '<div class="empty" style="padding:28px"><h3>Belum ada penerimaan</h3><p>Isi form di <a href="#/terima">Penerimaan Material</a> lalu ajukan untuk approval.</p></div>') + '</div>';
     }
     function rowHtml(r) {
       var c = calc(r), first = c.rows[0] || {}, acts = [];
@@ -661,7 +661,7 @@
       var c = calc(r), seq = r.no && r.no.seq ? r.no.seq : (R.data.seq || FIRST_SEQ), nb = numbers(seq, r.h.tglBast || r.h.tglTerima);
       var mySlots = SLOTS.filter(function (s) { return s.k !== 'bastb' && ((r.sign || {})[s.k] || {}).uid === S.user.id; }).map(function (s) { return s.doc + ' ' + s.t; });
       var myBastb = ((r.sign || {}).bastb || {}).uid === S.user.id;
-      drawerOpen('<div class="drawer-head"><div style="flex:1"><div class="mono muted">Approval Penerimaan Barang</div><h2>' + esc(r.h.vendor) + '</h2></div><button class="icon-btn" data-act="close-drawer">✕</button></div>' +
+      drawerOpen('<div class="drawer-head"><div style="flex:1"><div class="mono muted">Approval Penerimaan Material</div><h2>' + esc(r.h.vendor) + '</h2></div><button class="icon-btn" data-act="close-drawer">✕</button></div>' +
         '<div class="drawer-body">' +
         '<div class="kv"><div><span>PO/RO</span><b>' + esc(r.h.po) + '</b></div><div><span>OA</span><b>' + esc(r.h.oa || '—') + '</b></div><div><span>Tgl terima</span><b>' + esc(dot(r.h.tglTerima)) + '</b></div><div><span>Delivery date</span><b>' + esc(dot(r.h.delivery)) + '</b></div>' +
         '<div><span>Penyerahan</span><b class="' + (c.late ? 'txt-bad' : '') + '">' + (c.late ? 'Terlambat ' + c.lateDays + ' hari' : 'Tepat waktu') + '</b></div><div><span>Denda</span><b>Rp ' + idr(c.totDenda) + '</b></div><div><span>Kesimpulan</span><b>' + esc(c.kesimpulan) + '</b></div><div><span>Diajukan</span><b>' + esc(r.createdBy) + '</b></div></div>' +

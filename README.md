@@ -145,7 +145,7 @@ vendor/               SheetJS, ExcelJS, PDF.js
 - Download Excel Register **per bulan / per tahun / seluruh tahun** dengan format asli (`assets/terima/register-template.xlsx`); Rekap BASTB & LHPB juga per bulan / tahun / seluruh tahun.
 - Data: `data/register/<tahun>.js` + `data/register/index.js` (terenkripsi). Data lama diimpor dari REGISTER_RECEIVING.xls (file Excel mentah tidak disimpan di repo).
 
-## Penerimaan Barang (barang masuk — TKO B7-084 Lampiran 3–7)
+## Penerimaan Material (barang masuk — TKO B7-084 Lampiran 3–7)
 
 - **Penerimaan Barang** (Section 1): satu form — default **BASTB + LHPB**; **SPB** otomatis bila ada item *Ditolak*; **Form Denda + Stamp** hanya bila bagian F **"Material terlambat"** dicentang (jumlah hari otomatis dari tanggal, bisa diisi manual).
   Nomor BASTB/LHPB (`0043/BASTB/10/2026`) terisi otomatis saat mengisi form & bisa diedit; nomor yang dihapus tidak dipakai ulang, nomor manual (mis. 0001) melanjutkan urutan berikutnya (0002). Akun Warehouse bisa mengisi, mengajukan, mengedit pengajuan, preview & download.
@@ -159,6 +159,14 @@ vendor/               SheetJS, ExcelJS, PDF.js
 - Export: pilih dokumen → **PDF** (A4, format Lampiran) atau **Excel** (template BASTB/LHPB/Denda + sheet SPB & Stamp).
 - Profil penandatangan (nama lengkap, No. ID, jabatan, fungsi, tanda tangan): **Pengaturan → Tanda tangan & profil penyetuju**.
 - Data: `data/terima.js` (terenkripsi). Aset: `assets/terima/` (logo PHE, stamp Lampiran 7, template Excel kosong).
+
+## Pengembalian Material & Penitipan Material DC
+
+Menu **Pengembalian & Penitipan DC** (form) dan **Riwayat Pengembalian & Penitipan DC**. Data: `data/kembali.js` (terenkripsi), lampiran memo User: `data/kembali/<id>-memo.js`.
+
+- **BA Pengembalian Material** — TKO B7-044/PHE52000/2022-S9 Rev.1 Lampiran 4 (Ex Operation / Ex Project / Ex Drilling): Berita Acara Serah Terima & Point of Agreement + Daftar Material (landscape). Nomor `BA-0001/KBO/2026-W101` (urut otomatis, bisa diedit). Diisi Warehouse/Receiving/Owner → approval **Gerald atau Seto** → tanda tangan yang approve tertempel otomatis di "Tim Warehouse Operation & Material Management". GR Slip tidak dibuat (dari SAP). Export PDF + Daftar Material (Excel).
+- **BA Penitipan Material Direct Charge** — Memo VP SCM No. 2230/PHR17000/2025-S9: Pihak Pertama = User (ketik manual), Pihak Kedua = SCM Receiving (Seto Agustian). Approval Seto (Owner Gerald juga bisa) — tanda tangan yang tertempel selalu Seto. PDF otomatis melampirkan Memo 2230 (Lampiran 1, diambil dari TKO & Referensi) dan memo permohonan User bila di-upload (Lampiran 2). Masa titip 3 bulan (jatuh tempo otomatis), perpanjangan 1 bulan, status Titip aktif / Segera jatuh tempo / Lewat jatuh tempo / Selesai diambil.
+- Edit/Hapus/Ajukan Revisi: Owner, Co-Owner & Receiving (edit oleh Receiving → approve ulang). Rekap Excel semua BA.
 
 ## Angkutan Berat (Heavy Transport)
 
