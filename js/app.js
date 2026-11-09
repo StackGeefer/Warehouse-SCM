@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261109b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261109c'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -335,6 +335,7 @@
       a.classList.toggle('active', rn === r.name);
       a.classList.toggle('hidden', !routeAllowed(rn));
     });
+    var act = $('#nav a.active'); if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     $$('#nav .nav-group').forEach(function (g) { g.classList.toggle('hidden', g.getAttribute('data-group') === 'fleet' ? !routeAllowed('angber') : !canWarehouse()); });
     var t = TITLES[r.name];
     $('#pageTitle').textContent = t[0];

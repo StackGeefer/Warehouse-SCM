@@ -61,7 +61,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: 22px 16px;
   position: sticky; top: 0; height: 100vh;
   display: flex; flex-direction: column; gap: 22px;
+  /* menu panjang / zoom besar: sidebar bisa di-scroll sendiri */
+  overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent;
 }
+.sidebar > * { flex: none; }
+.sidebar::-webkit-scrollbar { width: 8px; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .22); border-radius: 8px; }
+.sidebar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .38); }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
 .brand { display: flex; align-items: center; gap: 12px; padding: 0 6px; }
 .brand-mark {
   width: 44px; height: 44px; border-radius: 12px; flex: none; background: #fff; padding: 7px 6px;
@@ -502,7 +510,7 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 /* ---------- Responsive ---------- */
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; gap: 12px; }
+  .sidebar { position: static; height: auto; overflow: visible; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; gap: 12px; }
   .nav { flex-direction: row; flex-wrap: wrap; }
   .nav a span.lbl { display: none; }
   .side-data { display: none; }
