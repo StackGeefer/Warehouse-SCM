@@ -138,7 +138,7 @@
         return { kind: 'dc', h: { tgl: today(), field: 'Rantau', wh: 'Warehouse Field Rantau', gudang: 'Gudang Rantau', bulan: 3, alasan: ALASAN_DC[0], p1name: '', p1jab: '', p1fungsi: '', memoUser: '', memoTgl: '' },
           items: [{ d: '', q: '', u: '', ket: '' }] };
       }
-      return { kind: 'ret', h: { jenis: 'Ex Operation', tgl: today(), ap: 'PT Pertamina EP Field Rantau', wh: 'Warehouse Field Rantau', kbo: 'KBO', kode: 'W101', fungsi: '', project: '', afe: '', afeSt: '',
+      return { kind: 'ret', h: { jenis: 'Ex Operation', tgl: today(), ap: 'PT. Pertamina EP Field Rantau', wh: 'Warehouse Field Rantau', kbo: 'KBO', kode: 'W101', fungsi: '', project: '', afe: '', afeSt: '',
         statMat: 'Stock', integ: 'Goods Value', reservasi: '', inspeksi: 'Baik' },
         items: [{ cat: 'Material Operasi', kond: 'Baik' }], docs: [], sign: { user: [{ name: '', jab: '' }], wh: [], ack: [] } };
     }
@@ -732,6 +732,8 @@
     function draftMark(r) { return r.status === ST.ok ? '' : r.status === ST.pending || !r.status ? 'DRAFT - MENUNGGU APPROVAL' : 'DRAFT - ' + r.status.toUpperCase(); }
 
     // ---------- PDF: BA Pengembalian (TKO B7-044 Lampiran 4) ----------
+    // "PT Pertamina EP Field Rantau" → "PT. Pertamina EP Field Rantau"
+    function apName(h) { return String(h.ap || 'PT. Pertamina EP Field Rantau').replace(/^PT\.?\s+/i, 'PT. '); }
     function retTitle(h) {
       var jn = h.jenis.toUpperCase().replace('EX ', 'EX ');
       if (h.jenis === 'Ex Project') return 'SERAH TERIMA & POINT OF AGREEMENT MATERIAL EXCESS PROJECT (' + (h.project || '…') + ') (AFE ' + (h.afe || '…') + ')' + (h.statMat === 'Direct Charge' ? ' / DIRECT CHARGE' : h.statMat === 'Stock' ? ' / STOCK MATERIAL' : '');
@@ -765,10 +767,9 @@
       K.center('No. ' + no, 11, 'normal', { after: 8 });
       K.center('TENTANG', 13, 'normal', { after: 8 });
       K.center(retTitle(h), 12.5, 'bold', { after: 0 });
-      K.center('DI GUDANG PENYIMPANAN PT. PERTAMINA HULU ENERGI', 12.5, 'bold', { after: 0 });
-      K.center('(' + (h.ap || '…') + ', ' + (h.wh || '…') + ')', 12.5, 'bold', { after: 16 });
+      K.center('DI GUDANG ' + apName(h).toUpperCase(), 12.5, 'bold', { after: 16 });
       var hdr = 'Pada hari ini **' + hari(h.tgl) + '** tanggal **' + (utc(h.tgl) ? utc(h.tgl).getUTCDate() : '…') + '** bulan **' + (utc(h.tgl) ? BLN[utc(h.tgl).getUTCMonth()] : '…') + '** tahun **' + (utc(h.tgl) ? utc(h.tgl).getUTCFullYear() : '…') +
-        '** bertempat di gudang penyimpanan PT. Pertamina Hulu Energi **' + (h.ap || '…') + '** di **' + (h.wh || '…') + '** telah dilaksanakan serah terima ';
+        '** bertempat di **' + (h.wh || 'Warehouse Field Rantau') + '** telah dilaksanakan serah terima ';
       if (h.jenis === 'Ex Project') hdr += 'material excess **' + (h.project || '…') + '** AFE **' + (h.afe || '…') + '**.' + (h.afeSt ? ' Status untuk AFE **' + h.afe + '** tersebut **' + h.afeSt + '**.' : '');
       else hdr += 'pengembalian material **' + h.jenis + '** dari Fungsi User **' + (h.fungsi || '…') + '**' + (h.memo ? ' berdasarkan memo justifikasi No. **' + h.memo + '**' : '') + (h.reservasi ? ' (dokumen/reservasi SAP **' + h.reservasi + '**)' : '') + '.';
       K.rich(hdr, { after: 6 });
