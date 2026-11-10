@@ -24,7 +24,7 @@
 
   root.FleetModule = function (ctx) {
     var S = ctx.S, esc = ctx.esc, toast = ctx.toast, loading = ctx.loading, Vault = ctx.Vault, gh = ctx.gh;
-    var F = S.fleet = { master: null, index: null, months: {}, sel: null, filt: { jenis: '', status: '', program: '', unit: '', fungsi: '', driver: '', date: '', q: '' }, date: today() };
+    var F = S.fleet = { master: null, index: null, months: {}, sel: null, filt: { jenis: '', status: '', program: '', unit: '', fungsi: '', driver: '', date: '', q: '' }, date: today(), pick: {} };
 
     function $(s) { return document.querySelector(s); }
     function view() { return document.getElementById('view'); }
@@ -425,9 +425,10 @@
         kpi('Selesai', all.filter(function (r) { return r.status === 'Selesai'; }).length, '', 'Selesai') +
         kpi('Estimasi tonase', nf(ton) + ' t', 'reservasi aktif') + '</div>' +
         utilCard(act) +
-        '<div class="card"><div class="card-pad fleet-statbar" id="fStatBar">' + statBar() + '</div><div class="table-wrap"><table class="grid fleet-table"><thead><tr><th>No / Tanggal</th><th>Armada</th><th>Driver / Helper</th><th>Fungsi / User</th><th class="num">Tonase / Boom</th><th>Barang</th><th>Lokasi → Tujuan</th><th>Status</th><th></th></tr></thead><tbody>' +
-        (list.length ? list.map(rowHtml).join('') : '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px">Tidak ada data</td></tr>') +
+        '<div class="card"><div class="card-pad fleet-statbar" id="fStatBar">' + statBar() + '</div><div class="table-wrap"><table class="grid fleet-table"><thead><tr>' + (isAdmin() ? '<th class="fpick"><input type="checkbox" id="fPickAll" title="Pilih semua yang belum selesai"></th>' : '') + '<th>No / Tanggal</th><th>Armada</th><th>Driver / Helper</th><th>Fungsi / User</th><th class="num">Tonase / Boom</th><th>Barang</th><th>Lokasi → Tujuan</th><th>Status</th><th></th></tr></thead><tbody>' +
+        (list.length ? list.map(rowHtml).join('') : '<tr><td colspan="' + (isAdmin() ? 10 : 9) + '" class="muted" style="text-align:center;padding:24px">Tidak ada data</td></tr>') +
         '</tbody></table></div></div>';
+      refreshPick();
     }
     function kpi(k, v, s, st) {
       var click = st != null;
@@ -445,10 +446,29 @@
       var cnt = function (st) { return base.filter(function (r) { return !st || r.status === st; }).length; };
       var tabs = [['', 'Semua'], ['Terjadwal', 'Belum selesai'], ['Selesai', 'Selesai'], ['Dibatalkan', 'Dibatalkan']];
       var anyF = ['jenis', 'status', 'program', 'unit', 'fungsi', 'driver', 'date', 'q'].some(function (k) { return F.filt[k]; });
-      return '<div class="chips">' + tabs.map(function (t) {
+      var picked = pickedIds();
+      var bulk = isAdmin() && picked.length ? '<div class="fleet-bulk"><b>' + picked.length + ' reservasi dipilih</b><button class="btn sm primary" data-fa="bulk-done">Tandai Selesai (' + picked.length + ')</button><button class="btn sm" data-fa="bulk-clear">Batal pilih</button></div>' : '';
+      return bulk + '<div class="chips">' + tabs.map(function (t) {
         return '<button class="chip-toggle st-' + (t[0] || 'all').toLowerCase() + (F.filt.status === t[0] ? ' on' : '') + '" data-fa="fstatus" data-v="' + t[0] + '">' + esc(t[1]) + ' <span class="chip-n">' + cnt(t[0]) + '</span></button>';
       }).join('') + '<span class="small muted" style="margin-left:auto">Menampilkan <b>' + shown + '</b> dari ' + all.length + ' reservasi</span>' +
         (anyF ? '<a href="#" class="small" data-fa="freset">Reset filter</a>' : '') + '</div>';
+    }
+    // reservasi Terjadwal yang dicentang (hanya yang tampil di bulan ini)
+    function pickedIds() { return (F.months[F.sel] || []).filter(function (r) { return F.pick[r.id] && r.status === 'Terjadwal'; }).map(function (r) { return r.id; }); }
+    function refreshPick() {
+      var bar = document.getElementById('fStatBar'); if (bar) bar.innerHTML = statBar();
+      var vis = filtered().filter(function (r) { return r.status === 'Terjadwal'; }), all = document.getElementById('fPickAll');
+      if (all) { var n = vis.filter(function (r) { return F.pick[r.id]; }).length; all.checked = !!vis.length && n === vis.length; all.indeterminate = n > 0 && n < vis.length; }
+      Array.prototype.forEach.call(document.querySelectorAll('[data-fpick]'), function (c) { c.checked = !!F.pick[c.getAttribute('data-fpick')]; c.closest('tr').classList.toggle('picked', c.checked); });
+    }
+    async function bulkDone() {
+      var ids = pickedIds();
+      if (!ids.length) return;
+      if (!confirm('Tandai ' + ids.length + ' reservasi sebagai Selesai?')) return;
+      var set = {}, ms = {}, at = new Date().toISOString();
+      ids.forEach(function (i) { set[i] = 1; });
+      ms[F.sel] = function (list) { return list.map(function (x) { return set[x.id] && x.status === 'Terjadwal' ? Object.assign({}, x, { status: 'Selesai', updatedBy: me(), updatedAt: at }) : x; }); };
+      await doCommit({ months: ms }, 'Angkutan berat: ' + ids.length + ' reservasi Selesai (' + me() + ')', ids.length + ' reservasi ditandai Selesai', function () { F.pick = {}; });
     }
     function filtered(ignoreStatus) {
       var q = F.filt.q.trim().toLowerCase(), fl = F.filt;
@@ -468,7 +488,8 @@
       var adm = isAdmin(), acts = [];
       if (adm && r.status === 'Terjadwal') acts.push('<button class="btn sm" data-fa="status" data-v="Selesai" data-id="' + esc(r.id) + '">Selesai</button>');
       if (adm) acts.push('<button class="btn sm" data-fa="edit" data-id="' + esc(r.id) + '">Edit</button>');
-      return '<tr><td><b class="mono">' + esc(r.no) + '</b><div class="small">' + esc(fmtDate(r.date)) + '</div></td>' +
+      var pickTd = adm ? '<td class="fpick">' + (r.status === 'Terjadwal' ? '<input type="checkbox" data-fpick="' + esc(r.id) + '"' + (F.pick[r.id] ? ' checked' : '') + '>' : '') + '</td>' : '';
+      return '<tr' + (F.pick[r.id] ? ' class="picked"' : '') + '>' + pickTd + '<td><b class="mono">' + esc(r.no) + '</b><div class="small">' + esc(fmtDate(r.date)) + '</div></td>' +
         '<td><b>' + esc(r.unit) + '</b><div class="small muted">' + esc(r.jenis) + (r.nopol ? ' · ' + esc(r.nopol) : '') + '</div>' + (r.program ? '<span class="prog-tag' + (isRig(r.program) ? ' rig' : '') + '">' + esc(r.program) + '</span>' : '') + '</td>' +
         '<td>' + esc(r.driver) + '<div class="small muted">' + esc(r.helper || '—') + '</div></td>' +
         '<td><b>' + esc(r.fungsi) + '</b><div class="small muted">' + esc(r.user) + '</div></td>' +
@@ -701,6 +722,8 @@
     });
     document.addEventListener('change', function (e) {
       var t = e.target, f = t.form;
+      if (t.hasAttribute && t.hasAttribute('data-fpick')) { if (t.checked) F.pick[t.getAttribute('data-fpick')] = 1; else delete F.pick[t.getAttribute('data-fpick')]; refreshPick(); return; }
+      if (t.id === 'fPickAll') { filtered().forEach(function (r) { if (r.status !== 'Terjadwal') return; if (t.checked) F.pick[r.id] = 1; else delete F.pick[r.id]; }); refreshPick(); return; }
       if (t.hasAttribute && t.hasAttribute('data-other') && f) {
         var oi = f[t.getAttribute('data-other')];
         if (oi) { oi.classList.toggle('hidden', t.value !== OTHER); if (t.value === OTHER) oi.focus(); }
@@ -766,6 +789,8 @@
       else if (act === 'fstatus') { F.filt.status = F.filt.status === a.getAttribute('data-v') && a.classList.contains('kpi') ? '' : a.getAttribute('data-v'); renderHistory(); }
       else if (act === 'freset') { F.filt = { jenis: '', status: '', program: '', unit: '', fungsi: '', driver: '', date: '', q: '' }; renderHistory(); }
       else if (act === 'status') setStatus(id, a.getAttribute('data-v'));
+      else if (act === 'bulk-done') bulkDone();
+      else if (act === 'bulk-clear') { F.pick = {}; refreshPick(); }
       else if (act === 'edit') openEdit(id);
       else if (act === 'cancel') cancel(id, a.getAttribute('data-m'));
       else if (act === 'delete') del(id);
@@ -774,7 +799,7 @@
       else if (act === 'master-save') saveMaster();
     });
 
-    function reset() { F.master = null; F.index = null; F.months = {}; F.draft = null; F.sel = null; F.date = today(); }
+    function reset() { F.master = null; F.index = null; F.months = {}; F.draft = null; F.sel = null; F.date = today(); F.pick = {}; }
     return { reset: reset, renderForm: renderForm, renderHistory: renderHistory, masterCard: masterCard, stats: stats, preload: function () { return loadMonth(monthOf(today())).catch(function () {}); } };
   };
 })(this);

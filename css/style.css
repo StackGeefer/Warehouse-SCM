@@ -802,3 +802,8 @@ body.ana-lock { overflow: hidden; }
 .kb-foto { display: flex; align-items: center; gap: 4px; }
 .kb-foto img { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); cursor: zoom-in; }
 .kb-foto-add { white-space: nowrap; cursor: pointer; }
+/* Riwayat Armada: pilih banyak → Selesai sekaligus */
+.fleet-table .fpick { width: 34px; text-align: center; }
+.fleet-table .fpick input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--ok, #16a34a); }
+.fleet-table tr.picked td { background: rgba(22, 163, 74, .07); }
+.fleet-bulk { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 10px; border-radius: 10px; background: rgba(22, 163, 74, .1); border: 1px solid rgba(22, 163, 74, .35); }
