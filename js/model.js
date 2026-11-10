@@ -100,17 +100,20 @@
       } else if (p.type === 'me3n') {
         // File ME3N cukup ditarik Purchasing Group X07 & X02. PG lain (X10, X03) yang tidak ada di file baru
         // dipertahankan dari data sebelumnya; PG yang ada di file baru diganti seluruhnya.
+        // Kontrak dengan seri nomor (4 digit awal, mis. 4650/4600/4740) yang tidak ikut ditarik di file baru untuk PG tsb
+        // (filter Document Type berbeda) dan masih berlaku juga dipertahankan agar tidak hilang.
         var prev = ds.oa && ds.oa.rows ? ds.oa.rows : [];
-        var pgNew = {};
-        p.rows.forEach(function (x) { pgNew[x.pg || ''] = 1; });
-        var keep = prev.filter(function (x) { return !pgNew[x.pg || '']; });
-        if (prev.length) {
-          var oaNew = {}, today = todayStr(), lostOa = {};
-          p.rows.forEach(function (x) { oaNew[x.po] = 1; });
-          prev.forEach(function (x) { if (pgNew[x.pg || ''] && !oaNew[x.po] && (!x.ve || x.ve >= today)) lostOa[x.po] = 1; });
-          var nLost = Object.keys(lostOa).length;
-          if (nLost) notes.push('⚠ ' + nLost + ' kontrak OA (PG ' + Object.keys(pgNew).filter(Boolean).sort().join(', ') + ') yang masih berlaku di versi sebelumnya tidak ada di file ini (mis. ' + Object.keys(lostOa).slice(0, 5).join(', ') + '). Periksa filter Document Type.');
-        }
+        var pgNew = {}, oaNew = {}, serNew = {}, today = todayStr(), lostOa = {}, keptSer = {};
+        p.rows.forEach(function (x) { pgNew[x.pg || ''] = 1; oaNew[x.po] = 1; serNew[(x.pg || '') + '|' + String(x.po).slice(0, 4)] = 1; });
+        var keep = prev.filter(function (x) {
+          if (!pgNew[x.pg || '']) return true;
+          if (oaNew[x.po] || (x.ve && x.ve < today)) return false;
+          if (!serNew[(x.pg || '') + '|' + String(x.po).slice(0, 4)]) { keptSer[x.po] = 1; return true; }
+          lostOa[x.po] = 1; return false;
+        });
+        var nLost = Object.keys(lostOa).length, nSer = Object.keys(keptSer).length;
+        if (nLost) notes.push('⚠ ' + nLost + ' kontrak OA (PG ' + Object.keys(pgNew).filter(Boolean).sort().join(', ') + ') yang masih berlaku di versi sebelumnya tidak ada di file ini (mis. ' + Object.keys(lostOa).slice(0, 5).join(', ') + '). Periksa filter Document Type.');
+        if (nSer) notes.push(nSer + ' kontrak seri lain yang masih berlaku (mis. ' + Object.keys(keptSer).slice(0, 4).join(', ') + ') tidak ada di file ini — dipertahankan dari data sebelumnya.');
         var keptPg = {};
         keep.forEach(function (x) { keptPg[x.pg || '-'] = 1; });
         ds.oa = { date: parsed.date, file: parsed.name, rows: p.rows.concat(keep), kept: keep.length ? { pg: Object.keys(keptPg).sort(), rows: keep.length, from: ds.oa.date } : null };
@@ -220,6 +223,9 @@
           oaMap.set(l.po, h);
         }
         if (l.ve && (!h.ve || l.ve > h.ve)) { h.ve = l.ve; h.active = h.ve >= today; }
+        // Total open value & Target value adalah nilai header kontrak; di sebagian export item pertama tercatat 0 → pakai yang terbesar
+        if ((l.totalOpen || 0) > (h.totalOpen || 0)) h.totalOpen = l.totalOpen;
+        if ((l.tgtHdr || 0) > (h.tgtHdr || 0)) h.tgtHdr = l.tgtHdr;
         h.lines.push(line);
       });
     }

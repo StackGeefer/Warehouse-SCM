@@ -120,6 +120,12 @@
       var a = valid(+m[3], +m[1], +m[2]) || valid(+m[3], +m[2], +m[1]);
       if (a) return a;
     }
+    // 6 digit MMDDYY / DDMMYY, mis. "Aggregated_ME3N_100_110826" -> 8 Nov 2026
+    m = base.match(/(?:^|[^\d])(\d{2})(\d{2})(\d{2})(?!\d)/);
+    if (m) {
+      var c6 = valid(2000 + +m[3], +m[1], +m[2]) || valid(2000 + +m[3], +m[2], +m[1]);
+      if (c6) return c6;
+    }
     m = base.match(/(?:^|[^\d])(\d{1,2})[.\-](\d{1,2})(?![\d.])/);
     if (m) {
       var b = valid(y, +m[1], +m[2]) || valid(y, +m[2], +m[1]) || valid(y - 1, +m[1], +m[2]);
