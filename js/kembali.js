@@ -451,7 +451,7 @@
           return '<button class="chip-toggle' + (R.filt === t ? ' on' : '') + '" data-ka="tab" data-v="' + esc(t) + '">' + esc(t) + ' <span class="chip-n">' + base.filter(function (r) { return inTab(r, t); }).length + '</span></button>';
         }).join('') + '<span class="small muted" style="margin-left:auto">Menampilkan <b>' + list.length + '</b> dari ' + all.length + ' dokumen</span></div></div>' +
         (list.length ? '<div class="table-wrap"><table class="grid rcv-table"><thead><tr><th>No. BA / Tanggal</th><th>Jenis</th><th>User / Fungsi</th><th>Material</th><th>Integrasi / Masa titip</th><th>Status</th><th></th></tr></thead><tbody>' + list.map(rowHtml).join('') + '</tbody></table></div>'
-          : '<div class="empty" style="padding:28px"><h3>Belum ada dokumen</h3><p>Buat BA di <a href="#/kembali">Pengembalian &amp; Penitipan DC</a> lalu ajukan untuk approval.</p></div>') + '</div>';
+          : '<div class="empty" style="padding:28px"><h3>Belum ada dokumen</h3><p>Buat BA di <a href="#/kembali">Pengembalian Material &amp; Penitipan DC</a> lalu ajukan untuk approval.</p></div>') + '</div>';
     }
     function rowHtml(r) {
       var t = totals(r), first = t.rows[0] || {}, acts = [], s = dcState(r);
@@ -567,7 +567,7 @@
       try {
         await save(function (D) { D.list = D.list.filter(function (x) { return x.id !== r.id; }); return D; }, 'Pengembalian/Penitipan: hapus ' + ((r.no && r.no.no) || r.id) + ' (' + me() + ')');
         toast('Dihapus');
-        if (ctx.audit) ctx.audit('Pengembalian & Penitipan DC', KIND_SHORT[r.kind] + ' ' + ((r.no && r.no.no) || 'Draft') + ' · ' + (r.h.fungsi || r.h.p1name || '') + ' · ' + r.status, r);
+        if (ctx.audit) ctx.audit('Pengembalian Material & Penitipan DC', KIND_SHORT[r.kind] + ' ' + ((r.no && r.no.no) || 'Draft') + ' · ' + (r.h.fungsi || r.h.p1name || '') + ' · ' + r.status, r);
       } catch (e) { toast('Gagal menghapus: ' + e.message, true); }
       finally { loading(false); renderHistory(); }
     }
