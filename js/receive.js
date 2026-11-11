@@ -401,7 +401,7 @@
         '<form id="rcvForm" autocomplete="off" onsubmit="return false">' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">A. Dokumen Pembelian &amp; Vendor</h4><div class="rcv-grid">' +
         fld('Nomor PO/RO *', inp('h.po', h.po, { cls: 'mono', ph: 'mis. 4300096306' })) +
-        fld('Nomor Kontrak/OA', inp('h.oa', h.oa, { cls: 'mono', ph: 'mis. 4720000471 — vendor terisi otomatis' })) +
+        fld('Nomor Kontrak/OA', inp('h.oa', h.oa, { cls: 'mono', ph: 'mis. 4720000471 — vendor & material terisi otomatis' })) +
         fld('Jangka Waktu Kontrak', inp('h.jangka', h.jangka, { ph: 'mis. 2 (DUA) TAHUN' })) +
         fld('Delivery Date (PO/RO) *', inp('h.delivery', h.delivery, { type: 'date', rr: 1 })) +
         fld('Tipe Material', sel('h.tipe', h.tipe, ['Persediaan', 'Non Persediaan'], { rr: 1 })) +
@@ -431,6 +431,8 @@
         '<div class="table-wrap"><table class="grid rcv-items"><thead><tr><th>No</th><th>Line No.</th><th>KIMAP</th><th>Deskripsi Material</th><th>Satuan</th><th>Qty PO/RO</th><th>Qty Diterima</th><th>Harga Satuan (IDR)</th><th>% TKDN</th><th>Tgl Jatuh Tempo<div class="small muted">kosong = Delivery Date</div></th><th>Tgl Penerimaan<div class="small muted">kosong = Tgl Terima</div></th><th>Status</th><th>Catatan</th><th></th></tr></thead><tbody>' +
         d.items.map(itemRow).join('') + '</tbody></table></div><datalist id="rcvUom">' + UOMS.map(function (u) { return '<option value="' + u + '">'; }).join('') + '</datalist>' +
         '<div class="toolbar" style="margin-top:8px"><button class="btn sm" data-ra="row-add">+ Tambah baris</button><button class="btn sm" data-ra="row-add" data-n="5">+ 5 baris</button>' +
+        (oaOf(d) ? '<button class="btn sm primary" data-ra="oa-fill" title="Ganti isi Bagian C dengan daftar material kontrak">Ambil material kontrak ' + esc(d.h.oa) + ' (' + oaLines(oaOf(d)).length + ' item)</button>' : '') +
+        (d.items.length > 1 ? '<button class="btn sm" data-ra="row-clean" title="Hapus semua baris yang Qty Diterima-nya masih kosong">Hapus baris yang Qty Diterima kosong</button>' : '') +
         '<span class="small muted">Tip: salin kolom dari Excel (Line, KIMAP, Deskripsi, Satuan, Qty PO, Qty Diterima, Harga, % TKDN) lalu tempel di sel pertama.</span></div></div>' +
         '<div class="card card-pad rcv-sec"><h4 class="section-title">D. LHPB — Hasil Pemeriksaan Barang Keseluruhan</h4><div class="rcv-grid">' +
         HASIL.map(function (x) {
@@ -506,6 +508,19 @@
       lookupVendor(d);
       d.items.forEach(function (it) { priceFromOA(d, it); });
       return true;
+    }
+    // Material kontrak/OA → baris Data Material (Bagian C); tinggal isi Qty, baris yang tidak diterima dihapus
+    function oaOf(d) { return S.idx && S.idx.oaMap ? S.idx.oaMap.get(String(d.h.oa || '').trim()) || null : null; }
+    function oaLines(o) {
+      return o.lines.filter(function (l) { return l.m && !(num(l.price) <= 1 && !num(l.tgtQty) && !num(l.rel)); })
+        .sort(function (a, b) { return num(a.item) - num(b.item); });
+    }
+    function itemsEmpty(d) { return !d.items.some(function (it) { return it.m || it.d || has(it.qpo) || has(it.qrc); }); }
+    function fillFromOA(d) {
+      var o = oaOf(d); if (!o) return 0;
+      var ls = oaLines(o); if (!ls.length) return 0;
+      d.items = ls.map(function (l) { return { line: String(+l.item || l.item), m: l.m, d: l.d, u: l.u, price: l.price || '', st: 'Diterima', oaItem: l.item }; });
+      return ls.length;
     }
     function lookupVendor(d) {
       var V = (R.data && R.data.vendors) || {}, v = V[d.h.vendorId] || V['N:' + String(d.h.vendor || '').toUpperCase()];
@@ -1472,7 +1487,13 @@
       if (!final) { refreshSum(); return; }
       var m = /^items\.(\d+)\.m$/.exec(path);
       if (m) { var it = d.items[+m[1]]; if (it.m) { var found = lookupMat(d, it); if (!found) toast('KIMAP ' + it.m + ' tidak ada di data stok — isi deskripsi manual', true); } rerender(); return; }
-      if (path === 'h.oa' && d.h.oa) { if (lookupOA(d)) toast('Vendor & harga terisi dari kontrak ' + d.h.oa); rerender(); return; }
+      if (path === 'h.oa' && d.h.oa) {
+        if (lookupOA(d)) {
+          var nF = itemsEmpty(d) ? fillFromOA(d) : 0;
+          toast(nF ? nF + ' material kontrak ' + d.h.oa + ' dimuat di Bagian C — isi Qty yang diterima, hapus baris yang tidak dikirim' : 'Vendor & harga terisi dari kontrak ' + d.h.oa);
+        } else toast('Kontrak ' + d.h.oa + ' tidak ada di data ME3N — isi material manual', true);
+        rerender(); return;
+      }
       if ((path === 'h.vendorId' || path === 'h.vendor') && lookupVendor(d)) { rerender(); return; }
       if (t.hasAttribute('data-rr')) { rerender(); return; }
       refreshSum();
@@ -1524,6 +1545,18 @@
       var act = a.getAttribute('data-ra'), id = a.getAttribute('data-id'), d = R.draft;
       if (act === 'row-add' && d) { for (var ni = +(a.getAttribute('data-n') || 1); ni > 0; ni--) d.items.push({ line: String(d.items.length + 1), st: 'Diterima' }); storeDraft(); rerender(); }
       else if (act === 'row-del' && d) { d.items.splice(+a.getAttribute('data-i'), 1); if (!d.items.length) d.items.push({ line: '1', st: 'Diterima' }); storeDraft(); rerender(); }
+      else if (act === 'oa-fill' && d) {
+        if (!itemsEmpty(d) && !confirm('Ganti isi Data Material (Bagian C) dengan daftar material kontrak ' + d.h.oa + '?')) return;
+        var nf = fillFromOA(d); storeDraft(); rerender();
+        toast(nf ? nf + ' material kontrak dimuat — isi Qty yang diterima, hapus baris yang tidak dikirim' : 'Kontrak tidak punya daftar material', !nf);
+      }
+      else if (act === 'row-clean' && d) {
+        var before = d.items.length;
+        d.items = d.items.filter(function (it) { return has(it.qrc); });
+        var removed = before - d.items.length;
+        if (!d.items.length) d.items = [{ line: '1', st: 'Diterima' }];
+        storeDraft(); rerender(); toast(removed + ' baris kosong dihapus');
+      }
       else if (act === 'chk-add' && d) { d.lhpb.check.push({ doc: '', ok: 'Yes', note: '' }); storeDraft(); rerender(); }
       else if (act === 'chk-del' && d) { d.lhpb.check.splice(+a.getAttribute('data-i'), 1); storeDraft(); rerender(); }
       else if (act === 'reg-change' && d) { d.reg = null; storeDraft(); rerender(); }
