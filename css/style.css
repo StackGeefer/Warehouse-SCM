@@ -509,9 +509,15 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 960px) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .app > * { min-width: 0; }
+  .sidebar { width: 100%; max-width: 100vw; }
   .sidebar { position: static; height: auto; overflow: visible; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; gap: 12px; }
-  .nav { flex-direction: row; flex-wrap: wrap; }
+  .sidebar > * { flex: 0 1 auto; min-width: 0; }
+  /* menu ikon: satu baris yang bisa digeser, tidak melebarkan halaman */
+  .nav { flex: 1 1 100%; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; gap: 2px; padding-bottom: 2px; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { flex: none; }
   .nav a span.lbl { display: none; }
   .side-data { display: none; }
   .topbar, .view { padding-left: 16px; padding-right: 16px; }
@@ -570,7 +576,7 @@ tr.oa-other td{opacity:.72}
 .drawer .fleet-form { grid-template-columns: 1fr 1fr; }
 @media (max-width: 960px) {
   .fleet-grid { grid-template-columns: 1fr; }
-  .fleet-form { grid-template-columns: 1fr; }
+  .fleet-form { grid-template-columns: minmax(0, 1fr); }
   .fleet-util-row { grid-template-columns: 110px 1fr 64px; }
 }
 
@@ -808,3 +814,17 @@ body.ana-lock { overflow: hidden; }
 .fleet-table tr.picked td { background: rgba(22, 163, 74, .07); }
 .fleet-bulk { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; margin-bottom: 10px; border-radius: 10px; background: rgba(22, 163, 74, .1); border: 1px solid rgba(22, 163, 74, .35); }
 .nav .ext { font-size: 12px; opacity: .75; margin-left: 2px; }
+
+/* HP: grid & kartu tidak boleh melebihi lebar layar */
+@media (max-width: 560px) {
+  .manual-grid { grid-template-columns: minmax(0, 1fr); }
+  .manual-grid > * { min-width: 0; }
+  .fleet-grid { grid-template-columns: minmax(0, 1fr); }
+  .fleet-grid > *, .fleet-side > * { min-width: 0; max-width: 100%; }
+  .view .card { max-width: 100%; }
+}
+@media (max-width: 560px) {
+  /* tombol Ajukan/Preview tidak menutupi form di layar HP */
+  .rcv-actions { position: static; box-shadow: none; }
+  .fleet-form .input, .fleet-form .select, .rcv-grid .input, .rcv-grid .select { min-width: 0; max-width: 100%; }
+}
