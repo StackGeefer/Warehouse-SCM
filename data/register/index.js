@@ -1,2 +1,2 @@
 /* Register Receiving — daftar tahun — TERENKRIPSI */
-window.MW_REG_INDEX = "MWK1.Ow2qC45+fUTj7MNwrIPTMruoeXHvFoBNTUz4IamBwLUW2BkmnDG25oLA9Zu8SVKkaCEwsI22IxfwsByLHR8gladoqSJ0ndTEh6K8PD4z0NcEg0G8Ky5s1hbyaroKvBZmn81cF/mZIpeXGgUA8BLoubU1Eq6Xr6tpwIA/MUOHcI332+M5n0GIpkVgZbHK6+fhRukxIIOXsbRF";
+window.MW_REG_INDEX = "MWK1.CwlawFjgjVqvMmkJgDvug3IgDJNx1fYltdzJNtqXh4W1nA/Xa6jl4JuWnGgaPuwFh3zxI2buPCQiOwYCOy11cPCK37Q21dzOQnePehjBM4J1obRVwMYkqStyY2swHDoewtmxt1f+wRSoPVk3ctoIJhFHeayLpXJNMrFrXlGxrSSIGQVGzSZZv7GqpIMw35hNiRpmgvQBbXvs";
