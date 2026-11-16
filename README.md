@@ -84,6 +84,10 @@ Token hanya tersimpan di browser Owner dan hanya punya akses ke repo ini.
 | Zona 13 | Donggi Matindok (W401) |
 | Zona 14 | Papua (W303) |
 
+## Tampilan (Dark Mode)
+
+Pengaturan → **Tampilan (Dark Mode)**: pilih *Terang*, *Gelap*, atau *Ikuti sistem HP/Laptop*. Pilihan disimpan di browser/perangkat masing-masing (tidak memengaruhi pengguna lain) dan juga berlaku di halaman login. Dokumen PDF tetap putih.
+
 ## Aktifkan / preview website
 
 - **Online (GitHub Pages)**: repo → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)` → Save.

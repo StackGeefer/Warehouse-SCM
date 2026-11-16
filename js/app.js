@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261112a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261116a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1667,11 +1667,31 @@
       '<li>Semua data tersimpan <b>terenkripsi</b> di GitHub dan hanya terbuka setelah login.</li></ol></div>';
   }
 
+  // ================= Tema (Terang / Gelap / Ikuti sistem) =================
+  var THEME_KEY = 'mw-theme';
+  var darkMq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function themePref() { try { var t = localStorage.getItem(THEME_KEY); return t === 'dark' || t === 'auto' ? t : 'light'; } catch (e) { return 'light'; } }
+  function applyTheme() {
+    var t = themePref(), dark = t === 'dark' || (t === 'auto' && darkMq && darkMq.matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    var m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', dark ? '#0b1220' : '#0b1730');
+  }
+  if (darkMq) { var onMq = function () { if (themePref() === 'auto') applyTheme(); }; if (darkMq.addEventListener) darkMq.addEventListener('change', onMq); else if (darkMq.addListener) darkMq.addListener(onMq); }
+  applyTheme();
+  function themeCard() {
+    var t = themePref(), opts = [['light', 'Terang'], ['dark', 'Gelap'], ['auto', 'Ikuti sistem HP/Laptop']];
+    return '<div class="card card-pad no-collapse theme-card" style="margin-top:16px"><h4 class="section-title">Tampilan (Dark Mode)</h4>' +
+      '<p class="muted small" style="margin-top:0">Pilih tema website. Berlaku di browser/perangkat ini saja dan langsung diterapkan. Dokumen PDF tetap putih seperti aslinya.</p>' +
+      '<div class="theme-opts">' + opts.map(function (o) {
+        return '<button type="button" class="theme-opt' + (t === o[0] ? ' on' : '') + '" data-act="set-theme" data-theme-v="' + o[0] + '" aria-pressed="' + (t === o[0]) + '"><span class="sw ' + o[0] + '"></span>' + o[1] + '</button>';
+      }).join('') + '</div></div>';
+  }
+
   // ================= Halaman: Pengaturan =================
   function renderSettings() {
     var st = S.settings, owner = isOwner();
     if (!canWarehouse()) {
-      view.innerHTML = '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + roleBadge(S.user.role) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
+      view.innerHTML = '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + roleBadge(S.user.role) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' + themeCard() +
         '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi publikasi</h4>' + (S.sharedTok ? '<span class="badge ok">Aktif</span> <span class="small muted">Reservasi &amp; perubahan langsung tersimpan untuk semua pengguna.</span>'
           : '<span class="badge warn">Belum aktif</span> <span class="small muted">Minta Owner Utama mengatur akses Anda (Pengaturan → Pengguna, isi password Anda) lalu login ulang.</span>') + '</div>' +
         (canAdminFleet() ? fleet().masterCard() : '');
@@ -1736,7 +1756,7 @@
         (shared ? '' : '<div class="toolbar" style="margin-top:8px"><input class="input sm" id="shPw" type="password" placeholder="Password login Anda" autocomplete="current-password"><button class="btn sm primary" data-act="gh-share">Bagikan ke Co-Owner</button></div>') + '</div>' : '') +
       '</div>';
     view.innerHTML =
-      '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + roleBadge(S.user.role) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' +
+      '<div class="card card-pad toolbar"><div><div class="small muted">Masuk sebagai</div><b style="font-size:16px">' + esc(S.user.name) + '</b> ' + roleBadge(S.user.role) + '</div><span class="spacer"></span><button class="btn" data-act="logout">Keluar</button></div>' + themeCard() +
       ownerHtml + (isOwner() ? passMod().signCard() : '') + (canAdminFleet() ? fleet().masterCard() : '') + (isOwner() ? heroCard() : '') + synCard() +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Field &amp; Kode Plant</h4>' +
       '<p class="muted small" style="margin-top:0">Field "Home" = field Anda (stok utama & pemakaian). Centang "Kolom utama" agar field tampil sebagai kolom di Cari Material (default: Lirik, Jambi, Pangkalan Susu). Field lain dicek lewat tombol <b>Cek field lain</b>. Satu field boleh punya beberapa plant, pisahkan dengan koma. Pengaturan ini berlaku di browser ini.</p>' +
@@ -1755,7 +1775,7 @@
   function collapseSettings(root) {
     var open = Store.load('setOpen', {}) || {};
     Array.prototype.slice.call(root.children).forEach(function (card, i) {
-      if (i === 0 || !card.classList.contains('card')) return;
+      if (i === 0 || !card.classList.contains('card') || card.classList.contains('no-collapse')) return;
       var h = card.querySelector('h4.section-title');
       if (!h || h.parentNode !== card) return;
       var key = h.textContent.trim(), d = document.createElement('details'), sm = document.createElement('summary'), body = document.createElement('div');
@@ -2581,6 +2601,12 @@
       }
       else if (act === 'reset-settings') { S.settings = clone(Model.DEFAULT_SETTINGS); Store.save('settings', S.settings); rebuild(); render(); toast('Pengaturan dikembalikan ke default'); }
       else if (act === 'logout') { logout(); }
+      else if (act === 'set-theme') {
+        try { localStorage.setItem(THEME_KEY, a.getAttribute('data-theme-v')); } catch (e) { /* abaikan */ }
+        applyTheme();
+        document.querySelectorAll('.theme-opt').forEach(function (b) { var on = b === a; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); });
+        toast(themePref() === 'dark' ? 'Dark Mode aktif' : themePref() === 'auto' ? 'Tema mengikuti pengaturan perangkat' : 'Tema terang aktif');
+      }
       else if (act === 'analisa') { anaMod().open(a.getAttribute('data-m')); }
       else if (act === 'audit-open') { openAudit(); }
       else if (act === 'hero-upload') { uploadHero($('#heroFile').files); }
