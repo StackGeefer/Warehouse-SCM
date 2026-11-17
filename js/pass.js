@@ -42,7 +42,7 @@
         try {
           var r = await gh('GET', '/contents/' + path + '?ref=' + ctx.branch + '&t=' + Date.now());
           return r && r.content != null ? b64text(r.content) : null;
-        } catch (e) { if (/not found/i.test(e.message)) return null; throw e; }
+        } catch (e) { if (/not found/i.test(e.message)) return null; if (e.code !== 401) throw e; }
       }
       var res = await fetch(path + '?t=' + Date.now(), { cache: 'no-store' });
       return res.ok ? res.text() : null;

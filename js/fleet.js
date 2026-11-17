@@ -57,7 +57,7 @@
           return r && r.content != null ? b64text(r.content) : null;
         } catch (e) {
           if (/not found/i.test(e.message)) return null;
-          throw e;
+          if (e.code !== 401) throw e; // token ditolak -> baca versi website di bawah
         }
       }
       var res = await fetch(path + '?t=' + Date.now(), { cache: 'no-store' });

@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261116a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261117a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1741,6 +1741,7 @@
       '<button class="btn sm primary" data-act="change-pw">Simpan</button></div></div></div>' +
       '<div class="small muted" style="margin-top:10px"><b>Owner Utama</b>: atur token GitHub &amp; pengguna. <b>Co-Owner</b>: upload data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama. <b>Warehouse</b>: material, kontrak, Call Order, ajukan Pass Keluar, Register, Penerimaan Material &amp; Pengembalian Material/Penitipan DC (tanpa edit/hapus), Reservasi Armada. <b>Receiving</b>: seperti Warehouse + edit &amp; hapus Register, Penerimaan Material &amp; Pengembalian Material/Penitipan DC. <b>Angkutan</b>: hanya Reservasi &amp; Riwayat Armada (isi, edit &amp; master armada). Untuk Co-Owner/Angkutan, isi password orang tersebut (lama atau baru) agar akses publikasinya terkunci untuk dia.</div></div>' +
       '<div class="card card-pad" style="margin-top:16px"><h4 class="section-title">Koneksi GitHub</h4><p class="muted small" style="margin-top:0">Agar upload &amp; perubahan langsung tampil untuk semua pengguna.</p>' +
+      (S.tokenBad ? '<div class="pending-banner card card-pad" style="display:block;margin:0 0 10px"><b style="color:var(--bad)">Token GitHub sudah tidak berlaku (kedaluwarsa/dicabut).</b><div class="small">Semua akun (Angkutan, Warehouse, Receiving, Co-Owner) belum bisa menyimpan. Buat token baru dengan langkah di bawah, tempel, lalu klik <b>Simpan &amp; Tes</b>. Token baru otomatis dibagikan ke semua akun, jadi tidak perlu atur ulang password siapa pun. Saat membuat token, pilih <b>Expiration</b> yang panjang (mis. 1 tahun) agar tidak cepat habis.</div></div>' : '') +
       '<div class="toolbar" style="margin-bottom:10px"><span>Status:</span>' + (tok ? '<span class="badge ok">Terhubung ke ' + esc(ghRepo()) + '</span>' : '<span class="badge warn">Belum terhubung</span>') + '</div>' +
       '<ol class="steps small"><li>Buka <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub › Fine-grained token baru</a> (login sebagai pemilik repo).</li>' +
       '<li>Isi <b>Token name</b> bebas (mis. "Material Warehouse"), <b>Expiration</b> sesuai kebutuhan (mis. 1 tahun).</li>' +
@@ -2040,8 +2041,16 @@
       body: body ? JSON.stringify(body) : undefined
     });
     var data = res.status === 204 ? null : await res.json().catch(function () { return null; });
+    if (res.status === 401) { tokenRejected(!!token); var e401 = new Error(TOKEN_BAD); e401.code = 401; throw e401; }
     if (!res.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
     return data;
+  }
+  // Token GitHub ditolak (kedaluwarsa / dicabut): data tetap dibaca dari website, simpan perlu token baru
+  var TOKEN_BAD = 'Token GitHub website sudah tidak berlaku (kedaluwarsa/dicabut). Data tetap bisa dilihat, tapi belum bisa disimpan sampai Owner Utama memasang token baru di Pengaturan → Koneksi GitHub.';
+  function tokenRejected(testing) {
+    if (testing || S.tokenBad) return;
+    S.tokenBad = true;
+    toast(isMainOwner() ? 'Token GitHub sudah tidak berlaku. Buat token baru lalu tempel di Pengaturan → Koneksi GitHub.' : 'Penyimpanan ke server sedang terganggu (token GitHub kedaluwarsa). Data tetap bisa dilihat; mohon kabari Owner Utama.', true);
   }
   // Satu commit berisi semua file baru/diubah + file yang dihapus
   async function ghCommit(files, deletes, message) {
@@ -2686,6 +2695,7 @@
           if (!info.permissions || !info.permissions.push) throw new Error('Token tidak punya izin menulis (Contents: Read and write)');
           var changed = tokIn !== Store.load('ghToken');
           Store.save('ghToken', tokIn);
+          S.tokenBad = false;
           toast('GitHub terhubung: ' + info.full_name);
           // token baru -> perbarui token bersama untuk Co-Owner
           if (changed && S.adminKey) return shareToken(null, tokIn);
