@@ -1,9 +1,22 @@
-/* Daftar versi data SAP (maks. 3 versi per jenis). Diperbarui 2026-11-19T01:51:29.808Z */
+/* Daftar versi data SAP (maks. 3 versi per jenis). Diperbarui 2026-11-20T02:32:31.712Z */
 window.MW_MANIFEST = {
  "v": 2,
- "updatedAt": "2026-11-19T01:51:29.808Z",
+ "updatedAt": "2026-11-20T02:32:31.712Z",
  "versions": {
   "stock": [
+   {
+    "id": "stock-2026-11-20-mwod62u8",
+    "date": "2026-11-20",
+    "uploadedAt": "2026-11-20T02:32:31.758Z",
+    "by": "Seto.agustian",
+    "files": [
+     "20.11_ZMB52.XLSX"
+    ],
+    "info": {
+     "plants": 22,
+     "rows": 14927
+    }
+   },
    {
     "id": "stock-2026-11-19-mwmw9gk0",
     "date": "2026-11-19",
@@ -28,19 +41,6 @@ window.MW_MANIFEST = {
     "info": {
      "plants": 22,
      "rows": 14945
-    }
-   },
-   {
-    "id": "stock-2026-11-17-mwjzyx60",
-    "date": "2026-11-17",
-    "uploadedAt": "2026-11-17T01:11:58.104Z",
-    "by": "Seto.agustian",
-    "files": [
-     "17.11_ZMB52.XLSX"
-    ],
-    "info": {
-     "plants": 22,
-     "rows": 14967
     }
    }
   ],
