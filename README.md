@@ -19,7 +19,7 @@ Website dibuka lewat halaman **Login** (username + password).
 | **Warehouse** | Cari material, Call Order, ajukan Pass Keluar, Penerimaan & Pengembalian Material, Reservasi Armada |
 | **Receiving** | Seperti Warehouse + edit & hapus Register / Penerimaan / Pengembalian |
 | **Angkutan** | Reservasi & Riwayat Armada, master armada |
-| **Viewer** | **Hanya melihat** semua menu & riwayat (Pass Keluar, Penerimaan, Pengembalian, Armada, Order, TKO, Data SAP). Tidak bisa membuat Pass Keluar / Penerimaan / Pengembalian / Reservasi Armada, tidak bisa upload SAP, dan tidak bisa membuka Pengaturan. Akun ini tidak memegang kunci simpan, jadi memang tidak bisa mengubah data apa pun. |
+| **Viewer** | **Hanya melihat** menu & riwayat (Cari Material tanpa pilihan RO/BAU/OUT, tanpa menu Call Order; Pass Keluar, Penerimaan, Pengembalian, Armada, Order, TKO, Data SAP). Tidak bisa membuat Pass Keluar / Penerimaan / Pengembalian / Reservasi Armada, tidak bisa upload SAP, dan tidak bisa membuka Pengaturan. Akun ini tidak memegang kunci simpan, jadi memang tidak bisa mengubah data apa pun. |
 
 Owner menambah/menghapus pengguna dan mengganti password di menu **Pengaturan**.
 

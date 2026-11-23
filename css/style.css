@@ -931,3 +931,5 @@ body.ana-lock { overflow: hidden; }
 .theme-opt .sw.light { background: linear-gradient(135deg, #ffffff 50%, #f3f5f9 50%); }
 .theme-opt .sw.dark { background: linear-gradient(135deg, #121b2d 50%, #0b1220 50%); }
 .theme-opt .sw.auto { background: linear-gradient(135deg, #ffffff 50%, #121b2d 50%); }
+/* Viewer: tanpa kolom Pilih (RO / BAU / OUT) & tanpa Call Order */
+.ro-view .pick-col, .ro-view #cartbar { display: none !important; }

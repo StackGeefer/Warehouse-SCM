@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261123a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261123b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -173,7 +173,7 @@
     nc.classList.toggle('hidden', !st.n);
     var bar = $('#cartbar');
     var route = currentRoute().name;
-    if (!st.n || route === 'call-order' || route === 'data' || route === 'pengaturan') { bar.classList.add('hidden'); return; }
+    if (!st.n || isLihat() || route === 'call-order' || route === 'data' || route === 'pengaturan') { bar.classList.add('hidden'); return; }
     bar.classList.remove('hidden');
     bar.innerHTML = '<span><b>' + st.n + '</b> material dipilih</span>' +
       '<span class="badge ro">RO ' + st.ro + '</span><span class="badge bau">BAU ' + st.bau + '</span><span class="badge out">OUT ' + st.out + '</span>' +
@@ -256,7 +256,7 @@
     return '<svg class="spark" width="84" height="16" aria-hidden="true">' + bars + '</svg>';
   }
   function pick(kind, m, checked, disabled, title, extra) {
-    if (kind === 'out' && isLihat()) return '';
+    if (isLihat()) return ''; // Viewer: tanpa pilihan RO / BAU / OUT
     return '<label class="pick ' + kind + '" title="' + esc(title || '') + '"><input type="checkbox" data-pick="' + kind + '" data-m="' + esc(m) + '"' +
       (extra || '') + (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' + kind.toUpperCase() + '</span></label>';
   }
@@ -336,6 +336,7 @@
       a.classList.toggle('active', rn === r.name);
       a.classList.toggle('hidden', !routeAllowed(rn));
     });
+    document.body.classList.toggle('ro-view', isLihat());
     var act = $('#nav a.active'); if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
     $$('#nav .nav-group').forEach(function (g) { g.classList.toggle('hidden', g.getAttribute('data-group') === 'fleet' ? !(routeAllowed('angber') || routeAllowed('angber-riwayat')) : !canWarehouse()); });
     var t = TITLES[r.name];
@@ -1321,7 +1322,7 @@
   // Viewer: hanya melihat — semua menu & riwayat terbuka, tapi tidak bisa membuat Pass Keluar, Penerimaan,
   // Pengembalian, Reservasi Armada, upload SAP, dan tidak bisa membuka Pengaturan (akun tanpa kunci simpan)
   function isLihat() { return role() === 'lihat'; }
-  var LIHAT_BLOCK = { pengaturan: 1, terima: 1, kembali: 1, angber: 1 };
+  var LIHAT_BLOCK = { pengaturan: 1, terima: 1, kembali: 1, angber: 1, 'call-order': 1 };
   function routeAllowed(name) {
     if (isLihat()) return !LIHAT_BLOCK[name];
     if (name === 'pengaturan') return true;
