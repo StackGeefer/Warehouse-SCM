@@ -445,6 +445,7 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
 .side-user .avatar { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #2f80ed, #0a5cc2); display: grid; place-items: center; font-weight: 800; color: #fff; flex: none; }
 .side-user .icon-btn { margin-left: auto; color: #8fa3c7; }
 .side-user .icon-btn:hover { background: rgba(255,255,255,.1); color: #fff; }
+.side-user .icon-btn + .icon-btn { margin-left: 0; }
 .side-warn { color: #fbbf24; font-weight: 700; font-size: 12px; }
 .ver { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; background: var(--surface-2); }
 .ver.active { border-color: #a7d7b8; background: #f3fbf6; }

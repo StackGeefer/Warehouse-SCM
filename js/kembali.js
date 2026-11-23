@@ -446,7 +446,7 @@
         }).join('') + '</div>' +
         '<select class="select" id="kbMonth"><option value="">Semua bulan</option>' + Object.keys(months).filter(Boolean).sort().reverse().map(function (m) { return '<option value="' + m + '"' + (R.month === m ? ' selected' : '') + '>' + BLN[+m.slice(5) - 1] + ' ' + m.slice(0, 4) + '</option>'; }).join('') + '</select>' +
         '<input class="input" id="kbQ" style="flex:1;min-width:200px" placeholder="Cari nomor BA, fungsi, user, KIMAP, PO, AFE…" value="' + esc(R.q) + '">' +
-        '<button class="btn" data-ka="refresh">Muat ulang</button><button class="btn" data-ka="rekap">Rekap Excel</button><a class="btn primary" href="#/kembali">+ Buat BA</a></div>' +
+        '<button class="btn" data-ka="refresh">Muat ulang</button><button class="btn" data-ka="rekap">Rekap Excel</button>' + (ctx.readOnly && ctx.readOnly() ? '' : '<a class="btn primary" href="#/kembali">+ Buat BA</a>') + '</div>' +
         '<div class="card"><div class="card-pad fleet-statbar"><div class="chips">' + TABS.map(function (t) {
           return '<button class="chip-toggle' + (R.filt === t ? ' on' : '') + '" data-ka="tab" data-v="' + esc(t) + '">' + esc(t) + ' <span class="chip-n">' + base.filter(function (r) { return inTab(r, t); }).length + '</span></button>';
         }).join('') + '<span class="small muted" style="margin-left:auto">Menampilkan <b>' + list.length + '</b> dari ' + all.length + ' dokumen</span></div></div>' +

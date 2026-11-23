@@ -16,7 +16,10 @@ Website dibuka lewat halaman **Login** (username + password).
 |---|---|
 | **Owner Utama** | Semua fitur + kelola pengguna, koneksi GitHub (satu-satunya yang mengisi token) |
 | **Co-Owner** | Upload/update data SAP, pilih versi data, kelola order/dokumen/foto/sinonim — publikasi memakai token Owner Utama yang tersimpan terenkripsi (Co-Owner tidak pernah melihat token) |
-| **Viewer** | Cari material, lihat stok/kontrak, buat & export Call Order |
+| **Warehouse** | Cari material, Call Order, ajukan Pass Keluar, Penerimaan & Pengembalian Material, Reservasi Armada |
+| **Receiving** | Seperti Warehouse + edit & hapus Register / Penerimaan / Pengembalian |
+| **Angkutan** | Reservasi & Riwayat Armada, master armada |
+| **Viewer** | **Hanya melihat** semua menu & riwayat (Pass Keluar, Penerimaan, Pengembalian, Armada, Order, TKO, Data SAP). Tidak bisa membuat Pass Keluar / Penerimaan / Pengembalian / Reservasi Armada, tidak bisa upload SAP, dan tidak bisa membuka Pengaturan. Akun ini tidak memegang kunci simpan, jadi memang tidak bisa mengubah data apa pun. |
 
 Owner menambah/menghapus pengguna dan mengganti password di menu **Pengaturan**.
 

@@ -631,7 +631,7 @@
         '<div class="card card-pad toolbar" style="margin-bottom:14px">' +
         '<select class="select" id="rcvMonth"><option value="">Semua bulan</option>' + Object.keys(months).filter(Boolean).sort().reverse().map(function (m) { return '<option value="' + m + '"' + (R.month === m ? ' selected' : '') + '>' + BLN[+m.slice(5) - 1] + ' ' + m.slice(0, 4) + '</option>'; }).join('') + '</select>' +
         '<input class="input" id="rcvQ" style="flex:1;min-width:200px" placeholder="Cari PO, OA, vendor, KIMAP, nomor BASTB…" value="' + esc(R.q) + '">' +
-        '<button class="btn" data-ra="refresh">Muat ulang</button><a class="btn primary" href="#/terima">+ Penerimaan baru</a>' +
+        '<button class="btn" data-ra="refresh">Muat ulang</button>' + (ctx.readOnly && ctx.readOnly() ? '' : '<a class="btn primary" href="#/terima">+ Penerimaan baru</a>') +
         '<span class="reg-dl"><span class="small muted">Rekap Excel:</span><button class="btn sm" data-ra="rekap" data-v="month"' + (R.month ? '' : ' disabled title="Pilih bulan dulu"') + '>Bulan</button>' +
         '<button class="btn sm" data-ra="rekap" data-v="year">Tahun ' + rekapYear() + '</button><button class="btn sm" data-ra="rekap" data-v="all">Seluruh tahun</button></span></div>' +
         '<div class="card"><div class="card-pad fleet-statbar"><div class="chips">' + tabs.map(function (t) {

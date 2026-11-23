@@ -27,6 +27,7 @@
     function qty(n) { return n == null ? '' : new Intl.NumberFormat('id-ID', { maximumFractionDigits: 3 }).format(n); }
     function me() { return S.user ? S.user.name : ''; }
     function canApprove() { return ctx.isOwner(); }
+    function ro() { return !!(ctx.readOnly && ctx.readOnly()); }
     function badge(st) { return '<span class="badge ' + (ST_CLS[st] || '') + '">' + esc(st) + '</span>'; }
     function passNo(seq, date) { return 'RTU-' + seq + '/EP0651/WH/' + String(date || today()).slice(0, 4); }
 
@@ -105,12 +106,12 @@
       var tabs = [ST.pending, ST.ok, ST.no, ST.cancel, 'Semua'];
       var list = P.filt === 'Semua' ? all : all.filter(function (r) { return r.status === P.filt; });
       var mySign = P.signs.users[S.user.id];
-      v.innerHTML = manualCard() +
+      v.innerHTML = (ro() ? '' : manualCard()) +
         (canApprove() && !mySign ? '<div class="card card-pad remind-card">Anda belum mengatur <b>nama &amp; tanda tangan</b> untuk Pass Keluar. Atur di <a href="#/pengaturan">Pengaturan → Tanda tangan Pass Keluar</a> sebelum approve.</div>' : '') +
         '<div class="card card-pad toolbar" style="margin-bottom:14px">' + tabs.map(function (t) {
           var n = t === 'Semua' ? all.length : (cnt[t] || 0);
           return '<span class="chip-toggle' + (P.filt === t ? ' on' : '') + '" data-pa="tab" data-v="' + esc(t) + '">' + esc(t) + ' <b>' + n + '</b></span>';
-        }).join('') + '<span class="spacer"></span><button class="btn" data-pa="refresh">Muat ulang</button><a class="btn primary" href="#/call-order">+ Ajukan dari Call Order</a></div>' +
+        }).join('') + '<span class="spacer"></span><button class="btn" data-pa="refresh">Muat ulang</button>' + (ro() ? '' : '<a class="btn primary" href="#/call-order">+ Ajukan dari Call Order</a>') + '</div>' +
         (list.length ? '<div class="card"><div class="table-wrap"><table class="grid pass-table"><thead><tr><th>No. Pass / Tanggal</th><th>Dikirim ke</th><th>Material</th><th>Kendaraan / Driver</th><th>Pemohon → Penerima</th><th>Status</th><th></th></tr></thead><tbody>' +
           list.map(rowHtml).join('') + '</tbody></table></div></div>'
           : '<div class="card empty"><h3>Tidak ada pass ' + esc(P.filt === 'Semua' ? '' : P.filt.toLowerCase()) + '</h3><p>Pilih material di <b>Cari Material</b> → centang <b>OUT</b> → isi di <b>Call Order</b> bagian Material Keluar → Ajukan.</p></div>');
