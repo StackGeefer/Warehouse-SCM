@@ -49,5 +49,13 @@ window.MW_USERS = [
   "wk": "DC5G9EmRcrXBkflUjFsU20NdoONxPpjyUjKhXO5kJxJUYKXVjfNN9dLqC9VpdZ6w",
   "aiv": "pbjwNqhyZGktfjlf",
   "ak": "E0dH8UaB9PmKmK+vk+8PCi6lAdK0u9Bicmai6DyDrRvGjxnDVj3vGZcgkmO6c0IM"
+ },
+ {
+  "id": "cee5a8557785921d801b6720b5f37585e7f6ed1f3f120383e089e9ee2e6f3a8d",
+  "name": "User Rantau",
+  "role": "lihat",
+  "salt": "4mh+VMF/Jf1VRDjuourtzA==",
+  "iv": "1DwlDf8Q54dVz9hP",
+  "wk": "yZ7pAoQ4vO9U9AIFEpS0sqFQF8i3G7ZxFd8EEJtxnCrdvElCe4wu5IYLko27yDTi"
  }
 ];
