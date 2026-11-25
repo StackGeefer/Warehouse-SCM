@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261125a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261125b'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -560,7 +560,7 @@
       fieldKpis +
       '<div class="kpi"><div class="k">Pemakaian ' + idx.histYear + '</div><div class="v">' + fmtQ(o.hist) + '</div><div class="s">' + idx.dataYear + ' YTD: ' + fmtQ(o.ytd) + '</div></div>' +
       '<div class="kpi"><div class="k">Rata-rata / bulan</div><div class="v">' + fmtQ(Math.round(o.avg12 * 10) / 10) + '</div><div class="s">12 bulan terakhir</div></div>' +
-      (function () { var L = pcLast(o.m); return '<div class="kpi"><div class="k">Physical Check terakhir</div>' + (L ? '<div class="v" style="font-size:17px">' + fmtDate(L[0]) + '</div><div class="s">Fisik <b>' + fmtQ(L[1]) + '</b> ' + esc(o.u || '') + ' · <a href="#/pc/' + esc(L[2]) + '">' + esc(L[3] || 'lihat') + '</a></div>' : '<div class="v" style="font-size:17px">—</div><div class="s">Belum pernah dicek</div>') + '</div>'; })() +
+      (function () { var L = pcLast(o.m); return '<div class="kpi"><div class="k">Physical Check terakhir</div>' + (L ? '<div class="v" style="font-size:17px">' + fmtDate(L[0]) + '</div><div class="s">Fisik <b>' + fmtQ(L[1]) + '</b> ' + esc(o.u || '') + (L[5] ? ' · Kondisi <b>' + esc(L[5]) + '</b>' : '') + ' · <a href="#/pc/' + esc(L[2]) + '">' + esc(L[3] || 'lihat') + '</a></div>' : '<div class="v" style="font-size:17px">—</div><div class="s">Belum pernah dicek</div>') + '</div>'; })() +
       '<div class="kpi"><div class="k">Harga</div><div class="v" style="font-size:17px">' + (o.bestOA ? fmtMoney(o.bestOA.price, o.bestOA.cur) : fmtMoney(o.map)) + '</div><div class="s">' + (o.bestOA ? 'OA ' + esc(o.bestOA.po) : (o.map ? 'Harga rata-rata stok' : 'Tidak ada')) + '</div></div>' +
       '</div>' +
       '<div><div class="toolbar"><h4 class="section-title" style="margin:0">Stok per plant</h4><span class="spacer"></span><label class="small"><input type="checkbox" data-act="drawer-all"' + (S.drawerAll ? ' checked' : '') + '> tampilkan stok 0</label></div>' +
@@ -1420,17 +1420,34 @@
   function pcMod() {
     if (!Pc) Pc = window.PcModule({
       S: S, esc: esc, toast: toast, loading: loading, route: function () { return currentRoute().name; }, routeArg: function () { return currentRoute().arg; },
-      isOwner: isOwner, canInput: function () { return canWarehouse() && !isLihat(); }, pass: passMod, loadDet: loadDet,
-      loadExcelJS: Exporter.loadExcelJS, audit: logDelete
+      isOwner: isOwner, readOnly: isLihat, canInput: function () { return canWarehouse() && !isLihat(); }, pass: passMod, loadDet: loadDet,
+      loadExcelJS: Exporter.loadExcelJS, audit: logDelete, homeName: homeName,
+      hasToken: function () { return !!ghToken(); }, ghCond: ghCond,
+      decryptText: function (text) { var m = /"(MWK1\.[^"]+)"/.exec(text || ''); return m ? Vault.decrypt(S.key, m[1]) : Promise.resolve(null); }
     });
     return Pc;
+  }
+  // Baca satu file data terbaru untuk tampilan LIVE: permintaan bersyarat (ETag) ke GitHub API —
+  // jawaban 304 (tidak berubah) tidak memakai kuota API; tanpa token baca versi website.
+  async function ghCond(path, etag) {
+    var tok = ghToken();
+    if (tok) {
+      var h = { Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github.raw+json', 'X-GitHub-Api-Version': '2022-11-28' };
+      if (etag) h['If-None-Match'] = etag;
+      var res = await fetch('https://api.github.com/repos/' + ghRepo() + '/contents/' + path + '?ref=' + GH_BRANCH, { cache: 'no-store', headers: h });
+      if (res.status === 304) return { status: 304 };
+      if (res.ok) return { status: 200, etag: res.headers.get('ETag'), text: await res.text() };
+      if (res.status === 401) tokenRejected(false); else return { status: res.status };
+    }
+    var r2 = await fetch(path + '?t=' + Date.now(), { cache: 'no-store' });
+    return r2.ok ? { status: 200, text: await r2.text() } : { status: r2.status };
   }
   function pcLast(m) { return Pc ? Pc.lastOf(m) : null; }
   function pcBadge(o) {
     var L = pcLast(o.m);
     if (!L) return '';
     var p = L[0].split('-');
-    return ' <span class="badge pc-badge" title="' + esc('Physical Check terakhir ' + fmtDate(L[0]) + ' · fisik ' + fmtQ(L[1]) + ' ' + (o.u || '') + ' · ' + (L[3] || '') + (L[4] ? ' · oleh ' + L[4] : '')) + '">PC ' + p[2] + '/' + p[1] + '/' + p[0].slice(2) + '</span>';
+    return ' <span class="badge pc-badge" title="' + esc('Physical Check terakhir ' + fmtDate(L[0]) + ' · fisik ' + fmtQ(L[1]) + ' ' + (o.u || '') + (L[5] ? ' · kondisi ' + L[5] : '') + ' · ' + (L[3] || '') + (L[4] ? ' · oleh ' + L[4] : '')) + '">PC ' + p[2] + '/' + p[1] + '/' + p[0].slice(2) + '</span>';
   }
   var Fleet = null;
   function fleet() {

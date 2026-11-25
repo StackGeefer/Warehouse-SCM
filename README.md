@@ -177,11 +177,13 @@ Menu **Pengembalian Material & Penitipan DC** (form) dan **Riwayat Pengembalian 
 
 ## Physical Check (cek fisik stok)
 
-- **Owner / Co-Owner**: menu **Physical Check → + Create Physical Check** → isi judul & tanggal, lalu **paste banyak KIMAP sekaligus** (langsung dari kolom Excel — dipisah baris/spasi/koma/tab). KIMAP otomatis terdeteksi dari data stok SAP; kode berpola KIMAP yang tidak ada di data stok tetap bisa diikutkan. Bisa **+ Tambah KIMAP**, **Tandai Selesai / Buka lagi**, **Export Excel**, **Hapus**.
-- **Warehouse / Receiving**: buka check → cukup **isi Jumlah Fisik** — **tersimpan otomatis** (tanpa tombol Simpan; Enter = baris berikutnya). Stok SAP & selisih hanya terlihat oleh Owner/Co-Owner (blind count).
-- Kolom **Terakhir keluar <tahun>** diambil dari data MB51 yang di-upload di Data SAP (plant Home).
-- **Cari Material** menampilkan badge **PC dd/mm/yy** dan kartu **Physical Check terakhir** di detail material.
-- Viewer hanya bisa melihat. Data terenkripsi di `data/pc.js` (daftar + terakhir dicek per material) dan `data/pc/<id>.js` (isi check).
+- **Create (Owner / Co-Owner)**: menu **Physical Check → + Create Physical Check** → judul & tanggal, **File Base opsional** (MP-01 / database stok .xlsx: Qty, Harga Satuan, Aging, Valuation Type, Kondisi A–E, Bin — kolom dikenali otomatis), lalu **paste banyak KIMAP sekaligus** (dari kolom Excel). Paste dikosongkan = semua KIMAP di File Base. Tanpa File Base, info diambil dari data SAP website.
+- **Isi (Owner, Co-Owner, Warehouse, Receiving)** — 4 kolom: **Qty Aktual**, **Kondisi** (A Baru & baik · B Baru, diperbaiki · C Rusak, diperbaiki · D Salvaged · E Rencana FUPP — tombol sekali tekan, terisi dari File Base), **Storage Bin update** (opsional), **Keterangan**. Terlihat juga UoM, Harga Satuan, Aging, Valuation Type, Bin & terakhir keluar (MB51).
+- **Tersimpan otomatis & LIVE**: semua perangkat (walau akun yang sama di 10 HP) melihat isian rekan dalam ±5 detik tanpa refresh. Isian beberapa orang sekaligus tidak saling menimpa. Cek perubahan memakai permintaan bersyarat (ETag) — jawaban "tidak berubah" tidak memakai kuota GitHub API.
+- **Blind count**: Qty SAP & Selisih hanya terlihat Owner / Co-Owner / Viewer. **Viewer** hanya melihat. **Hapus** & Tandai Selesai: Owner / Co-Owner.
+- **Download Excel** (Owner / Co-Owner / Viewer): sheet *Hasil Physical Check* (Qty SAP, Qty Aktual, Selisih, Selisih Kurang/Lebih, nilai IDR, Kondisi, Status Match/Selisih, Keterangan, Bin update, pengisi) + sheet *Ringkasan* (per status & per kondisi).
+- **Cari Material**: badge **PC dd/mm/yy** dan kartu **Physical Check terakhir** (qty & kondisi) di detail material.
+- Data terenkripsi: `data/pc.js` (daftar + terakhir dicek per material) dan `data/pc/<id>.js` (isi check).
 
 ## Angkutan Berat (Heavy Transport)
 

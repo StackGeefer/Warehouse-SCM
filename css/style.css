@@ -948,3 +948,36 @@ body.ana-lock { overflow: hidden; }
   .pc-create-grid, .pc-prog { grid-template-columns: minmax(0, 1fr); }
   .pc-table .pc-q { width: 84px; }
 }
+/* Physical Check v2: 4 isian, kondisi A–E, info material, tampilan kartu di HP */
+.pc-legend { margin-top: 8px; }
+.pc-info { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 11.5px; color: var(--muted); }
+.pc-info b { color: var(--ink-2); font-weight: 700; }
+.pc-mat { min-width: 260px; }
+.pc-table .pc-t { width: 100%; min-width: 120px; padding: 7px 9px; font-size: 13px; }
+.pc-k { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.pc-kb { border: 0; border-right: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-weight: 800; width: 30px; height: 34px; cursor: pointer; font-size: 13px; }
+.pc-k .pc-kb:last-child { border-right: 0; }
+.pc-kb:hover { background: var(--brand-soft); }
+.pc-kb.on { background: var(--brand); color: #fff; }
+span.pc-kb.on { display: inline-grid; place-items: center; border-radius: 7px; height: 26px; }
+.pc-table tr.pc-miss .pc-k { border-color: var(--warn); box-shadow: 0 0 0 2px var(--warn-soft); }
+.pc-table td.pc-by { min-width: 92px; }
+@media (max-width: 760px) {
+  /* HP: setiap KIMAP jadi satu kartu, isian besar & mudah disentuh */
+  .pc-table, .pc-table tbody { display: block; }
+  .pc-table thead { display: none; }
+  .pc-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 10px; padding: 12px; border-bottom: 1px solid var(--line); }
+  .pc-table td { display: block; padding: 0; border: 0; background: transparent !important; text-align: left; }
+  .pc-table td.pc-no { display: none; }
+  .pc-table td.num { text-align: left; }
+  .pc-table td.pc-mat { grid-column: 1 / -1; min-width: 0; }
+  .pc-table td[data-label]::before { content: attr(data-label); display: block; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 3px; }
+  .pc-table td.pc-tc, .pc-table td.pc-by { grid-column: 1 / -1; }
+  .pc-table .pc-q { width: 100%; font-size: 17px; height: 44px; }
+  .pc-table .pc-t { font-size: 15px; height: 42px; min-width: 0; }
+  .pc-kb { width: 100%; height: 44px; font-size: 15px; }
+  .pc-k { display: grid; grid-template-columns: repeat(5, 1fr); width: 100%; }
+  .pc-table tr.pc-filled { background: var(--ok-soft); }
+  .pc-table td.pc-by:empty { display: none; }
+}
+.pc-table td.pc-dc { white-space: nowrap; }
