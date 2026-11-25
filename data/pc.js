@@ -1,0 +1,2 @@
+/* Physical Check — daftar — TERENKRIPSI */
+window.MW_PC = "MWK1.+SjxZIlaZQYvtDPUProTJUh1vNmKiEylURFFIul67ThNvIN1oNXb5XyPef+I7/tsYB3E24Vb1d+zdr3Ado/V+FFDkd+320lE/KrZxNHuep6xb9DBsypmY7i3388AOflRr3yCF43+PfbLEp3FPJGsUfsk01RoMASJesjAIsxcc1MBNANGlphxxUWgUBheKyFhVyrHO4BCG89ZNhqNMatxNDjDzkNrzl1jgO/KEqwIDD8zICDKnzU1khWzkC2/tdRjV0oVw2Ch+ESmu3fBLvymxZjh63lU9sG5jvpoZlxsaiZEracWJiMat4osUQ==";
