@@ -933,3 +933,18 @@ body.ana-lock { overflow: hidden; }
 .theme-opt .sw.auto { background: linear-gradient(135deg, #ffffff 50%, #121b2d 50%); }
 /* Viewer: tanpa kolom Pilih (RO / BAU / OUT) & tanpa Call Order */
 .ro-view .pick-col, .ro-view #cartbar { display: none !important; }
+
+/* ================= Physical Check ================= */
+.pc-create-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
+.pc-create textarea { width: 100%; resize: vertical; min-height: 120px; }
+.pc-prog { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; margin-top: 12px; }
+.pc-save { margin-top: 10px; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+.pc-table .pc-q { width: 110px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pc-table tr.pc-filled td { background: var(--ok-soft); }
+.pc-table tr.pc-filled .pc-q { border-color: var(--ok); }
+.pc-table td { vertical-align: middle; }
+.badge.pc-badge { background: var(--ok-soft); color: var(--ok); font-size: 10.5px; padding: 1px 7px; }
+@media (max-width: 560px) {
+  .pc-create-grid, .pc-prog { grid-template-columns: minmax(0, 1fr); }
+  .pc-table .pc-q { width: 84px; }
+}

@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261123b'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261125a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -322,6 +322,7 @@
     terima: ['Penerimaan Material', 'Material masuk — BASTB, SPB, LHPB & Form Denda Keterlambatan (TKO B7-084 Lampiran 3–7) dalam satu form'],
     'terima-riwayat': ['Riwayat Penerimaan Material', 'Approval Owner / Co-Owner, tanda tangan otomatis, export PDF atau Excel'],
     kembali: ['Pengembalian Material & Penitipan DC', 'BA Pengembalian Material (TKO B7-044) & BA Penitipan Material Direct Charge (Memo VP SCM 2230)'],
+    pc: ['Physical Check', 'Cek fisik stok gudang — Owner membuat daftar KIMAP, rekan Warehouse cukup isi jumlah fisik (tersimpan otomatis)'],
     'kembali-riwayat': ['Riwayat Pengembalian Material & Penitipan DC', 'Approval Gerald / Seto, tanda tangan otomatis, masa penitipan Direct Charge & export PDF'],
     angber: ['Reservasi Armada', 'Angkutan Berat — Crane, Picker, Tronton, Trailer, Vacuum Truck & Forklift'],
     'angber-riwayat': ['Riwayat Armada', 'Riwayat pemakaian angkutan berat per bulan — filter, edit & export Excel']
@@ -356,6 +357,7 @@
     else if (r.name === 'terima-riwayat') recvMod().renderHistory();
     else if (r.name === 'kembali') retMod().renderForm();
     else if (r.name === 'kembali-riwayat') retMod().renderHistory();
+    else if (r.name === 'pc') pcMod().render();
     else if (r.name === 'angber') fleet().renderForm();
     else if (r.name === 'angber-riwayat') fleet().renderHistory();
     updateCartUI();
@@ -463,7 +465,7 @@
     var it = item(o.m), F = mainFields();
     var canBau = o.zoneStock > 0 || o.other > 0;
     return '<tr class="clickable' + (active(it) ? ' in-cart' : '') + '" data-m="' + esc(o.m) + '">' +
-      '<td class="mat-cell"><div class="mat-desc">' + esc(o.d) + (o.u ? '<span class="uom">' + esc(o.u) + '</span>' : '') + '</div><div class="mat-code">' + esc(o.m) + ' ' + agingBadge(o) + (viaSyn ? ' <span class="badge syn" title="Ditemukan lewat sinonim">sinonim</span>' : '') + '</div></td>' +
+      '<td class="mat-cell"><div class="mat-desc">' + esc(o.d) + (o.u ? '<span class="uom">' + esc(o.u) + '</span>' : '') + '</div><div class="mat-code">' + esc(o.m) + ' ' + agingBadge(o) + pcBadge(o) + (viaSyn ? ' <span class="badge syn" title="Ditemukan lewat sinonim">sinonim</span>' : '') + '</div></td>' +
       '<td>' + priceCell(o) + '</td>' +
       F.map(function (x) { return '<td class="num">' + qtyPill(o.fs[x.i], x.f.home, fieldTitle(o, x.f)) + '</td>'; }).join('') +
       '<td class="c">' + otherBtn(o) + '</td>' +
@@ -558,6 +560,7 @@
       fieldKpis +
       '<div class="kpi"><div class="k">Pemakaian ' + idx.histYear + '</div><div class="v">' + fmtQ(o.hist) + '</div><div class="s">' + idx.dataYear + ' YTD: ' + fmtQ(o.ytd) + '</div></div>' +
       '<div class="kpi"><div class="k">Rata-rata / bulan</div><div class="v">' + fmtQ(Math.round(o.avg12 * 10) / 10) + '</div><div class="s">12 bulan terakhir</div></div>' +
+      (function () { var L = pcLast(o.m); return '<div class="kpi"><div class="k">Physical Check terakhir</div>' + (L ? '<div class="v" style="font-size:17px">' + fmtDate(L[0]) + '</div><div class="s">Fisik <b>' + fmtQ(L[1]) + '</b> ' + esc(o.u || '') + ' · <a href="#/pc/' + esc(L[2]) + '">' + esc(L[3] || 'lihat') + '</a></div>' : '<div class="v" style="font-size:17px">—</div><div class="s">Belum pernah dicek</div>') + '</div>'; })() +
       '<div class="kpi"><div class="k">Harga</div><div class="v" style="font-size:17px">' + (o.bestOA ? fmtMoney(o.bestOA.price, o.bestOA.cur) : fmtMoney(o.map)) + '</div><div class="s">' + (o.bestOA ? 'OA ' + esc(o.bestOA.po) : (o.map ? 'Harga rata-rata stok' : 'Tidak ada')) + '</div></div>' +
       '</div>' +
       '<div><div class="toolbar"><h4 class="section-title" style="margin:0">Stok per plant</h4><span class="spacer"></span><label class="small"><input type="checkbox" data-act="drawer-all"' + (S.drawerAll ? ' checked' : '') + '> tampilkan stok 0</label></div>' +
@@ -1411,6 +1414,23 @@
       docs: function () { return S.docs || []; }, docBlob: docBlob
     });
     return Ret;
+  }
+  // Physical Check — daftar KIMAP dari Owner, rekan Warehouse isi jumlah fisik (simpan otomatis)
+  var Pc = null;
+  function pcMod() {
+    if (!Pc) Pc = window.PcModule({
+      S: S, esc: esc, toast: toast, loading: loading, route: function () { return currentRoute().name; }, routeArg: function () { return currentRoute().arg; },
+      isOwner: isOwner, canInput: function () { return canWarehouse() && !isLihat(); }, pass: passMod, loadDet: loadDet,
+      loadExcelJS: Exporter.loadExcelJS, audit: logDelete
+    });
+    return Pc;
+  }
+  function pcLast(m) { return Pc ? Pc.lastOf(m) : null; }
+  function pcBadge(o) {
+    var L = pcLast(o.m);
+    if (!L) return '';
+    var p = L[0].split('-');
+    return ' <span class="badge pc-badge" title="' + esc('Physical Check terakhir ' + fmtDate(L[0]) + ' · fisik ' + fmtQ(L[1]) + ' ' + (o.u || '') + ' · ' + (L[3] || '') + (L[4] ? ' · oleh ' + L[4] : '')) + '">PC ' + p[2] + '/' + p[1] + '/' + p[0].slice(2) + '</span>';
   }
   var Fleet = null;
   function fleet() {
@@ -2409,6 +2429,8 @@
     if (isOwner()) passMod().load().then(refreshPassNav, function () {});
     if (canReceiving()) recvMod().load().then(refreshPassNav, function () {});
     if (canReceiving()) retMod().load().then(refreshPassNav, function () {});
+    // Physical Check terakhir per material (untuk Cari Material)
+    if (canWarehouse()) pcMod().loadIndex().then(function () { var rn = currentRoute().name; if (rn === 'cari' && S.idx) renderResults(); }, function () {});
   }
 
   // ================= Event handlers =================

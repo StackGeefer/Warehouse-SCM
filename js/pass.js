@@ -70,6 +70,35 @@
       }
       throw new Error('Gagal menyimpan, coba lagi');
     }
+    // Ubah beberapa file dalam SATU commit: specs = [{ path, varName, note, mutate }] atau { path, del: true }.
+    // mutate dipanggil berurutan (boleh memakai hasil mutate sebelumnya); ulang bila ada commit lain bersamaan.
+    async function atomicMulti(specs, message) {
+      if (!ctx.ghToken() && ctx.ensureToken) await ctx.ensureToken();
+      if (!ctx.ghToken()) throw new Error('Akun ini belum diberi akses simpan. Minta Owner Utama mengatur akses (Pengaturan → Pengguna: pilih peran + isi password), lalu coba lagi.');
+      for (var attempt = 0; attempt < 5; attempt++) {
+        var ref = await gh('GET', '/git/ref/heads/' + ctx.branch), base = ref.object.sha;
+        var cm = await gh('GET', '/git/commits/' + base);
+        var tree = await gh('GET', '/git/trees/' + cm.tree.sha + '?recursive=1');
+        var byPath = {}; tree.tree.forEach(function (e) { byPath[e.path] = e; });
+        var entries = [], out = {};
+        for (var i = 0; i < specs.length; i++) {
+          var sp = specs[i], ent = byPath[sp.path];
+          if (sp.del) { if (ent) entries.push({ path: sp.path, mode: '100644', type: 'blob', sha: null }); continue; }
+          var cur = null;
+          if (ent) { var b = await gh('GET', '/git/blobs/' + ent.sha), p = payloadOf(b64text(b.content)); cur = p ? await Vault.decrypt(S.key, p) : null; }
+          var next = sp.mutate(cur);
+          out[sp.path] = next;
+          var blob = await gh('POST', '/git/blobs', { content: fileText(sp.varName, sp.note, await Vault.encrypt(S.key, next)), encoding: 'utf-8' });
+          entries.push({ path: sp.path, mode: '100644', type: 'blob', sha: blob.sha });
+        }
+        var nt = await gh('POST', '/git/trees', { base_tree: cm.tree.sha, tree: entries });
+        var nc = await gh('POST', '/git/commits', { message: message, tree: nt.sha, parents: [base] });
+        try { await gh('PATCH', '/git/refs/heads/' + ctx.branch, { sha: nc.sha }); }
+        catch (e) { if (/fast forward|422|conflict/i.test(e.message) && attempt < 4) { await new Promise(function (r) { setTimeout(r, 300 + Math.random() * 900); }); continue; } throw e; }
+        return out;
+      }
+      throw new Error('Gagal menyimpan, coba lagi');
+    }
     function emptyData() { return { seq: FIRST_SEQ, list: [] }; }
     async function load(force) {
       if (!P.data || force) P.data = (await readJSON('data/pass.js')) || emptyData();
@@ -513,6 +542,6 @@
     function reset() { P.data = null; P.signs = null; P.filt = ST.pending; }
     return { render: render, submit: submit, previewDraft: previewDraft, signCard: signCard, fillSignCard: fillSignCard, load: load, pendingCount: pendingCount, reset: reset,
       // dipakai modul Penerimaan Barang
-      atomic: atomic, readJSON: readJSON, loadJsPDF: loadJsPDF, placeSign: placeSign, signs: function () { return P.signs; } };
+      atomic: atomic, atomicMulti: atomicMulti, readJSON: readJSON, loadJsPDF: loadJsPDF, placeSign: placeSign, signs: function () { return P.signs; } };
   };
 })(this);

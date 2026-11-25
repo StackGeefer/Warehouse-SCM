@@ -175,6 +175,14 @@ Menu **Pengembalian Material & Penitipan DC** (form) dan **Riwayat Pengembalian 
 - **BA Penitipan Material Direct Charge** — Memo VP SCM No. 2230/PHR17000/2025-S9: Pihak Pertama = User (ketik manual), Pihak Kedua = SCM Receiving (Seto Agustian). Approval Seto (Owner Gerald juga bisa) — tanda tangan yang tertempel selalu Seto. PDF otomatis melampirkan Memo 2230 (Lampiran 1, diambil dari TKO & Referensi) dan memo permohonan User bila di-upload (Lampiran 2 — No. & tanggal memo wajib diisi bila memo di-upload). Masa titip 3 bulan (jatuh tempo otomatis), perpanjangan 1 bulan, status Titip aktif / Segera jatuh tempo / Lewat jatuh tempo / Selesai diambil.
 - Edit/Hapus/Ajukan Revisi: Owner, Co-Owner & Receiving (edit oleh Receiving → approve ulang). Rekap Excel semua BA.
 
+## Physical Check (cek fisik stok)
+
+- **Owner / Co-Owner**: menu **Physical Check → + Create Physical Check** → isi judul & tanggal, lalu **paste banyak KIMAP sekaligus** (langsung dari kolom Excel — dipisah baris/spasi/koma/tab). KIMAP otomatis terdeteksi dari data stok SAP; kode berpola KIMAP yang tidak ada di data stok tetap bisa diikutkan. Bisa **+ Tambah KIMAP**, **Tandai Selesai / Buka lagi**, **Export Excel**, **Hapus**.
+- **Warehouse / Receiving**: buka check → cukup **isi Jumlah Fisik** — **tersimpan otomatis** (tanpa tombol Simpan; Enter = baris berikutnya). Stok SAP & selisih hanya terlihat oleh Owner/Co-Owner (blind count).
+- Kolom **Terakhir keluar <tahun>** diambil dari data MB51 yang di-upload di Data SAP (plant Home).
+- **Cari Material** menampilkan badge **PC dd/mm/yy** dan kartu **Physical Check terakhir** di detail material.
+- Viewer hanya bisa melihat. Data terenkripsi di `data/pc.js` (daftar + terakhir dicek per material) dan `data/pc/<id>.js` (isi check).
+
 ## Angkutan Berat (Heavy Transport)
 
 Menu **Reservasi Armada** dan **Riwayat Armada** — khusus angkutan berat (Crane, Picker/TMC, Tronton, Trailer, Vacuum Truck), di luar KRP. Tanpa approval: reservasi langsung berstatus **Terjadwal**.
