@@ -22,6 +22,7 @@
   };
   var KONDL = { A: 'Quantity Kondisi Aset Baru dan baik', B: 'Quantity Kondisi Aset Baru, diperbaiki', C: 'Quantity Kondisi Aset Rusak, diperbaiki', D: 'Quantity Kondisi Aset Salvaged', E: 'Quantity Kondisi Aset Rencana FUPP' };
   var FIELDS = ['q', 'k', 'nb', 'ket'];
+  var KSHORT = { A: 'Baik', B: 'Baru-fix', C: 'Rusak-fix', D: 'Salvage', E: 'FUPP' };
   var POLL_MS = 5000, POLL_STATIC_MS = 12000;
 
   root.PcModule = function (ctx) {
@@ -56,7 +57,10 @@
       return P.idx;
     }
     // Physical Check terakhir untuk Cari Material: [tanggal, qty, idCheck, judul, oleh, kondisi]
-    function lastOf(m) { return P.idx && P.idx.last ? P.idx.last[m] || null : null; }
+    function lastOf(m) {
+      var L = P.idx && P.idx.last ? P.idx.last[m] || null : null;
+      return L && L[1] === 0 && L[5] ? L.slice(0, 5).concat(['']) : L; // qty 0 -> tanpa kondisi
+    }
 
     // ---------- File Base (MP-01 / database stok) ----------
     var CODE_RE = /^([A-Z]\d{9}|\d{9,12})$/;
@@ -289,6 +293,9 @@
     }
     // nilai yang tampil: perubahan lokal (belum tersimpan) didahulukan
     function val(x, f) { var p = P.queue[x.m]; return p && has(p, f) ? p[f] : x[f]; }
+    // Qty Aktual 0 = barang tidak ada -> kondisi otomatis kosong
+    function kv(x) { return val(x, 'q') === 0 ? null : val(x, 'k'); }
+    function needK(x) { var q = val(x, 'q'); return q != null && q !== 0 && !val(x, 'k'); }
     function drawCheck() {
       var c = P.cur, meta = c.meta, open = isOpen(meta), mg = canManage(), ed = editable(), sap = seesSap(), k = counts();
       var pct = k.n ? Math.round(k.done / k.n * 100) : 0;
@@ -306,7 +313,7 @@
         '<div class="pc-save" id="pcSave">' + saveText() + '</div>' +
         (ed ? '<div class="pc-legend small muted">Kondisi: ' + Object.keys(KOND).map(function (l) { return '<b>' + l + '</b> ' + KOND[l]; }).join(' · ') + '</div>' : '') +
         '</div>' +
-        '<div class="card" style="margin-top:14px"><div class="table-wrap tall"><table class="grid pc-table' + (ed ? ' pc-ed' : '') + '"><thead><tr><th class="c">No</th><th>Material</th>' +
+        '<div class="card pc-card" style="margin-top:14px"><div class="table-wrap tall pc-wrap"><table class="grid pc-table' + (ed ? ' pc-ed' : '') + (sap ? ' pc-sapv' : '') + '"><thead><tr><th class="c">No</th><th>Material</th>' +
         (sap ? '<th class="num">Qty SAP</th>' : '') + '<th class="num">Qty Aktual *</th><th>Kondisi *</th><th>Storage Bin</th><th>Keterangan</th>' + (sap ? '<th class="num">Selisih</th>' : '') + '<th>Diisi</th></tr></thead>' +
         '<tbody id="pcBody">' + rowsHtml() + '</tbody></table></div></div>';
       bindCheck();
@@ -332,11 +339,11 @@
       return '<div class="pc-info">' + chips.join('') + '</div>';
     }
     function kondHtml(x, ed) {
-      var k = val(x, 'k');
+      var k = kv(x), zero = val(x, 'q') === 0;
       if (!ed) return k ? '<span class="pc-kb on" title="' + esc(KONDL[k] || '') + '">' + esc(k) + '</span>' : '<span class="muted">—</span>';
-      return '<div class="pc-k" role="radiogroup">' + 'ABCDE'.split('').map(function (l) {
-        return '<button type="button" class="pc-kb' + (k === l ? ' on' : '') + '" data-pck="' + esc(x.m) + '" data-v="' + l + '" title="' + l + ' — ' + esc(KONDL[l]) + '" aria-pressed="' + (k === l) + '">' + l + '</button>';
-      }).join('') + '</div>';
+      return '<div class="pc-k' + (zero ? ' pc-k-off' : '') + '" role="radiogroup">' + 'ABCDE'.split('').map(function (l) {
+        return '<button type="button" class="pc-kb' + (k === l ? ' on' : '') + '" data-pck="' + esc(x.m) + '" data-v="' + l + '"' + (zero ? ' disabled' : '') + ' title="' + l + ' — ' + esc(KONDL[l]) + '" aria-pressed="' + (k === l) + '">' + l + '<small>' + KSHORT[l] + '</small></button>';
+      }).join('') + '</div>' + (zero ? '<div class="pc-k-note">Qty 0 — kondisi dikosongkan</div>' : '');
     }
     function diffOf(x) { var q = val(x, 'q'); return q != null && x.sap != null ? q - x.sap : null; }
     function diffHtml(x) {
@@ -347,11 +354,11 @@
     }
     function byHtml(x) {
       if (P.queue[x.m]) return '<span style="color:var(--warn)">menyimpan…</span>';
-      return x.by ? esc(x.by) + '<br>' + fmtTime(x.at) : '';
+      return x.by ? '<span class="pc-who">' + esc(x.by) + '</span><span class="pc-at">' + fmtTime(x.at) + '</span>' : '';
     }
     function rowHtml(o) {
       var x = o.x, ed = editable(), sap = seesSap(), q = val(x, 'q');
-      var miss = ed && q != null && !val(x, 'k');
+      var miss = ed && needK(x);
       return '<tr data-m="' + esc(x.m) + '" class="' + (q != null ? 'pc-filled' : '') + (miss ? ' pc-miss' : '') + '"><td class="c muted pc-no">' + (o.i + 1) + '</td>' +
         '<td class="pc-mat"><div class="mat-desc">' + (x.d ? esc(x.d) : '<span class="muted">(tidak ada di data)</span>') + '</div><div class="mat-code">' + esc(x.m) + '</div>' + infoHtml(x) + '</td>' +
         (sap ? '<td class="num pc-sap" data-label="Qty SAP"><b>' + nf(x.sap) + '</b></td>' : '') +
@@ -383,7 +390,7 @@
       var df = tr.querySelector('[data-diff]'); if (df) df.innerHTML = diffHtml(x);
       var q = val(x, 'q');
       tr.classList.toggle('pc-filled', q != null);
-      tr.classList.toggle('pc-miss', ed && q != null && !val(x, 'k'));
+      tr.classList.toggle('pc-miss', ed && needK(x));
     }
     function refreshProgress() {
       var k = counts(), d = document.getElementById('pcDone'), b = document.getElementById('pcBar'), s = document.getElementById('pcSel');
@@ -406,7 +413,7 @@
       body.addEventListener('click', function (e) {
         var b = e.target.closest('[data-pck]'); if (!b) return;
         var m = b.getAttribute('data-pck'), l = b.getAttribute('data-v'), x = findItem(m);
-        if (x && val(x, 'k') === l) return;
+        if (!x || b.disabled || val(x, 'q') === 0 || val(x, 'k') === l) return;
         enqueue(m, 'k', l, 400);
       });
       // Enter di Qty Aktual = lanjut ke Qty baris berikutnya (input cepat)
@@ -473,6 +480,7 @@
             cur.items.forEach(function (x) {
               var p = batch[x.m]; if (!p) return;
               Object.keys(p).forEach(function (f) { if (FIELDS.indexOf(f) >= 0) x[f] = p[f]; });
+              if (x.q === 0) x.k = null;
               x.by = by; x.at = now;
             });
             done = cur.items.filter(function (x) { return x.q != null; }).length;
@@ -636,7 +644,8 @@
       return d === 0 ? 'Match' : d < 0 ? 'Selisih Kurang' : 'Selisih Lebih';
     }
     async function exportExcel() {
-      var c = P.cur;
+      // qty aktual 0 -> kondisi kosong (hanya di laporan; data tersimpan tidak diubah)
+      var c = Object.assign({}, P.cur, { items: P.cur.items.map(function (x) { return x.q === 0 && x.k ? Object.assign({}, x, { k: null }) : x; }) });
       loading('Menyiapkan Excel…');
       try {
         await ensureDet();
