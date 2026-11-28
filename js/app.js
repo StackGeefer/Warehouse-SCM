@@ -51,7 +51,7 @@
   };
 
   // Repo GitHub tempat data website disimpan (bisa diganti di Pengaturan)
-  var APP_VERSION = '20261126a'; // samakan dengan ?v= di index.html setiap rilis
+  var APP_VERSION = '20261128a'; // samakan dengan ?v= di index.html setiap rilis
   var DEFAULT_REPO = 'StackGeefer/Warehouse-SCM';
   var GH_BRANCH = 'main';
   var RECENT_MS = 15 * 60 * 1000;
@@ -1437,6 +1437,7 @@
       var res = await fetch('https://api.github.com/repos/' + ghRepo() + '/contents/' + path + '?ref=' + GH_BRANCH, { cache: 'no-store', headers: h });
       if (res.status === 304) return { status: 304 };
       if (res.ok) return { status: 200, etag: res.headers.get('ETag'), text: await res.text() };
+      if (res.status === 401 && dropStaleLocalToken()) return ghCond(path, etag);
       if (res.status === 401) tokenRejected(false); else return { status: res.status };
     }
     var r2 = await fetch(path + '?t=' + Date.now(), { cache: 'no-store' });
@@ -2087,6 +2088,7 @@
       headers: { Authorization: 'Bearer ' + (token || ghToken()), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
       body: body ? JSON.stringify(body) : undefined
     });
+    if (res.status === 401 && !token && dropStaleLocalToken()) return gh(method, path, body);
     var data = res.status === 204 ? null : await res.json().catch(function () { return null; });
     if (res.status === 401) { tokenRejected(!!token); var e401 = new Error(TOKEN_BAD); e401.code = 401; throw e401; }
     if (!res.ok) throw new Error((data && data.message) || ('HTTP ' + res.status));
@@ -2094,6 +2096,15 @@
   }
   // Token GitHub ditolak (kedaluwarsa / dicabut): data tetap dibaca dari website, simpan perlu token baru
   var TOKEN_BAD = 'Token GitHub website sudah tidak berlaku (kedaluwarsa/dicabut). Data tetap bisa dilihat, tapi belum bisa disimpan sampai Owner Utama memasang token baru di Pengaturan → Koneksi GitHub.';
+  // Owner Utama: token lama yang tersimpan di perangkat ini ditolak, padahal token bersama (terbaru)
+  // tersedia -> buang token lama di perangkat ini & lanjut pakai token bersama (tanpa perlu tempel ulang)
+  function dropStaleLocalToken() {
+    var loc = isMainOwner() && Store.load('ghToken');
+    if (!loc || !S.sharedTok || S.sharedTok === loc) return false;
+    Store.save('ghToken', null);
+    console.warn('Token GitHub lama di perangkat ini ditolak — beralih ke token bersama.');
+    return true;
+  }
   function tokenRejected(testing) {
     if (testing || S.tokenBad) return;
     S.tokenBad = true;
